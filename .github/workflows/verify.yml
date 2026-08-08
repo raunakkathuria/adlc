@@ -1,0 +1,23 @@
+# The gate. No model in it, nothing to install, runs in seconds.
+#
+# This is the same command AGENTS.md tells every agent to run before it says it is done, and the
+# same one check.sh runs at setup. One gate, three callers.
+
+name: verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No `npm ci` — there are no dependencies. That is deliberate.
+      - run: npm run verify

@@ -42,6 +42,7 @@ Each step is a separate prompt with a fresh context, because a check that shares
 | Step | Prompt | What it produces |
 |---|---|---|
 | Classify | [`prompts/triage.md`](prompts/triage.md) | which process path an issue follows |
+| Draft the spec change | [`prompts/delta.md`](prompts/delta.md) | a spec delta for Gate 1 — behaviour changes only |
 | Verify against spec | [`prompts/verify.md`](prompts/verify.md) | drift between spec and code |
 | Reproduce | [`prompts/reproduce.md`](prompts/reproduce.md) | a **failing** test that proves the bug is real |
 | Fix | [`prompts/fix.md`](prompts/fix.md) | the smallest change that turns it green |

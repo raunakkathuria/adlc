@@ -1,0 +1,48 @@
+# artifacts — real runs, committed
+
+Everything in here is captured output from running the prompts in [`prompts/`](../prompts/) against this repo. Terminal output, diffs, and failure messages are real. Nothing was written by hand to look good.
+
+That matters for two reasons. You can do every exercise without an agent CLI, and you can check the claims in the README against the evidence instead of taking them.
+
+The runs used Claude Code in headless mode:
+
+```bash
+cat prompts/verify.md | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(curl:*)"
+```
+
+Your own runs will not match these, and that is expected. The gate is deterministic; the worker is not.
+
+## `expected/` — one reference run per step
+
+| File | The step | What it shows |
+|---|---|---|
+| `01-verify-catalog.md` | verify | An independent pass finds both halves of the search drift, with curl evidence — and flags that the existing test agrees with the code rather than the spec. |
+| `02-reproduce.md` | reproduce | The reasoning behind the reproduction, including why it pinned more than the reported symptom. |
+| `02-reproduce.diff` | reproduce | The actual tests it wrote. Three of them. |
+| `03-fix.md` | fix | The cause named in one sentence, then the patch. |
+| `03-fix.diff` | fix | The correct fix: the write moves below every guard. |
+| `04-review.md` | review | Review of that fix. `APPROVE`, plus a real spec gap nobody had noticed. |
+| `05-review-of-the-naive-fix.md` | review | Review of the **tempting** fix, the one that adds the stock back on the reject path. `REQUEST CHANGES`. |
+| `06-reproduce-002-escalation.md` | reproduce | A bug that could not be reproduced. No test written, eight endpoints tried, handed to a human. |
+
+Read `04` and `05` together. Two different fixes for the same bug, both passing all 17 tests, and the deterministic gate cannot separate them. One review approves and one asks for changes. That pair is the most useful thing in this directory.
+
+`06` is the second most useful. A loop that only ever succeeds has not been tested.
+
+## `overnight/` — three issues, three endings
+
+What the loop looks like running unattended. Three issues arrived overnight and none of them ended with an agent merging its own work.
+
+See [`overnight/README.md`](overnight/README.md).
+
+## `gate-1/` — two spec deltas waiting on a human
+
+Exercise 3. Two proposed behaviour changes with the advisory reviews that ran when each one opened. No code exists for either. Your job is to decide whether the intent is agreed and testable.
+
+## Regenerating any of this
+
+```bash
+./run.sh prompts/verify.md
+```
+
+Worth doing before you run a session. The output will differ from what is committed, which is honest and worth showing people.
