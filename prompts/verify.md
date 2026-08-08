@@ -24,7 +24,7 @@ The spec under verification is **`spec/catalog.md`**. (To verify a different are
    ```
 
    A response you actually saw beats a conclusion you reasoned to.
-5. **Change no files.** Report only. If you find yourself editing, you have stopped being the verifier.
+5. **Change no files — including your own report.** Write your findings to stdout and create nothing on disk. If you find yourself editing, you have stopped being the verifier.
 
 ## Output
 
