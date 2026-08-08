@@ -77,7 +77,14 @@ Delta A gets merged. Then:
 ./run.sh prompts/build.md
 ```
 
-The delta folds into the living spec, tests come before the implementation, and the gate has to be green at the end. The finished work is on the `feat/filter-by-price` branch, with its run and review in [`artifacts/demo/`](artifacts/demo/).
+The delta folds into the living spec, tests come before the implementation, and the gate has to be green at the end.
+
+The finished work is **[pull request #1](https://github.com/raunakkathuria/adlc/pull/1)**, on the `feat/filter-by-price` branch. Its run report is in `artifacts/demo/` on that branch, and it is the thing to actually read — four moments in it carry the session:
+
+- It **stayed inside the change**, working around the search defect the delta warned it about, then listing everything it deliberately left alone.
+- It **found a hole in the gate**: the spec now has two `REQ-CAT-3` scenarios no test asserts, and `req-coverage` matches on requirement ids, so it reports the requirement as covered anyway. *"The gate structurally cannot see this."*
+- It **argued with the delta it was given** — an open question does not belong in text that becomes the spec.
+- It **named four behaviours it made true by accident**, because code cannot abstain where a spec stayed silent.
 
 ```bash
 git diff main feat/filter-by-price
@@ -86,6 +93,8 @@ git diff main feat/filter-by-price
 ### 6. Gate 2 — still a human
 
 The pull request is open, the gates are green, and nothing merges it but a person.
+
+That is the honest shape of this loop. It does not remove unspecified behaviour. It makes the unspecified behaviour visible at the moment it gets decided, in a report someone can read.
 
 ---
 
