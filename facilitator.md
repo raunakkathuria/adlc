@@ -105,14 +105,19 @@ The reviewer also found a real spec gap: when an order is both over the 20-unit 
 
 ## Exercise 3 — the answer
 
-**Delta A is sound. Delta B should be sent back.** Two flaws in B:
+**Delta A is sound. Delta B should be sent back.** Three flaws in B, in the order they matter:
 
-1. A requirement that specifies *how* rather than *what* — it names the data structure to use. A spec that dictates implementation cannot be satisfied a second way, and it stops being a description of the product.
-2. No scenario for the rejection path. Every WHEN in it is a success case.
+1. **REQ-ORD-7 specifies *how*, not *what*.** It names the data structure: "holds cancelled order ids in a `Set` keyed by order id, and `GET /api/orders` reads that `Set`". A user cannot observe a `Set`. This freezes the implementation and can only be satisfied one way.
+2. **No refusal path anywhere.** Every WHEN in the delta is a success case. Missing: cancelling an order that does not exist, cancelling one that is already cancelled, and whether there is any time limit at all.
+3. **It says nothing about stock** — and this is the one to push the room on. Cancelling an order that took units out of stock either puts them back or does not. The delta is silent, so whoever builds it will decide by accident. `REQ-ORD-4` already says a rejected order changes nothing; a *cancelled* order is a different case and nobody has said what it does. Anyone who did exercise 2 has the reflex to catch this.
 
-The advisory reviews catch the first and are softer on the second than they should be. If someone notices that, they have understood the point of the exercise better than the reviews did — advisory means advisory.
+**REQ-ORD-8 is the untestable one** — "should feel instant", "no delay a customer would notice". No test can assert that without a human interpreting it first.
+
+Read the committed advisory review in `artifacts/gate-1/delta-b/review.md` before the session and note which of the three it found. Whatever it missed is the better question to put to the room: *the review is advisory, so what did it not tell you?* Do not tell them in advance which ones it caught — let them compare their own list to it. That comparison is the exercise.
 
 Runs well as a vote. Hands up for merge, hands up for send-back, then ask one person from each side why. This is the block that works for the non-engineers in the room, so extend it if the room skews that way.
+
+**On provenance:** the two deltas are constructed exercise material, unlike everything in `artifacts/expected/`. An exercise needs a known answer, so delta B's flaws are planted on purpose. The advisory reviews of them are real runs.
 
 ## The 60-second experiment for the close
 
