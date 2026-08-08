@@ -15,7 +15,7 @@ That one extra line names which file to read. It carries no judgement about the 
 
 | Issue | Classified as | Where it stopped |
 |---|---|---|
-| [001](../../issues/001-rejected-order-eats-stock.md) — stock disappears on a rejected order | `bug` | Reproduced by a failing test, fixed, reviewed. Pull request open on green gates, waiting at Gate 2. |
+| [001](../../issues/001-rejected-order-eats-stock.md) — stock disappears on a rejected order | `bug` | Reproduced by a failing test, fixed, and reviewed — locally, see [`../expected/`](../expected/). **Deliberately not opened as a pull request**, because the bug has to stay live for Part 2 of the workshop. |
 | [002](../../issues/002-confirmation-email-wrong-total.md) — confirmation email shows the wrong total | `feat` | Nothing built. Two stations independently concluded there was nothing here to fix, and it went to a human. |
 | [003](../../issues/003-filter-catalog-by-price.md) — let shoppers filter by price | `feat` | Spec delta drafted. Waiting at Gate 1, before any code exists. |
 
@@ -26,6 +26,8 @@ Three endings, and not one of them is "an agent merged its own work."
 `triage-001.txt` classifies it as a bug and names the requirements it bears on, `REQ-ORD-4` and `REQ-ORD-3`, without being told they exist.
 
 The rest of that run is in [`../expected/`](../expected/): the reproduction, the fix, and two reviews. Nothing needs repeating here.
+
+One thing to be straight about: that chain really ran, and then **the fix was reverted on purpose** so the bug is still live for anyone doing Part 2. So there is no pull request for it, unlike the feature in Part 1. The run output is real; the ending was rolled back by hand, and it would be dishonest to show you a green PR that does not exist.
 
 ## Issue 002 — the one that stopped
 

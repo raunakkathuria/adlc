@@ -220,10 +220,12 @@ If someone asks why the demo wasn't live: say that, plainly. It is a more useful
 ## Resetting between runs
 
 ```bash
-git checkout main && git checkout app/ test/ && npm run verify
+git checkout main && git checkout -- app/ test/ spec/ && npm run verify
 ```
 
 Fourteen tests, nine requirements, green. That is the shipping state, with both defects live.
+
+`spec/` is in that list on purpose. If anyone ran `prompts/build.md`, it folded the delta into `spec/catalog.md` and **deleted** `spec/changes/filter-catalog-by-price/` — correct behaviour, and it consumes Part 1's starting state. Restoring `app/` and `test/` alone leaves the delta directory gone and Part 1 unrunnable.
 
 ## Where the artifacts came from
 
