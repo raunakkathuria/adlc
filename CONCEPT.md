@@ -1,4 +1,4 @@
-# The concept — how this repo works
+# ADLC — the automated development life cycle
 
 One product spec, kept in git. A change is a diff to that spec. Agents carry the work between two points where a human decides, and every step is checked by something that did not do the work.
 
@@ -84,14 +84,14 @@ npm run verify     # node --test  +  requirement coverage
 
 No model in it. It runs in about a tenth of a second, and it is the only thing in the loop that gets a vote on whether the work is done.
 
-It is also not enough on its own, and the repo proves it. `npm run req-coverage` checks that every requirement in `spec/` is named by at least one test. It cannot check whether that test asserts the right thing. Exercise 1 is a requirement with a passing test, full coverage, a green pipeline, and behaviour that is plainly wrong.
+It is also not enough on its own, and the repo proves it. `npm run req-coverage` checks that every requirement in `spec/` is named by at least one test. It cannot check whether that test asserts the right thing. `REQ-CAT-3` has a passing test, full coverage, a green pipeline, and behaviour that is plainly wrong.
 
 Coverage is not proof. A green pipeline is only as true as the thing it compares against.
 
 ## The repo
 
 ```
-ai-sdlc-workshop/
+adlc/
 ├── AGENTS.md              the only instruction file — the standards live here
 ├── CLAUDE.md              ┐
 ├── GEMINI.md              ├ three-line pointers to AGENTS.md, so nothing drifts
@@ -106,12 +106,14 @@ ai-sdlc-workshop/
 ├── issues/                intake. Anything in, one shape out.
 │
 ├── prompts/               one per station, plain markdown, no tool lock-in
-│   ├── triage.md           classify
-│   ├── delta.md            draft the spec change (behaviour changes only)
-│   ├── verify.md           spec vs code, independent
-│   ├── reproduce.md        write the failing test
-│   ├── fix.md              make it pass
-│   └── review.md           check the fix, fresh context
+│   ├── triage.md           classify — which path does this change take
+│   ├── delta.md            draft the spec change      ┐ the feature path,
+│   ├── spec-review.md      advisory review for Gate 1 ├ before any code
+│   ├── build.md            build an approved delta    ┘ exists
+│   ├── reproduce.md        write the failing test     ┐ the bug path,
+│   ├── fix.md              make it pass               ┘ no delta needed
+│   ├── review.md           check the change, fresh context
+│   └── verify.md           spec vs code, independent
 │
 ├── app/                   the product. ~170 lines, no dependencies.
 ├── test/                  every test names its requirement

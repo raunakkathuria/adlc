@@ -6,41 +6,95 @@ Everything a participant should discover for themselves is spoiled here. Don't s
 
 > The gate is not an AI. The loop is deterministic, only the worker is generative. A bug is real when a test reproduces it, not when a model says so. And the check that catches drift is the one that never saw the code being written.
 
-If they take home only the shape — plain-English issue, classified, reproduced by a failing test, fixed, independently reviewed, two human gates — the session worked.
+If they take home only the shape — a plain-English request, classified, and then either a spec change through a human gate *or* a failing test and a fix, both ending at a pull request nobody but a person merges — the session worked.
 
 ## Framing the title, honestly
 
 "Work while you sleep" is not a claim about night shifts. Do not stage a fake overnight run, and do not let the room think the point is a cron schedule.
 
-The claim is **no guidance**: the same prompt files, any repo, any time, and nobody steering. That is provable rather than staged, and the proof is how `artifacts/` was made — one prompt file piped into one CLI, no hint about where the bug was, no follow-up turns, no corrections. First response, committed as-is.
+The claim is **no guidance**: the same prompt files, any repo, any time, nobody steering. That is provable rather than staged, and the proof is how `artifacts/` was made — one prompt file piped into one CLI, no hint about where the bug was, no follow-up turns, no corrections. First response, committed as-is.
 
-Say that in the first four minutes, because it is the difference between a demo and a claim someone can check. Then let them check it: the exact commands are at the bottom of this file.
+Say that in the first four minutes, because it is the difference between a demo and a claim someone can check. Then let them check it: the commands are at the bottom of this file.
 
-The second half of the claim is **anywhere**. Nothing in `prompts/` knows anything about this repo that it does not read from the repo at run time. No file paths baked into the reasoning, no "the bug is in `createOrder`". That is why the same five files work on a codebase they were never written for, and it is the part worth stealing on Monday.
+The second half of the claim is **anywhere**. Nothing in `prompts/` knows anything about this repo that it does not read from the repo at run time. No paths baked into the reasoning, no "the bug is in `createOrder`". That is why the same files work on a codebase they were never written for, and it is the part worth stealing on Monday.
 
 ## Timetable
 
-| Time | Min | Block |
-|---|---|---|
-| 0:00 | 4 | The claim. Put the `artifacts/unattended/` table on screen. Receipts before theory. |
-| 0:04 | 3 | `./check.sh`. Say the fallback out loud now. |
-| 0:07 | 7 | Exercise 1 — find the drift. Debrief inside the block. |
-| 0:14 | 15 | Exercise 2 — the bug loop. |
-| 0:29 | 4 | Debrief 2 — the two reviews. |
-| 0:33 | 6 | Exercise 3 — Gate 1. |
-| 0:39 | 6 | Wiring it up, and what breaks. |
+| Time | Min | Block | Who |
+|---|---|---|---|
+| 0:00 | 4 | The claim. `artifacts/unattended/` on screen. Receipts before theory. | you |
+| 0:04 | 3 | `./check.sh`, and say the fallback out loud. | them |
+| 0:07 | 14 | **Part 1 — one feature, end to end.** The Gate 1 vote lands around 0:15. | you drive |
+| 0:21 | 3 | **Part 2 warm-up** — the pipeline is green and the product is wrong. | them, reading |
+| 0:24 | 14 | **Part 2 — the bug loop.** | them, running |
+| 0:38 | 4 | Debrief — the two reviews, then the two paths side by side. | you |
+| 0:42 | 3 | Close. | you |
 
-**The cut line:** if the live half of exercise 2 isn't green by **0:26**, stop the room and walk `artifacts/expected/03-fix.diff` on the projector. Do not let it eat the debrief. The debrief is where the lesson lands; the live run is only where it gets felt.
+**The cut line:** if the live half of Part 2 isn't green by **0:35**, stop the room and walk `artifacts/expected/03-fix.diff` on the projector. Do not let it eat the debrief — the debrief is where the lesson lands; the live run is only where it gets felt.
 
-Exercise 1 and 3 are each compressible by two or three minutes — drop the live re-run, give one delta instead of two. Never squeeze exercise 2.
+Part 1 compresses to 10 minutes by showing the delta and its review as finished artifacts rather than running the prompts live. Never squeeze Part 2.
 
 ## Minute 5, say this out loud
 
 > Every exercise works from what's already committed in `artifacts/`. If your CLI is broken, rate-limited, or you never installed one, you lose nothing. The reading-and-judging half is the part that teaches; the live run is the part that convinces.
 
-Say it before anyone gets stuck, not after. It changes the room from "am I keeping up" to "I'm choosing how deep to go."
+Say it before anyone gets stuck, not after. It changes the room from "am I keeping up" to "I'm choosing how deep to go".
 
-## Exercise 1 — the answer
+---
+
+# Part 1 — running the demo
+
+You drive. Everything is already committed, so you can either run the prompts live or walk the artifacts. Decide by how the clock is going.
+
+### The beats
+
+1. **The request.** Read `issues/003-filter-catalog-by-price.md` aloud. Three paragraphs, no template. Point out that this is the actual input — nobody wrote acceptance criteria first.
+
+2. **Classify.** `artifacts/unattended/triage-003.txt`. One question sizes the process: would a rebuild from the spec alone lose this? Yes, so the spec moves first.
+
+   Worth admitting in the room: it came back `feat`, and I would have said `extension`. It is a defensible call either way, and the thing that matters is that it *wrote down its reason*, so a human can disagree in one line. A classifier that returns a label with no reason cannot be argued with.
+
+3. **The delta.** `spec/changes/filter-catalog-by-price/`. The one to actually open is `tasks.md`, for two reasons:
+   - It worked out on its own that `req-coverage` reads only the top level of `spec/` — `readdir`, not a recursive walk — so the new requirement is invisible to the gate while the delta sits in `changes/`, and gate-visible the moment it lands. Nobody told it that. It read the script.
+   - It noticed the *other* defect in this repo, the search one from Part 2, and wrote: **"Do not 'fix' search inside this change."** It suggested asserting composition with a query today's search happens to match, so the feature test doesn't fail for two unrelated reasons.
+
+   That second point is the demo's strongest moment. Scope discipline is the thing people assume an agent cannot do.
+
+   Then `proposal.md`, and specifically the split between **decisions taken** and the **open question for Gate 1**. It picks the things that are not coin flips and says why. It hands up the one that genuinely is — whether `max_price=0` is a filter with an empty answer or a mistake to refuse — and argues *against its own choice*, citing REQ-ORD-6 as precedent. "My proposal is the inconsistent one" is a sentence worth reading out.
+
+4. **Two reviewers, before a human.** `prompts/spec-review.md`, a product lens and an architect lens, neither of which wrote the delta.
+
+5. **Gate 1 — hand it to the room.** See below. This is the audience-participation beat and it needs no laptops.
+
+6. **Build.** `git diff main feat/filter-by-price`, and the run in `artifacts/demo/`. Tests first, gate green, delta folded into the living spec and its directory deleted — the spec is the record of what was agreed, not a pile of change files.
+
+7. **Gate 2.** The pull request is open on green gates. Nothing merges it but a person.
+
+### The Gate 1 vote — the answer
+
+Give them `artifacts/gate-1/delta-b/` (cancel an order) and ask whether they would merge it. **They should send it back.** Three flaws, in the order they matter:
+
+1. **REQ-ORD-7 specifies *how*, not *what*.** It names the data structure: "holds cancelled order ids in a `Set` keyed by order id, and `GET /api/orders` reads that `Set`". A user cannot observe a `Set`. It can be satisfied exactly one way.
+2. **No refusal path anywhere.** Every WHEN is a success case. Missing: cancelling an order that does not exist, cancelling one already cancelled, and whether there is any time limit at all.
+3. **It says nothing about stock** — push the room on this one. Cancelling an order that took units out of stock either puts them back or does not, the delta is silent, and whoever builds it will decide by accident. Anyone who has done Part 2 has the reflex to catch it.
+
+**REQ-ORD-8 is the untestable one** — "should feel instant", "no delay a customer would notice". No test asserts that without a human first deciding what it means.
+
+**Read `delta-b/review.md` before the session.** It found all three, and four more nobody planted: an ownership model the system does not have (nothing in the spec knows what a customer is, so as written any caller can cancel any order by guessing its id), a timestamp the proposal promises and no requirement delivers, a surface named in one scenario that exists nowhere in the spec, and a response body two people would implement differently.
+
+It also spotted that an untestable requirement plus a coverage gate that only checks a requirement is *named* will produce a fake test — the same lesson Part 2 opens with, reached from the other direction. That connection is worth drawing explicitly.
+
+Because the review is that thorough, **do not show it first.** Make them build their own list, then compare. The comparison is the exercise. The good question afterwards is: *it is advisory, so what did it not tell you?*
+
+### Provenance, if anyone asks
+
+Delta A is real output from the delta prompt. **Delta B was written by hand with its flaws planted** — an exercise needs a known answer, and a sound delta makes a poor thing to practise refusing. Both advisory reviews are real runs, and the review of delta B had no idea it was constructed. Say this plainly if asked; it is the one hand-written thing in `artifacts/`.
+
+---
+
+# Part 2 — the answers
+
+## The warm-up: green pipeline, wrong product
 
 `spec/catalog.md` REQ-CAT-3 requires search to match **SKU or name**, **case-insensitively**. `app/server.mjs:41` is:
 
@@ -48,7 +102,7 @@ Say it before anyone gets stuck, not after. It changes the room from "am I keepi
 return all.filter((item) => item.name.includes(query));
 ```
 
-Two separate defects on one line: it never reads `item.sku`, and `includes` is case-sensitive. Fixing the case would still leave the SKU half broken.
+Two separate defects on one line: it never reads `item.sku`, and `includes` is case-sensitive. Fixing the case still leaves the SKU half broken.
 
 ```bash
 curl -s 'localhost:3000/api/items?q=mug'      # []
@@ -58,15 +112,13 @@ curl -s 'localhost:3000/api/items?q=Mug'      # the mug
 
 **The part that matters more than the bug.** `test/catalog.test.js:28` covers REQ-CAT-3 and queries `?q=Mug` — capital M, the one casing the broken code handles. The test was written from the implementation, so it agrees with the implementation, passes forever, and reports nothing. Coverage is full. The pipeline is green. The product is wrong.
 
-Expect someone to say "so just delete the useless test." Good moment: the test isn't useless, it's aimed at the code instead of the spec. That's the difference between a test suite and a specification.
+Expect someone to say "so delete the useless test". Good moment: it isn't useless, it's aimed at the code instead of the spec. That is the difference between a test suite and a specification.
 
-### If they run the verifier
+If they run the verifier, it finds both halves, separates them, gives curl evidence, and flags the weak test unprompted. It also declines to file `GET /api/items/mug-1` returning 404 as a finding, because REQ-CAT-2 is silent on case — unspecified behaviour, not drift. Knowing what *not* to report is half of being a useful reviewer.
 
-It finds both halves, separates them, and flags the weak test unprompted. It also correctly declines to file `GET /api/items/mug-1` returning 404 as a finding — REQ-CAT-2 is silent on case, so that's unspecified behaviour, not drift. Worth pointing at: knowing what *not* to report is half of being a useful reviewer.
+## The bug loop
 
-## Exercise 2 — the answer
-
-`app/server.mjs` takes the units out of stock **before** the last guard has run:
+`app/server.mjs` takes units out of stock **before** the last guard runs:
 
 ```js
 if (qty > item.stock) return { ok: false, reason: 'insufficient_stock' };
@@ -76,22 +128,22 @@ item.stock -= qty;                                              // ← the write
 if (qty > MAX_UNITS_PER_ORDER) return { ok: false, reason: 'over_limit' };
 ```
 
-It reads like a guard that was added later and appended in the wrong place, which is exactly how this happens in real code.
+It reads like a guard added later and appended in the wrong place, which is how this happens in real code.
 
 - **The right fix** moves `item.stock -= qty` below every guard.
 - **The tempting wrong fix** adds `item.stock += qty` before the `over_limit` return.
 
 Both pass all 17 tests. Both are in `artifacts/expected/`. That is the whole debrief.
 
-**Why the existing REQ-ORD-4 test passes:** it exercises the `insufficient_stock` path, and that guard sits *above* the write. So the requirement has a test, the test is honest, and the bug lives in the path the test doesn't walk. REQ-ORD-4 says the invariant holds "for **every** rejection reason" — one path tested, four paths claimed.
+**Why the existing REQ-ORD-4 test passes:** it exercises the `insufficient_stock` path, and that guard sits *above* the write. So the requirement has a test, the test is honest, and the bug lives in the path the test doesn't walk. REQ-ORD-4 claims the invariant holds "for **every** rejection reason" — one path tested, four claimed.
 
 ### What to watch for
 
-- **Polarity.** Some agents will write a test asserting `stock === before - 25`, which passes today and hides the bug. If someone's agent does this, stop the room and show it. It is the most valuable failure in the session.
-- **How many tests it writes.** The reference run wrote three: the reported symptom, the invariant across every rejection reason, and the consequence — that stock lost to rejections starves a later valid order. That third one is what "model the mechanism, not the symptom" looks like in practice.
-- **The fix shape.** `git diff app/server.mjs` and ask the room which of the two fixes they got.
+- **Polarity.** Some agents will assert `stock === before - 25`, which passes today and hides the bug. If someone's agent does this, stop the room and show it. It is the most valuable failure available.
+- **How many tests it writes.** The reference run wrote three: the reported symptom, the invariant across every rejection reason, and the consequence — that stock lost to rejections starves a later valid order. That third one is "model the mechanism, not the symptom" in practice.
+- **The fix shape.** `git diff app/server.mjs`, then ask the room which of the two fixes they got.
 
-### Debrief 2 script
+### Debrief script
 
 Put `04-review.md` and `05-review-of-the-naive-fix.md` side by side. Same bug, same tests, both green, `APPROVE` versus `REQUEST CHANGES`.
 
@@ -99,25 +151,15 @@ Then read the reviewer's own caveat aloud, because it is the most credible line 
 
 > "high on there being **no reproducible runtime defect today** — I checked, and say so plainly... The severity comes from the repo's stated rule about patch shape, not from a wrong response I can show you."
 
-That is a reviewer distinguishing "this is wrong" from "this will rot." Most human reviewers don't separate those two out loud.
+That is a reviewer separating "this is wrong" from "this will rot". Most human reviewers don't do that out loud.
 
-The reviewer also found a real spec gap: when an order is both over the 20-unit cap and over available stock, `spec/orders.md` never says which `reason` wins. Nothing is broken today, and nothing pins it either. That finding routes to the spec, not to the code, and it is the second row of the table in `CONCEPT.md` happening for real.
+The reviewer also found a real spec gap: when an order is both over the 20-unit cap and over available stock, `spec/orders.md` never says which `reason` wins. Nothing is broken today, and nothing pins it either. That finding routes to the spec, not the code — the second row of the table in `CONCEPT.md`, happening for real.
 
-## Exercise 3 — the answer
+### Then close with the two paths
 
-**Delta A is sound. Delta B should be sent back.** Three flaws in B, in the order they matter:
+Put the table from the README on screen. Same loop, same gates, same standards; what differs is only what comes before the code. One question decided it, and the process sized itself.
 
-1. **REQ-ORD-7 specifies *how*, not *what*.** It names the data structure: "holds cancelled order ids in a `Set` keyed by order id, and `GET /api/orders` reads that `Set`". A user cannot observe a `Set`. This freezes the implementation and can only be satisfied one way.
-2. **No refusal path anywhere.** Every WHEN in the delta is a success case. Missing: cancelling an order that does not exist, cancelling one that is already cancelled, and whether there is any time limit at all.
-3. **It says nothing about stock** — and this is the one to push the room on. Cancelling an order that took units out of stock either puts them back or does not. The delta is silent, so whoever builds it will decide by accident. `REQ-ORD-4` already says a rejected order changes nothing; a *cancelled* order is a different case and nobody has said what it does. Anyone who did exercise 2 has the reflex to catch this.
-
-**REQ-ORD-8 is the untestable one** — "should feel instant", "no delay a customer would notice". No test can assert that without a human interpreting it first.
-
-Read the committed advisory review in `artifacts/gate-1/delta-b/review.md` before the session and note which of the three it found. Whatever it missed is the better question to put to the room: *the review is advisory, so what did it not tell you?* Do not tell them in advance which ones it caught — let them compare their own list to it. That comparison is the exercise.
-
-Runs well as a vote. Hands up for merge, hands up for send-back, then ask one person from each side why. This is the block that works for the non-engineers in the room, so extend it if the room skews that way.
-
-**On provenance:** the two deltas are constructed exercise material, unlike everything in `artifacts/expected/`. An exercise needs a known answer, so delta B's flaws are planted on purpose. The advisory reviews of them are real runs.
+---
 
 ## The 60-second experiment for the close
 
@@ -127,31 +169,32 @@ If you have time and a working CLI, this is the strongest closing demo. Add one 
 - **Decide before you write.** A request that can still be rejected must not have changed any state. Validate fully, then mutate.
 ```
 
-Reset the repo, re-run `./run.sh prompts/reproduce.md` and `./run.sh prompts/fix.md`, and the naive fix stops appearing. Same prompt, same model, different outcome, because the standard was written down.
+Reset, re-run `./run.sh prompts/reproduce.md` and `./run.sh prompts/fix.md`, and the naive fix stops appearing. Same prompt, same model, different outcome, because the standard was written down.
 
-That is the answer to "do we need a steering document?" You don't need nine files of philosophy. You need the six rules your team actually argues about in review, in one file the agent reads. Everything else is a wiki page nobody opens.
+That is the answer to "do we need steering documents?" You don't need nine files of philosophy. You need the six rules your team actually argues about in review, in one file the agent reads. Everything else is a wiki page nobody opens.
 
 ## When things break
 
 | What happens | What to say |
 |---|---|
-| A CLI won't authenticate | "Use `artifacts/expected/` — you're doing the graded half anyway." |
+| A CLI won't authenticate | "Use `artifacts/`— you're doing the graded half anyway." |
 | An agent produces a different diff | "Expected. The gate is deterministic, the worker isn't. Green verify is the criterion." |
-| An agent edits the test to make it pass | Stop the room. This is a real failure mode and `prompts/fix.md` forbids it by name. Best teaching moment available. |
-| Someone's `npm run verify` is red before they start | They have a leftover edit. `git checkout app/ test/`. |
-| The room finishes early | Point them at `issues/003` and `prompts/triage.md`, and let them draft the delta. |
+| An agent edits the test to make it pass | Stop the room. Real failure mode, and `prompts/fix.md` forbids it by name. Best teaching moment available. |
+| `npm run verify` is red before they start | Leftover edit. `git checkout app/ test/`. |
+| The room finishes early | Point them at `prompts/build.md` and the open question in delta A: pick an answer for `max_price=0` and see what the build does with it. |
+| Somebody asks how long the feature build took | Be honest: minutes, not seconds, and long enough that running it live in a 45-minute session is a bad bet. That is why the CI run was done beforehand. |
 
 ## Resetting between runs
 
 ```bash
-git checkout app/ test/ && npm run verify
+git checkout main && git checkout app/ test/ && npm run verify
 ```
 
 Fourteen tests, nine requirements, green. That is the shipping state, with both defects live.
 
 ## Where the artifacts came from
 
-Everything in `artifacts/` is captured output from actually running the prompts in this repo with Claude Code in headless mode (`claude -p`), not written by hand. Terminal output, diffs, and failure messages are real.
+`expected/` and `unattended/` are captured output from running the prompts here with Claude Code headless, not written by hand. Terminal output, diffs, and failure messages are real.
 
 To regenerate any of them:
 
@@ -159,4 +202,6 @@ To regenerate any of them:
 cat prompts/verify.md | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(curl:*)"
 ```
 
-Worth doing before you run the session, for two reasons: the output will differ from what's committed, which is honest and worth showing, and it confirms your own setup works on the day.
+Worth doing before you run the session, for two reasons: the output will differ from what's committed, which is honest and worth showing, and it confirms your setup works on the day.
+
+Two notes on the committed runs. They predate the rename to `adlc`, so a few stack traces show the old directory name — left alone deliberately, because editing a real transcript to look tidy is exactly what this repo's provenance claim rules out. And `--allowedTools` needs the prompt on **stdin**, not as an argument; passed as an argument it swallows the prompt as a list of tool names.

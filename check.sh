@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 
 fail=0
 
-echo "ai-sdlc-workshop — pre-flight"
+echo "adlc — pre-flight"
 echo
 
 if command -v node >/dev/null 2>&1; then

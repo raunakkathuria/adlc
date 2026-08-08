@@ -1,0 +1,121 @@
+# The feature path, unattended: a human merges a spec delta, and the build follows.
+#
+# This is the other half of the loop from bug-intake.yml. That one handles changes that need no
+# spec delta; this one starts *after* Gate 1, because a behaviour change is not the agent's
+# decision to make.
+#
+# The trigger is the point: merging the delta is the approval. Nothing here decides whether the
+# feature should exist — a person already did that, by merging.
+#
+# OFF unless someone adds an ANTHROPIC_API_KEY secret. It opens a pull request; it never merges
+# one. Gate 2 is a person.
+
+name: feature build
+
+on:
+  # Gate 1: a delta lands on main, and the build starts.
+  push:
+    branches: [main]
+    paths: ['spec/changes/**']
+  # Or run it deliberately, which is how the workshop's reference run was made.
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Delta directory under spec/changes/ (blank = whichever one is there)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Is the runner switched on?
+        id: runner
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${KEY:-}" ]; then
+            echo "No ANTHROPIC_API_KEY secret. The loop stays off — this workflow is documentation."
+            echo "on=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Which delta?
+        if: steps.runner.outputs.on == 'true'
+        id: delta
+        run: |
+          SLUG="${{ inputs.slug }}"
+          if [ -z "$SLUG" ]; then
+            SLUG=$(find spec/changes -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | head -1)
+          fi
+          if [ -z "$SLUG" ]; then
+            echo "No delta in spec/changes/. Nothing to build."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Building spec/changes/$SLUG"
+            echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install the agent CLI
+        if: steps.runner.outputs.on == 'true' && steps.delta.outputs.found == 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      # The build station. It folds the delta into the living spec, writes the tests first, then
+      # the implementation. The prompt is the same file a participant runs locally — prompts/ is
+      # the single definition of each station, and this workflow only supplies the trigger.
+      - name: Build it
+        if: steps.runner.outputs.on == 'true' && steps.delta.outputs.found == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          mkdir -p artifacts/demo
+          { cat prompts/build.md
+            printf '\n\nThe approved delta is `spec/changes/%s/`.\n' "${{ steps.delta.outputs.slug }}"
+          } | claude -p --allowedTools "Read Grep Glob Edit Write Bash(node:*) Bash(npm:*) Bash(rm:*)" \
+            | tee artifacts/demo/02-build.md
+
+      - name: The gate
+        if: steps.runner.outputs.on == 'true' && steps.delta.outputs.found == 'true'
+        run: npm run verify
+
+      # Fresh session, no memory of building it. Its findings go in the pull request body, which
+      # is where the human at Gate 2 will actually read them.
+      - name: Review it
+        if: steps.runner.outputs.on == 'true' && steps.delta.outputs.found == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cat prompts/review.md \
+            | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(git:*)" \
+            | tee artifacts/demo/03-review.md
+
+      - name: Open a pull request — never merge one
+        if: steps.runner.outputs.on == 'true' && steps.delta.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="feat/${{ steps.delta.outputs.slug }}"
+          git config user.name "feature-build"
+          git config user.email "feature-build@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add spec test app artifacts/demo
+          git commit -m "feat: ${{ steps.delta.outputs.slug }}
+
+          Built from the approved delta. The delta is folded into the living spec and its
+          directory removed — the spec is the record of what was agreed."
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "feat: ${{ steps.delta.outputs.slug }}" \
+            --body-file artifacts/demo/03-review.md \
+            --base main

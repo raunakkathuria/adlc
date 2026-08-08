@@ -20,17 +20,19 @@ Each of these is a one-line change at Gate 1 if you disagree — but none of the
 
 - **The cap is in minor units**, not pounds. `price` is an integer in minor units and never a float; a filter on price that spoke a different unit than the thing it filters would be the one place in this product where an amount means something else.
 - **The cap is inclusive.** The issue asks for "everything up to £10", and a £10.00 item is affordable on a £10 budget.
-- **A malformed cap is refused, loudly** — `400` with a reason, never ignored. A filter the system did not understand must not come back looking like an answer.
-- **A cap of zero is a valid filter with an empty answer.** A cap of `1` already answers `200` with an empty array; there is no reason for `0` to answer differently. Negative caps are refused — there is no such budget.
+- **A malformed cap is refused, loudly** — `400` with a reason, never ignored. A filter the system did not understand must not come back looking like an answer. A negative cap is refused on the same grounds: there is no such budget.
 - **The page speaks pounds, the API speaks minor units.** Shoppers do not think in pence.
+- **The parameter is called `max_price`**, matching `price`. Worth knowing the cost: a person hand-editing a URL, or a support agent sharing a link, may type `?max_price=10` meaning £10 and get an empty list — they asked for everything under 10p. Naming it so the unit is unmissable would close that off; consistency with `price` won. Say so if you want it the other way.
 
 ## Open question for Gate 1
 
-**Does the parameter name need to carry its unit?**
+**Is a cap of zero a filter or a mistake?**
 
-The proposal calls it `max_price`, in minor units, for consistency with `price`. The cost is a quiet trap: a person hand-editing a URL — or a support agent sharing a link — will type `?max_price=10` meaning £10 and get an empty list, because they asked for everything under 10p. The list is correct and useless, and nothing tells them why.
+The delta proposes it is a filter: `max_price=0` answers `200` with only the items priced `0` — an empty array today. The argument is continuity. A cap of `1` already answers `200` with an empty array, and there is no reason for `0` to be the one cap that changes the kind of the answer rather than its contents.
 
-The alternatives are to keep `max_price` and accept the trap, or to name it so the unit is unmissable (`max_price_minor`, say). Accepting a decimal cap is not on the table — it would put a float in the one place this product has always kept whole. This is a taste call about a name people will see, so it is yours, not mine.
+The precedent in this repo points the other way. REQ-ORD-6 is the only other numeric parameter on the wire, and it refuses `qty` that is "missing, zero, negative, or not a whole number" with `400`. If `max_price` is read as a quantity, zero should be refused the same way, and my proposal is the inconsistent one.
+
+The question is which of those `max_price` is: a **quantity**, where zero is meaningless and refused, or a **threshold**, where zero is a coherent budget with an empty answer. A test gets written against whichever you pick, so pick before task 2.
 
 ## Out of scope
 
