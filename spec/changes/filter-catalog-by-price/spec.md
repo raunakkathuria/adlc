@@ -18,7 +18,7 @@ Against [`spec/catalog.md`](../../catalog.md). One requirement added, two modifi
 - WHEN the cap is not a whole number — `9.99` — THEN the response is `400` with `{"reason":"invalid_max_price"}`.
 - WHEN the cap is not a number at all — `cheap` — THEN the response is `400` with `{"reason":"invalid_max_price"}`.
 
-Zero is a filter, not a mistake: a cap of `1` already answers `200` with an empty array, so `0` answers the same way. A negative cap is not a budget, so it is refused.
+Zero is a filter here, not a mistake: a cap of `1` already answers `200` with an empty array, so `0` answers the same way. A negative cap is not a budget, so it is refused. This is a deliberate divergence from REQ-ORD-6, which refuses a `qty` of zero — and it is the open question this delta hands to Gate 1, so confirm it before writing the test.
 
 ### How it composes
 
@@ -31,9 +31,9 @@ Price is the second thing a shopper filters on, after the name. "What have you g
 
 ---
 
-## MODIFIED — REQ-CAT-1 — list the items
+## MODIFIED — REQ-CAT-1 — list every item
 
-Two ways of narrowing the same list now exist, so "every item" needs to say when it holds.
+Two ways of narrowing the same list now exist, so "every item" needs to say when it holds. The rule and the title are unchanged; one sentence and one scenario are added.
 
 **Current text**
 
@@ -45,7 +45,7 @@ Two ways of narrowing the same list now exist, so "every item" needs to say when
 
 **Proposed text**
 
-> ## REQ-CAT-1 — list the items
+> ## REQ-CAT-1 — list every item
 >
 > `GET /api/items` returns a JSON array of items in the catalog, each with `sku`, `name`, `price`, and `stock`. With no search query and no price cap, that is every item.
 >

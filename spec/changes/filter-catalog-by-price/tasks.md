@@ -14,6 +14,8 @@ A test per scenario in REQ-CAT-4, plus the three new REQ-CAT-3 scenarios and the
 
 They must fail before anything in `app/` moves, and fail for the right reason — an unfiltered list or a missing rejection, not a typo in the URL.
 
+The zero-cap test asserts whatever Gate 1 decided: `200` with an empty array if the cap is a threshold, `400` with `invalid_max_price` if it is a quantity. If the answer went the other way, the merged `spec/catalog.md` says so and this test follows it — not the other way round.
+
 One hazard: today's build's search matches the **name only**, and case-sensitively, which already contradicts REQ-CAT-3. A composition test written as `?q=notebook&max_price=1000` therefore fails for two independent reasons, and passing it would need a search fix this delta did not ask for. Either land that separate defect first, or assert composition with a query today's search also matches (`?q=Notebook`) and let the lowercase case arrive with the fix. Do not "fix" search inside this change.
 
 ## 3. `app/server.mjs` — narrow, and refuse loudly
