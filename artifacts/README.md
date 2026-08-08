@@ -1,8 +1,12 @@
 # artifacts — real runs, committed
 
-Everything in here is captured output from running the prompts in [`prompts/`](../prompts/) against this repo. Terminal output, diffs, and failure messages are real. Nothing was written by hand to look good.
+`expected/` and `unattended/` are captured output from running the prompts in [`prompts/`](../prompts/) against this repo. Terminal output, diffs, and failure messages are real. Nothing there was written by hand to look good.
 
-That matters for two reasons. You can do every exercise without an agent CLI, and you can check the claims in the README against the evidence instead of taking them.
+Each of those runs was produced by piping **one prompt file into one CLI**, with nothing else: no hint about where the bug was, no follow-up turns, no corrections, no second attempt. What is committed is the first response. That is the claim this repo makes — not that something ran overnight, but that nobody steered it.
+
+One scoped exception: **the two spec deltas in `gate-1/` are constructed exercise material.** An exercise needs a known answer, so one of them has flaws planted on purpose. The advisory reviews *of* those deltas are real runs. `gate-1/README.md` says which is which.
+
+That split matters for two reasons. You can do every exercise without an agent CLI, and you can check the claims in the README against the evidence instead of taking them.
 
 The runs used Claude Code in headless mode:
 
