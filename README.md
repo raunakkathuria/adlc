@@ -77,6 +77,12 @@ Delta A gets merged. Then:
 ./run.sh prompts/build.md
 ```
 
+Heads up if you run that here: the build folds the delta into `spec/catalog.md` and **deletes `spec/changes/filter-catalog-by-price/`**, which is correct behaviour and also consumes Part 1's starting state. To get it back:
+
+```bash
+git checkout -- app/ test/ spec/
+```
+
 The delta folds into the living spec, tests come before the implementation, and the gate has to be green at the end.
 
 The finished work is **[pull request #1](https://github.com/raunakkathuria/adlc/pull/1)**, on the `feat/filter-by-price` branch. Its run report is in `artifacts/demo/` on that branch, and it is the thing to actually read — four moments in it carry the session:
