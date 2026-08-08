@@ -30,6 +30,8 @@
   }
   input[type=search] { width: 100%; }
   input[type=number] { width: 4.5rem; text-align: right; }
+  .filters { display: flex; gap: .5rem; align-items: center; }
+  input#max-price { width: 7rem; }
   button {
     padding: .5rem .9rem; border: 1px solid var(--accent); border-radius: 7px;
     background: var(--accent); color: var(--bg); cursor: pointer;
@@ -59,7 +61,13 @@
   <h1>Storefront</h1>
   <p class="sub">Behaviour is specified in <code>spec/</code>. If this page and the spec disagree, this page is wrong.</p>
 
-  <input type="search" id="q" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
+  <div class="filters">
+    <div class="grow">
+      <input type="search" id="q" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
+    </div>
+    <input type="number" id="max-price" min="0" step="0.01" placeholder="Max £"
+           aria-label="Maximum price, in pounds" autocomplete="off">
+  </div>
 
   <h2>Catalogue</h2>
   <div id="items"></div>
@@ -87,14 +95,51 @@ const REJECTIONS = {
   insufficient_stock: 'Rejected — not enough in stock.',
   unknown_sku: 'Rejected — no such item.',
   invalid_qty: 'Rejected — quantity must be a whole number, at least 1.',
+  invalid_max_price: 'Rejected — a maximum price cannot be less than zero.',
 };
+
+/** The page speaks pounds; the API speaks minor units. Blank or unreadable means no cap at all. */
+function priceCap() {
+  const pounds = el('max-price').value.trim();
+  const cents = pounds === '' ? null : Math.round(Number(pounds) * 100);
+  return Number.isFinite(cents) ? cents : null;
+}
+
+/** Say what was actually asked for — the text, the cap, or both. */
+function nothingFound(q, cap) {
+  const asked = [];
+  if (q) asked.push(`matching “${q}”`);
+  if (cap !== null) asked.push(`at or under ${money(cap)}`);
+  return asked.length ? `Nothing ${asked.join(' ')}.` : 'Nothing in the catalogue.';
+}
+
+// True while the catalogue is showing a refused filter, so the notice clears once it is fixed.
+let capRefused = false;
 
 async function loadItems() {
   const q = el('q').value.trim();
-  const { body: items } = await api('/items' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  const cap = priceCap();
+
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (cap !== null) params.set('max_price', String(cap));
+  const query = params.toString();
+
+  const { status, body: items } = await api('/items' + (query ? '?' + query : ''));
+
+  if (status !== 200) {
+    capRefused = true;
+    el('items').innerHTML = '';
+    note(REJECTIONS[items.reason] ?? `Rejected — ${items.reason}.`, 'bad');
+    return;
+  }
+  if (capRefused) {
+    capRefused = false;
+    note('');
+  }
 
   if (items.length === 0) {
-    el('items').innerHTML = `<p class="empty">Nothing matches “${q}”.</p>`;
+    el('items').innerHTML = `<p class="empty">${nothingFound(q, cap)}</p>`;
     return;
   }
 
@@ -140,6 +185,7 @@ async function order(sku) {
 }
 
 el('q').addEventListener('input', loadItems);
+el('max-price').addEventListener('input', loadItems);
 loadItems();
 loadOrders();
 </script>
