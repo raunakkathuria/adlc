@@ -1,0 +1,8 @@
+---
+description: Working instructions for this repo
+alwaysApply: true
+---
+
+Instructions for this repo live in **AGENTS.md** at the repo root. Read that file.
+
+It is the single source of truth, shared by every agent that works here. Don't duplicate it — this file is only a pointer.

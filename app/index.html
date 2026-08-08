@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storefront</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --surface: #ffffff; --ink: #191c26; --muted: #6b7180;
+    --line: #e4e4e2; --accent: #191c26; --bad: #b3261e; --good: #1d6b3f;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161c; --surface: #1c1f27; --ink: #ececee; --muted: #9aa0ae;
+      --line: #2c303a; --accent: #ececee; --bad: #f2b8b5; --good: #7fd3a2;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.5; }
+  main { max-width: 44rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  h1 { font-size: 1.35rem; margin: 0 0 .25rem; letter-spacing: -0.01em; }
+  p.sub { margin: 0 0 1.75rem; color: var(--muted); font-size: .875rem; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .07em;
+       color: var(--muted); margin: 2rem 0 .75rem; font-weight: 600; }
+  input, button { font: inherit; }
+  input[type=search], input[type=number] {
+    padding: .5rem .7rem; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--surface); color: var(--ink);
+  }
+  input[type=search] { width: 100%; }
+  input[type=number] { width: 4.5rem; text-align: right; }
+  button {
+    padding: .5rem .9rem; border: 1px solid var(--accent); border-radius: 7px;
+    background: var(--accent); color: var(--bg); cursor: pointer;
+  }
+  button:hover { opacity: .88; }
+  .card {
+    display: flex; align-items: center; gap: .75rem; padding: .85rem 1rem;
+    border: 1px solid var(--line); border-radius: 9px; background: var(--surface);
+    margin-bottom: .5rem;
+  }
+  .card .name { font-weight: 550; }
+  .card .meta { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .grow { flex: 1; min-width: 0; }
+  .note {
+    padding: .7rem .9rem; border-radius: 8px; margin: .75rem 0 0; font-size: .875rem;
+    border: 1px solid var(--line); background: var(--surface);
+  }
+  .note.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+  .note.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+  .empty { color: var(--muted); font-size: .875rem; padding: .5rem 0; }
+  ol { padding-left: 1.25rem; margin: 0; color: var(--muted); font-size: .875rem; }
+  code { font-size: .85em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Storefront</h1>
+  <p class="sub">Behaviour is specified in <code>spec/</code>. If this page and the spec disagree, this page is wrong.</p>
+
+  <input type="search" id="q" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
+
+  <h2>Catalogue</h2>
+  <div id="items"></div>
+  <div id="note"></div>
+
+  <h2>Orders</h2>
+  <ol id="orders"></ol>
+</main>
+
+<script>
+const money = (cents) => '£' + (cents / 100).toFixed(2);
+const el = (id) => document.getElementById(id);
+
+async function api(path, options) {
+  const res = await fetch('/api' + path, options);
+  return { status: res.status, body: await res.json() };
+}
+
+function note(message, kind) {
+  el('note').innerHTML = message ? `<p class="note ${kind}">${message}</p>` : '';
+}
+
+const REJECTIONS = {
+  over_limit: 'Rejected — no more than 20 units per order.',
+  insufficient_stock: 'Rejected — not enough in stock.',
+  unknown_sku: 'Rejected — no such item.',
+  invalid_qty: 'Rejected — quantity must be a whole number, at least 1.',
+};
+
+async function loadItems() {
+  const q = el('q').value.trim();
+  const { body: items } = await api('/items' + (q ? '?q=' + encodeURIComponent(q) : ''));
+
+  if (items.length === 0) {
+    el('items').innerHTML = `<p class="empty">Nothing matches “${q}”.</p>`;
+    return;
+  }
+
+  el('items').innerHTML = items.map((item) => `
+    <div class="card">
+      <div class="grow">
+        <div class="name">${item.name}</div>
+        <div class="meta">${item.sku} · ${money(item.price)} · ${item.stock} in stock</div>
+      </div>
+      <input type="number" min="1" value="1" id="qty-${item.sku}" aria-label="Quantity of ${item.name}">
+      <button data-sku="${item.sku}">Order</button>
+    </div>
+  `).join('');
+
+  for (const button of el('items').querySelectorAll('button')) {
+    button.addEventListener('click', () => order(button.dataset.sku));
+  }
+}
+
+async function loadOrders() {
+  const { body: orders } = await api('/orders');
+  el('orders').innerHTML = orders.length
+    ? orders.map((o) => `<li>#${o.id} — ${o.qty} × ${o.sku} — ${money(o.total)}</li>`).join('')
+    : '<li class="empty" style="list-style:none;margin-left:-1.25rem">No orders yet.</li>';
+}
+
+async function order(sku) {
+  const qty = Number(el('qty-' + sku).value);
+  const { status, body } = await api('/orders', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sku, qty }),
+  });
+
+  if (status === 201) {
+    note(`Order #${body.id} placed — ${body.qty} × ${body.sku} for ${money(body.total)}.`, 'good');
+  } else {
+    note(REJECTIONS[body.reason] ?? `Rejected — ${body.reason}.`, 'bad');
+  }
+
+  await loadItems();
+  await loadOrders();
+}
+
+el('q').addEventListener('input', loadItems);
+loadItems();
+loadOrders();
+</script>
+</body>
+</html>

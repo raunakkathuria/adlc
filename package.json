@@ -1,0 +1,16 @@
+{
+  "name": "ai-sdlc-workshop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A 45-minute hands-on workshop repo: the spec is the source of truth, agents carry the work, humans hold two gates.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node app/server.mjs",
+    "test": "node --test 'test/*.test.js'",
+    "req-coverage": "node scripts/req-coverage.mjs",
+    "verify": "npm test --silent && npm run req-coverage --silent"
+  }
+}
