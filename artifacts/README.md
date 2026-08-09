@@ -49,4 +49,14 @@ Exercise 3. Two proposed behaviour changes with the advisory reviews that ran wh
 ./run.sh prompts/verify.md spec/catalog.md
 ```
 
+That opens an interactive session, which is what you want when you are watching it work. To **capture** a run to a file the way the ones here were captured, print the prompt and pipe it to a headless CLI instead:
+
+```bash
+./run.sh --print prompts/verify.md spec/catalog.md \
+  | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(curl:*)" \
+  > artifacts/expected/01-verify-catalog.md
+```
+
+Same prompt text either way — `--print` emits exactly what the interactive path hands the CLI, target line included.
+
 Worth doing before you run a session. The output will differ from what is committed, which is honest and worth showing people.
