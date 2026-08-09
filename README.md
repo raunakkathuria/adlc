@@ -189,6 +189,8 @@ npm run verify
 
 Fourteen tests pass. Every requirement has a test. Nothing is red.
 
+Two different things in this repo carry the word *verify*. This is the gate: `node --test` plus `req-coverage`, no model in it. It stays green through everything below. The Verifier is a station, and it is the one that catches what you are about to find.
+
 Now open [`spec/catalog.md`](spec/catalog.md) beside [`app/server.mjs`](app/server.mjs) and read `REQ-CAT-3` scenario by scenario. Ask of each one: *does the code actually do this?* Then check the same scenarios against [`test/catalog.test.js`](test/catalog.test.js).
 
 Three minutes of reading — you are doing the Verifier's job by hand. Then hand it to the real thing, the same station you watched in Part 1 step 6:
