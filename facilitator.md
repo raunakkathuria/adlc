@@ -47,8 +47,11 @@ For a full rehearsal with the agents actually running, use a throwaway clone wit
 
 ```bash
 git clone https://github.com/raunakkathuria/adlc.git /tmp/rehearsal
-cd /tmp/rehearsal && git remote remove origin && ./check.sh
+cd /tmp/rehearsal && git branch feat/filter-by-price origin/feat/filter-by-price \
+  && git remote remove origin && ./check.sh
 ```
+
+Create that branch **before** dropping the remote. Removing `origin` deletes the remote-tracking refs with it, and step 5 of Part 1 is `git checkout feat/filter-by-price` — without a local branch it fails outright, in the one clone you rehearse in.
 
 Only two stations change files: `build.md` (folds the delta in and deletes its directory) and `reproduce.md` / `fix.md`. Nothing in the loop touches GitHub. Worth knowing: `AGENTS.md` has a Git section, so an agent could decide to commit on its own — harmless in a remote-less clone, which is the main argument for using one.
 
