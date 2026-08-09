@@ -74,7 +74,7 @@ jobs:
 
       # Only the bug path is automated here. A behaviour change needs a spec delta and a human
       # at Gate 1, so it stops before any code is written — see the 05:02 run in
-      # artifacts/overnight/.
+      # artifacts/unattended/.
       - name: Not a bug — stop and say why
         if: steps.runner.outputs.on == 'true' && steps.triage.outputs.class != 'bug'
         run: |
