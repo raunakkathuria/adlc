@@ -11,7 +11,7 @@ That split matters for two reasons. You can do every exercise without an agent C
 The runs used Claude Code in headless mode:
 
 ```bash
-cat prompts/verify.md | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(curl:*)"
+./run.sh prompts/verify.md spec/catalog.md
 ```
 
 Your own runs will not match these, and that is expected. The gate is deterministic; the worker is not.
@@ -46,7 +46,7 @@ Exercise 3. Two proposed behaviour changes with the advisory reviews that ran wh
 ## Regenerating any of this
 
 ```bash
-./run.sh prompts/verify.md
+./run.sh prompts/verify.md spec/catalog.md
 ```
 
 Worth doing before you run a session. The output will differ from what is committed, which is honest and worth showing people.

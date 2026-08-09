@@ -81,7 +81,7 @@ jobs:
         run: |
           mkdir -p artifacts/demo
           { cat prompts/build.md
-            printf '\n\nThe approved delta is `spec/changes/%s/`.\n' "${{ steps.delta.outputs.slug }}"
+            printf '\n\nThe target for this run is `spec/changes/%s/`.\n' "${{ steps.delta.outputs.slug }}"
           } | claude -p --allowedTools "Read Grep Glob Edit Write Bash(node:*) Bash(npm:*) Bash(rm:*)" \
             | tee artifacts/demo/02-build.md
 
@@ -104,6 +104,8 @@ jobs:
       # code, and reports drift in both directions: requirements with no implementation, and
       # behaviour with no requirement. Advisory, so it cannot block the pull request from opening;
       # its verdict is for the human at Gate 2 to weigh.
+      # No target given, so verify.md falls back to its own default. That is correct here and
+      # deliberate: which spec file a delta touches is not derivable from its slug.
       - name: Verify against the spec
         if: steps.runner.outputs.on == 'true' && steps.delta.outputs.found == 'true'
         continue-on-error: true

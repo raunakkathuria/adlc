@@ -22,7 +22,7 @@ The second half of the claim is **anywhere**. Nothing in `prompts/` knows anythi
 
 | Time | Min | Block | Who |
 |---|---|---|---|
-| 0:00 | 4 | The claim. `artifacts/unattended/` on screen. Receipts before theory. | you |
+| 0:00 | 4 | The claim. `artifacts/unattended/` on screen, and the [GitHub issues](https://github.com/raunakkathuria/adlc/issues) beside it — "the line accepts work one way, as a tracked issue" is worth showing rather than asserting. Receipts before theory. | you |
 | 0:04 | 3 | `./check.sh`, and say the fallback out loud. | them |
 | 0:07 | 14 | **Part 1 — one feature, end to end.** The Gate 1 vote lands around 0:15. | you drive |
 | 0:21 | 3 | **Part 2 warm-up** — the pipeline is green and the product is wrong. | them, reading |
@@ -50,11 +50,13 @@ You drive. Everything is already committed, so you can either run the prompts li
 
 1. **The request.** Read `issues/003-filter-catalog-by-price.md` aloud. Three paragraphs, no template. Point out that this is the actual input — nobody wrote acceptance criteria first.
 
-2. **Classify.** `artifacts/unattended/triage-003.txt`. One question sizes the process: would a rebuild from the spec alone lose this? Yes, so the spec moves first.
+2. **Classify.** `./run.sh prompts/triage.md issues/003-filter-catalog-by-price.md`, or read `artifacts/unattended/triage-003.txt`. One question sizes the process: would a rebuild from the spec alone lose this? Yes, so the spec moves first.
+
+   Say what the second argument is doing, because it is the whole intake story in one line: the issue is [#4 on GitHub](https://github.com/raunakkathuria/adlc/issues/4), and the first station copied it into the repo so every station after this reads the same bytes — and so none of this needs a token.
 
    Worth admitting in the room: it came back `feat`, and I would have said `extension`. It is a defensible call either way, and the thing that matters is that it *wrote down its reason*, so a human can disagree in one line. A classifier that returns a label with no reason cannot be argued with.
 
-3. **The delta.** `spec/changes/filter-catalog-by-price/`. The one to actually open is `tasks.md`, for two reasons:
+3. **The delta.** `./run.sh prompts/delta.md issues/003-filter-catalog-by-price.md` produces `spec/changes/filter-catalog-by-price/`. The one to actually open is `tasks.md`, for two reasons:
    - It worked out on its own that `req-coverage` reads only the top level of `spec/` — `readdir`, not a recursive walk — so the new requirement is invisible to the gate while the delta sits in `changes/`, and gate-visible the moment it lands. Nobody told it that. It read the script.
    - It noticed the *other* defect in this repo, the search one from Part 2, and wrote: **"Do not 'fix' search inside this change."** It suggested asserting composition with a query today's search happens to match, so the feature test doesn't fail for two unrelated reasons.
 
@@ -62,7 +64,7 @@ You drive. Everything is already committed, so you can either run the prompts li
 
    Then `proposal.md`, and specifically the split between **decisions taken** and the **open question for Gate 1**. It picks the things that are not coin flips and says why. It hands up the one that genuinely is — whether `max_price=0` is a filter with an empty answer or a mistake to refuse — and argues *against its own choice*, citing REQ-ORD-6 as precedent. "My proposal is the inconsistent one" is a sentence worth reading out.
 
-4. **Two reviewers, before a human.** `prompts/spec-review.md`, a product lens and an architect lens, neither of which wrote the delta.
+4. **Two reviewers, before a human.** `./run.sh prompts/spec-review.md spec/changes/filter-catalog-by-price/` — a product lens and an architect lens, neither of which wrote the delta.
 
 5. **Gate 1 — hand it to the room.** See below. This is the audience-participation beat and it needs no laptops.
 
@@ -72,7 +74,7 @@ You drive. Everything is already committed, so you can either run the prompts li
 
    The fourth beat is the one that earns trust with a sceptical room: four behaviours the delta left unspecified now have answers, decided by an implementation detail rather than a person, and it said so. The loop does not remove unspecified behaviour — it makes it visible at the point it gets decided.
 
-7. **The Verifier.** `./run.sh prompts/verify.md` — the third role, which wrote none of it and shares no session with the two that did.
+7. **The Verifier.** `./run.sh prompts/verify.md spec/catalog.md` — the third role, which wrote none of it and shares no session with the two that did.
 
    Two things to draw out. It **re-derives the feature from the spec before opening any code**, which is what stops it becoming a diff-reader: read the code first and you only ever check whether the code is self-consistent, which it always is. And it reports drift **in both directions** — *missing* (a requirement the product does not honour) and *extra* (behaviour that traces to no requirement).
 
@@ -185,7 +187,7 @@ If you have time and a working CLI, this is the strongest closing demo. Add one 
 - **Decide before you write.** A request that can still be rejected must not have changed any state. Validate fully, then mutate.
 ```
 
-Reset, re-run `./run.sh prompts/reproduce.md` and `./run.sh prompts/fix.md`, and the naive fix stops appearing. Same prompt, same model, different outcome, because the standard was written down.
+Reset, re-run `./run.sh prompts/reproduce.md issues/001-rejected-order-eats-stock.md` and `./run.sh prompts/fix.md`, and the naive fix stops appearing. Same prompt, same model, different outcome, because the standard was written down.
 
 That is the answer to "do we need steering documents?" You don't need nine files of philosophy. You need the six rules your team actually argues about in review, in one file the agent reads. Everything else is a wiki page nobody opens.
 
@@ -244,7 +246,7 @@ Fourteen tests, nine requirements, green. That is the shipping state, with both 
 To regenerate any of them:
 
 ```bash
-cat prompts/verify.md | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(curl:*)"
+./run.sh prompts/verify.md spec/catalog.md
 ```
 
 Worth doing before you run the session, for two reasons: the output will differ from what's committed, which is honest and worth showing, and it confirms your setup works on the day.

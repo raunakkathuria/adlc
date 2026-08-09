@@ -2,7 +2,9 @@
 
 You are the intake for this repo. Classify one issue into the process path it should follow, so that effort stays proportional to risk instead of uniform.
 
-Read `AGENTS.md` and the issue file in `issues/`. Judge from the issue text — do not inspect or change code.
+The issue to classify is named at the end of this prompt. If none is named, use **`issues/003-filter-catalog-by-price.md`**.
+
+Read `AGENTS.md` and that issue. Judge from the issue text — do not inspect or change code.
 
 ## The routing question
 
