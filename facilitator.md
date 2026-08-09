@@ -47,8 +47,11 @@ For a full rehearsal with the agents actually running, use a throwaway clone wit
 
 ```bash
 git clone https://github.com/raunakkathuria/adlc.git /tmp/rehearsal
-cd /tmp/rehearsal && git remote remove origin && ./check.sh
+cd /tmp/rehearsal && git branch feat/filter-by-price origin/feat/filter-by-price \
+  && git remote remove origin && ./check.sh
 ```
+
+Create that branch **before** dropping the remote. Removing `origin` deletes the remote-tracking refs with it, and step 5 of Part 1 is `git checkout feat/filter-by-price` — without a local branch it fails outright, in the one clone you rehearse in.
 
 Only two stations change files: `build.md` (folds the delta in and deletes its directory) and `reproduce.md` / `fix.md`. Nothing in the loop touches GitHub. Worth knowing: `AGENTS.md` has a Git section, so an agent could decide to commit on its own — harmless in a remote-less clone, which is the main argument for using one.
 
@@ -117,6 +120,8 @@ You drive. Everything is already committed, so you can either run the prompts li
    Its verdict splits the routing rather than saying a bare FAIL: the Extra list needs Gate 1 because a human decides what the spec should say, while `REQ-CAT-3` needs no delta at all because the spec is already correct and only the code is wrong. That distinction is the whole point of `FAIL → back to the Planner`.
 
    **Expect it to flag the seeded search defect, and let it.** The build deliberately left that alone, per-diff review passed it, and the independent check caught it anyway. It is advisory, so the pull request stays mergeable. This is the strongest live proof of independence in the session — do not apologise for it.
+
+   If you name the defect out loud here, name both halves: `app/server.mjs:41` never reads `item.sku`, and the match is case-sensitive. Say only "search is case-sensitive" and the first person who types `BOOK-1` exactly as printed will contradict you. Worked out in full under Part 2 below.
 
 8. **Gate 2.** The pull request is open on green gates. Nothing merges it but a person.
 

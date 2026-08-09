@@ -12,7 +12,7 @@ REQ-ORD-1 already says: "the item's stock has dropped by `qty`". The delta adds 
 
 This is not a gap that can be left to the build, because both possible answers change spec text that is not in the delta:
 
-- **If cancelling puts stock back**, then `spec/catalog.md` is wrong as written — "Over the API it is read-only; only an order changes stock (see [orders.md](orders.md))". A cancel would be a second thing that changes stock. That needs a `MODIFIED` entry, and the delta's "Target: `spec/orders.md`" is then incomplete.
+- **If cancelling puts stock back**, then `spec/catalog.md` is wrong as written — "Over the API it is read-only; only an order changes stock (see [orders.md](../../../spec/orders.md))". A cancel would be a second thing that changes stock. That needs a `MODIFIED` entry, and the delta's "Target: `spec/orders.md`" is then incomplete.
 - **If cancelling does not put stock back**, then REQ-ORD-2 — "stock is a hard limit" — becomes permanently lossy: every cancellation burns units that were never sold. That is a new product rule, and nobody has stated it.
 
 The spec already has a stance in the neighbourhood, in REQ-ORD-4: "A rejection is a decision not to trade. Nothing may be consumed by a trade that did not happen." A cancellation is arguably the same claim one step later. The delta does not engage with it either way.
