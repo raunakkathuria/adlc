@@ -33,11 +33,11 @@ Read `04` and `05` together. Two different fixes for the same bug, both passing 
 
 `06` is the second most useful. A loop that only ever succeeds has not been tested.
 
-## `overnight/` — three issues, three endings
+## `unattended/` — three issues, three endings
 
 What the loop looks like running unattended. Three issues arrived overnight and none of them ended with an agent merging its own work.
 
-See [`overnight/README.md`](overnight/README.md).
+See [`unattended/README.md`](unattended/README.md).
 
 ## `gate-1/` — two spec deltas waiting on a human
 
