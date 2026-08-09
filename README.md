@@ -57,7 +57,34 @@ This is the one station whose output is **data, not prose** — `bug-intake.yml`
   | claude -p --allowedTools "Read Grep Glob" | jq
 ```
 
-One question decides how much process this change carries: **would a rebuild from the spec alone lose it?** Here, yes — so the spec moves before any code does. Result: [`artifacts/unattended/triage-003.txt`](artifacts/unattended/triage-003.txt).
+The committed run is [`artifacts/unattended/triage-003.txt`](artifacts/unattended/triage-003.txt). The file holds it on one line; this is the same object through `jq`:
+
+```json
+{
+  "class": "feat",
+  "needs_spec": true,
+  "needs_proposal": true,
+  "slug": "filter-catalog-by-price",
+  "requirements": [
+    "REQ-CAT-1",
+    "REQ-CAT-3"
+  ],
+  "reason": "The spec defines only list, fetch-by-SKU, and text search — it is silent on price filtering, so this is a net-new query capability whose units and boundary semantics need a human-approved proposal."
+}
+```
+
+| Field | What it decides |
+|---|---|
+| `class` | Which of the five paths the issue takes: `feat`, `extension`, `bug`, `chore`, `docs`. `bug-intake.yml` reads this key and nothing else to decide whether the bug path runs. |
+| `needs_spec` | Whether a human has to merge a spec delta before any code exists. True when a rebuild from the spec alone would lose the change. |
+| `needs_proposal` | Whether that delta also carries `proposal.md`, the why-it-exists file for the person at Gate 1. True only for `feat`. |
+| `slug` | The directory the delta lands in, `spec/changes/<slug>/`. Empty for `bug`, `chore` and `docs`, which write no delta. |
+| `requirements` | The requirement ids the issue bears on. For a bug, what is broken. For a feature, what the delta touches. |
+| `reason` | Why this class, in one sentence, so a human can disagree in one line. |
+
+`class` sets the three keys under it: `feat` needs a delta and a proposal, `extension` a delta only, and the code-only classes neither.
+
+One question decides how much process this change carries: **would a rebuild from the spec alone lose it?** Here, yes — so the spec moves before any code does.
 
 ### 2. Change the spec, not the code
 
@@ -94,20 +121,20 @@ This is the gate that cannot be automated, and it is the cheapest place in the w
 
 ### 5. Build it
 
-Delta A gets merged, and the Executor builds it. **Switch to the finished branch rather than running this live** — the build took about 50 minutes, and a spinner in front of a room teaches nothing:
+Delta A gets merged, and the Executor builds it:
+
+```bash
+./run.sh prompts/build.md spec/changes/filter-catalog-by-price/
+```
+
+**This one is already done.** It is the main development work of Part 1, and the real run took about 50 minutes. Keep the session clock in mind: that is the longest step in the loop by a wide margin, and a spinner in front of a room teaches nothing. Switch to the finished branch instead:
 
 ```bash
 git checkout feat/filter-by-price
 git diff main
 ```
 
-That branch is [pull request #1](https://github.com/raunakkathuria/adlc/pull/1), and it is the output of:
-
-```bash
-./run.sh prompts/build.md spec/changes/filter-catalog-by-price/
-```
-
-If you do run it, know that it folds the delta into `spec/catalog.md` and **deletes `spec/changes/filter-catalog-by-price/`** — correct behaviour, and it consumes Part 1's starting state. Put it back with:
+If you do run the build live, know that it folds the delta into `spec/catalog.md` and **deletes `spec/changes/filter-catalog-by-price/`**. That is correct behaviour, and it consumes Part 1's starting state. Put it back with:
 
 ```bash
 git checkout main && git checkout -- app/ test/ spec/
