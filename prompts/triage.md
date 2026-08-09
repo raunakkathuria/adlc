@@ -24,10 +24,12 @@ The trap to avoid: a report phrased as a complaint about missing behaviour is a 
 
 ## Output
 
-Exactly one JSON object and nothing else:
+**One JSON object, on one line, and nothing else.** This output is read by a machine — `bug-intake.yml` parses it to decide which path the issue takes — so anything around it is a bug.
 
-```json
-{"class":"feat|extension|bug|chore|docs","needs_spec":true,"needs_proposal":false,"slug":"kebab-case-or-empty","requirements":["REQ-ORD-4"],"reason":"one sentence"}
-```
+Specifically: no code fence, no `json` tag, no preamble, no explanation after. Do not describe what you are about to do or what you just did. The shape is:
 
-`requirements` lists the REQ ids the issue bears on, empty if none apply. `slug` is empty for `bug`, `chore`, and `docs`.
+    {"class":"feat|extension|bug|chore|docs","needs_spec":true,"needs_proposal":false,"slug":"kebab-case-or-empty","requirements":["REQ-ORD-4"],"reason":"one sentence"}
+
+That is indented as an illustration; emit the object flush left with nothing before or after it, so `jq` can read it directly.
+
+`requirements` lists the REQ ids the issue bears on, empty if none apply. `slug` is empty for `bug`, `chore`, and `docs`. Put your reasoning in `reason` — that is what the field is for, and it is the thing a human reads when they disagree with you.
