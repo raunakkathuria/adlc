@@ -96,7 +96,23 @@ The finished work is **[pull request #1](https://github.com/raunakkathuria/adlc/
 git diff main feat/filter-by-price
 ```
 
-### 6. Gate 2 — still a human
+### 6. The Verifier signs it off
+
+A third role. It wrote none of this and shares no session with the two that did.
+
+```bash
+./run.sh prompts/verify.md
+```
+
+It re-derives the feature from the spec *before* reading any code — read the code first and you end up checking whether the code is self-consistent, which it always is. Then it reports drift in both directions: **missing** (a requirement the product does not honour) and **extra** (behaviour that traces back to no requirement at all).
+
+That second direction is the one most reviews skip. Code cannot abstain: where the spec stayed silent, an implementation detail decided, and nobody chose it. So extra findings go back to the spec, not into the code.
+
+On `pass` the work goes to Gate 2. On `fail` it goes **back to the Planner, not the Executor** — if the spec was silent or wrong, more code will not fix it.
+
+Expect it to flag the search defect this build deliberately left alone. Per-diff review passed that; the independent check did not.
+
+### 7. Gate 2 — still a human
 
 The pull request is open, the gates are green, and nothing merges it but a person.
 
@@ -118,7 +134,13 @@ Fourteen tests pass. Every requirement has a test. Nothing is red.
 
 Now open [`spec/catalog.md`](spec/catalog.md) beside [`app/server.mjs`](app/server.mjs) and read `REQ-CAT-3` scenario by scenario. Ask of each one: *does the code actually do this?* Then check the same scenarios against [`test/catalog.test.js`](test/catalog.test.js).
 
-Three minutes. If you have a CLI, `./run.sh prompts/verify.md` runs an independent verifier that has the spec, the code, and no memory of writing either. Reference run: [`artifacts/expected/01-verify-catalog.md`](artifacts/expected/01-verify-catalog.md).
+Three minutes of reading — you are doing the Verifier's job by hand. Then hand it to the real thing, the same station you watched in Part 1 step 6:
+
+```bash
+./run.sh prompts/verify.md
+```
+
+Reference run: [`artifacts/expected/01-verify-catalog.md`](artifacts/expected/01-verify-catalog.md).
 
 **The lesson:** `npm run req-coverage` checks that every requirement is *named* by a test. Naming is not asserting. A green pipeline is only as true as the thing it compares against.
 
