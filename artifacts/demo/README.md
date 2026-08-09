@@ -28,6 +28,19 @@ Four things the delta left unspecified now have de facto answers, because code c
 
 That is the honest shape of this loop. It does not eliminate unspecified behaviour. It makes the unspecified behaviour *visible* at the point it gets decided, in a report a person can read.
 
+## Then the Verifier signed it off
+
+[`04-verify.md`](04-verify.md) is the independent check, run against this branch by something that wrote none of it and shares no session with what did. It re-derives the feature from the spec before reading any code.
+
+**On the feature itself it is clean.** `REQ-CAT-4` holds on every one of its nine scenarios and all four composition rules — *"the cap is correct work."*
+
+It found two other things:
+
+- **Missing** — the search defect is still there, because this change deliberately did not touch it. Per-diff review passed that. The independent check did not. That is the whole argument for a third role, happening on its own without being set up.
+- **Extra** — the accepted grammar for the cap is `/^\d+$/`, which the spec never states. So `1e3` is a whole number and refused anyway, `+800` is refused, `0800` is silently normalised to 800. The spec named exactly two rejections; the code invented a third rule.
+
+That last one is the interesting bit, because **the build had already confessed to it** in `02-build.md`. Two stations, working from opposite ends and sharing no context, landed on the same gap — one noticed while writing the code, the other while reading the spec. Neither was told to look.
+
 ## Seeing it
 
 ```bash
