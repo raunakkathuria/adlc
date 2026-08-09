@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Run one of the prompts in prompts/ with whichever agent CLI you have.
 #
-#   ./run.sh prompts/reproduce.md            run it
-#   ./run.sh --print prompts/verify.md       print the prompt, paste it wherever you like
+#   ./run.sh prompts/triage.md issues/003-filter-catalog-by-price.md   run it on a target
+#   ./run.sh prompts/reproduce.md                                      no target — the prompt's default
+#   ./run.sh --print prompts/verify.md spec/catalog.md                 print it, paste it anywhere
 #   AGENT_CMD='my-cli --headless' ./run.sh prompts/fix.md
+#
+# The second argument is optional and is appended to the prompt as one line naming the target.
+# Most stations need one — which issue to classify, which delta to build, which spec to verify —
+# and each prompt states its own default for when you leave it off.
 #
 # CLI flags move between versions. If the invocation below is wrong for yours, set AGENT_CMD —
 # the prompt is piped to it on stdin — or use --print and paste. The prompts are plain markdown;
@@ -20,7 +25,10 @@ fi
 
 prompt_file="${1:-}"
 if [ -z "$prompt_file" ]; then
-  echo "usage: ./run.sh [--print] prompts/<name>.md" >&2
+  echo "usage: ./run.sh [--print] prompts/<name>.md [target]" >&2
+  echo >&2
+  echo "  target is optional — the issue, delta or spec this run is about." >&2
+  echo "  Leave it off and the prompt uses its own stated default." >&2
   echo >&2
   echo "available prompts:" >&2
   for p in prompts/*.md; do echo "  $p" >&2; done
@@ -33,6 +41,17 @@ if [ ! -f "$prompt_file" ]; then
 fi
 
 prompt="$(cat "$prompt_file")"
+
+# The target, if given, is appended as one line. One mechanism for every station, so nothing
+# has to be templated into the prompts themselves.
+target="${2:-}"
+if [ -n "$target" ]; then
+  if [ ! -e "$target" ]; then
+    echo "no such target: $target" >&2
+    exit 2
+  fi
+  prompt="$(printf '%s\n\nThe target for this run is `%s`.\n' "$prompt" "$target")"
+fi
 
 if [ "$print_only" -eq 1 ]; then
   printf '%s\n' "$prompt"

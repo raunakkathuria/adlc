@@ -4,9 +4,11 @@ You are reviewing a proposed change to the spec. No code exists yet, and none sh
 
 Your review is **advisory**. A human decides at Gate 1. Say what you think clearly and then let them decide; do not write as if you were the gate.
 
+The delta under review is named at the end of this prompt. If none is named, use **`spec/changes/filter-catalog-by-price/`**.
+
 ## Mandatory reads
 
-The delta under review (`proposal.md`, `spec.md`, `tasks.md`), plus every existing file in `spec/`. You cannot judge a change to a spec without knowing the spec it changes.
+That delta (`proposal.md`, `spec.md`, `tasks.md`), plus every existing file in `spec/`. You cannot judge a change to a spec without knowing the spec it changes.
 
 ## Review it through two lenses, separately
 

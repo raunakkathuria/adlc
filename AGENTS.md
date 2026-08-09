@@ -52,7 +52,14 @@ Three roles carry the work, and one of them checks it.
 | Quality check | Review | [`prompts/review.md`](prompts/review.md) | findings on the change — design, not just behaviour |
 | **Verifier** | Verify against spec | [`prompts/verify.md`](prompts/verify.md) | drift in both directions — missing *and* extra |
 
-Run one with `./run.sh prompts/<name>.md`, which dispatches to whichever agent CLI you have.
+Run one with `./run.sh prompts/<name>.md [target]`, which dispatches to whichever agent CLI you have.
+
+The optional second argument names what the run is about — which issue, which delta, which spec file — and is appended to the prompt as one line. Leave it off and each prompt falls back to its own stated default. The workflows in `.github/workflows/` append the identical sentence, so a station sees the same text whether a person or CI invoked it.
+
+```bash
+./run.sh prompts/triage.md issues/003-filter-catalog-by-price.md
+./run.sh prompts/verify.md spec/catalog.md
+```
 
 **Isolation is the design principle.** Planner and Executor share the same business context but never a session, so a plan cannot leak its assumptions into the build. The Verifier shares neither: it re-derives the feature from the spec alone before it reads any code. Same reason a factory's quality inspector does not report to the line supervisor.
 
