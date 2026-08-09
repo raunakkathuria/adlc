@@ -45,9 +45,27 @@ A loop that always produces a fix will produce a fix for this, and it will be fi
 
 ## Issue 003 — stopped at the gate, not by failure
 
+[`triage-003.txt`](triage-003.txt) in full, formatted. On disk it is one line:
+
+```json
+{
+  "class": "feat",
+  "needs_spec": true,
+  "needs_proposal": true,
+  "slug": "filter-catalog-by-price",
+  "requirements": [
+    "REQ-CAT-1",
+    "REQ-CAT-3"
+  ],
+  "reason": "The spec defines only list, fetch-by-SKU, and text search — it is silent on price filtering, so this is a net-new query capability whose units and boundary semantics need a human-approved proposal."
+}
+```
+
+What each field decides is in [`README.md` § 1. Classify it](../../README.md#1-classify-it).
+
 Classified `feat`, so the spec moves before any code does. The delta is in [`../gate-1/`](../gate-1/), where a human decides.
 
-Worth noting: I would have called this one `extension` rather than `feat` — it changes behaviour but needs no new design. The classifier argued it is a net-new query capability whose units and boundary semantics need a human-approved proposal. That is defensible, and more to the point it is *legible*: it wrote down its reason, so a human can disagree in one line and relabel it. A classifier that returns a label with no reason cannot be argued with.
+Worth noting: I would have called this one `extension` rather than `feat` — it changes behaviour but needs no new design. That is defensible, and more to the point it is *legible*: it wrote down its reason, so a human can disagree in one line and relabel it. A classifier that returns a label with no reason cannot be argued with.
 
 ## What this does not prove
 
