@@ -35,10 +35,13 @@ reset();
 
 // --- domain ------------------------------------------------------------------
 
-export function listItems(query) {
-  const all = [...items.values()];
-  if (!query) return all;
-  return all.filter((item) => item.name.includes(query));
+export function listItems(query, maxPrice = null) {
+  let found = [...items.values()];
+  if (query) found = found.filter((item) => item.name.includes(query));
+  // The cap is inclusive and in minor units, like price itself. Zero is a cap, not an absence —
+  // hence the null check rather than a falsy one.
+  if (maxPrice !== null) found = found.filter((item) => item.price <= maxPrice);
+  return found;
 }
 
 export function getItem(sku) {
@@ -77,7 +80,19 @@ const REJECT_STATUS = {
   invalid_qty: 400,
   insufficient_stock: 422,
   over_limit: 422,
+  invalid_max_price: 400,
 };
+
+/**
+ * Read `max_price` off the query string. Absent or empty is no cap at all; anything else must be a
+ * whole number of minor units at or above zero. Digits only, on the raw string — `Number('')` and
+ * `Number(' ')` are both 0, so a cap the system did not understand must never reach the filter.
+ */
+function parseMaxPrice(raw) {
+  if (raw === null || raw === '') return { ok: true, maxPrice: null };
+  if (!/^\d+$/.test(raw)) return { ok: false, reason: 'invalid_max_price' };
+  return { ok: true, maxPrice: Number(raw) };
+}
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
@@ -102,7 +117,11 @@ export function createApp() {
 
     try {
       if (req.method === 'GET' && path === '/api/items') {
-        return json(res, 200, listItems(url.searchParams.get('q')));
+        // The cap is refused before anything is narrowed, so a rejected filter never comes back
+        // looking like an answer.
+        const cap = parseMaxPrice(url.searchParams.get('max_price'));
+        if (!cap.ok) return json(res, REJECT_STATUS[cap.reason], { reason: cap.reason });
+        return json(res, 200, listItems(url.searchParams.get('q'), cap.maxPrice));
       }
 
       if (req.method === 'GET' && path.startsWith('/api/items/')) {
