@@ -1,6 +1,6 @@
 # Let shoppers narrow the catalogue by price
 
-From [`issues/003-filter-catalog-by-price.md`](../../../issues/003-filter-catalog-by-price.md).
+From [issue #4](https://github.com/raunakkathuria/adlc/issues/4), taken in as [`issues/003-filter-catalog-by-price.md`](../../../issues/003-filter-catalog-by-price.md).
 
 ## Why now
 
