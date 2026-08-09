@@ -66,9 +66,25 @@ You drive. Everything is already committed, so you can either run the prompts li
 
 5. **Gate 1 — hand it to the room.** See below. This is the audience-participation beat and it needs no laptops.
 
-6. **Build.** `git diff main feat/filter-by-price`, and the run in `artifacts/demo/`. Tests first, gate green, delta folded into the living spec and its directory deleted — the spec is the record of what was agreed, not a pile of change files.
+6. **Build.** [Pull request #1](https://github.com/raunakkathuria/adlc/pull/1), and the run report in `artifacts/demo/` on that branch. Tests first, gate green, delta folded into the living spec and its directory deleted — the spec is the record of what was agreed, not a pile of change files.
 
-7. **Gate 2.** The pull request is open on green gates. Nothing merges it but a person.
+   The four beats to read out are in the PR description. If you only use one, use the second: it found that the living spec now carries two `REQ-CAT-3` scenarios no test asserts, and that `req-coverage` matches on requirement ids so it reports the requirement covered regardless. *"The gate structurally cannot see this."* An agent auditing the gate it was measured by is not what people expect from this.
+
+   The fourth beat is the one that earns trust with a sceptical room: four behaviours the delta left unspecified now have answers, decided by an implementation detail rather than a person, and it said so. The loop does not remove unspecified behaviour — it makes it visible at the point it gets decided.
+
+7. **The Verifier.** `./run.sh prompts/verify.md` — the third role, which wrote none of it and shares no session with the two that did.
+
+   Two things to draw out. It **re-derives the feature from the spec before opening any code**, which is what stops it becoming a diff-reader: read the code first and you only ever check whether the code is self-consistent, which it always is. And it reports drift **in both directions** — *missing* (a requirement the product does not honour) and *extra* (behaviour that traces to no requirement).
+
+   Extra is the one nobody expects, and on this repo it is spectacular. Run it before the session and read `artifacts/expected/01-verify-catalog.md`: it finds an entire unspecified web UI, an error handler leaking internal messages to clients, three reason codes in no spec, and — the best one — that `?max_price=1000` is **silently ignored today**, while cross-referencing the delta sitting at Gate 1 whose own composition rule says a shopper must never receive a plausible-looking list assembled from a filter the system did not understand.
+
+   Its verdict splits the routing rather than saying a bare FAIL: the Extra list needs Gate 1 because a human decides what the spec should say, while `REQ-CAT-3` needs no delta at all because the spec is already correct and only the code is wrong. That distinction is the whole point of `FAIL → back to the Planner`.
+
+   **Expect it to flag the seeded search defect, and let it.** The build deliberately left that alone, per-diff review passed it, and the independent check caught it anyway. It is advisory, so the pull request stays mergeable. This is the strongest live proof of independence in the session — do not apologise for it.
+
+8. **Gate 2.** The pull request is open on green gates. Nothing merges it but a person.
+
+   Worth showing the Actions tab here: `verify` runs in about 11 seconds. The gate being that cheap is why it can sit between every station.
 
 ### The Gate 1 vote — the answer
 
@@ -184,13 +200,42 @@ That is the answer to "do we need steering documents?" You don't need nine files
 | The room finishes early | Point them at `prompts/build.md` and the open question in delta A: pick an answer for `max_price=0` and see what the build does with it. |
 | Somebody asks how long the feature build took | Be honest: minutes, not seconds, and long enough that running it live in a 45-minute session is a bad bet. That is why the CI run was done beforehand. |
 
+## Running the loop in CI — what's left to do
+
+Two workflows are wired and both are **off until someone adds a secret**, which is deliberate: a repo that can open pull requests on its own should need a human to switch it on.
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `verify.yml` | every push and PR | The gate. Already running, ~11 seconds, no secret needed. |
+| `bug-intake.yml` | an issue is opened or labelled | The bug path: classify, reproduce, fix, review, open a PR. |
+| `feature-build.yml` | a delta lands on `main`, or manual | The feature path, starting *after* Gate 1 — because merging the delta is the approval. |
+
+To switch the agent ones on, add your key once:
+
+```bash
+gh secret set ANTHROPIC_API_KEY --repo raunakkathuria/adlc
+```
+
+Then trigger the feature build deliberately, **well before the session**:
+
+```bash
+gh workflow run feature-build.yml --repo raunakkathuria/adlc
+gh run watch --repo raunakkathuria/adlc
+```
+
+**Do not run this live in the room.** The local run of the same prompt took roughly 50 minutes. A feature build is minutes-to-tens-of-minutes work, and a spinner in front of an audience is the exact failure mode the rest of this design avoids. Run it beforehand, then walk the finished run and the pull request it opened. The Actions tab with a real green run is more convincing than watching one start.
+
+If someone asks why the demo wasn't live: say that, plainly. It is a more useful answer than a staged one.
+
 ## Resetting between runs
 
 ```bash
-git checkout main && git checkout app/ test/ && npm run verify
+git checkout main && git checkout -- app/ test/ spec/ && npm run verify
 ```
 
 Fourteen tests, nine requirements, green. That is the shipping state, with both defects live.
+
+`spec/` is in that list on purpose. If anyone ran `prompts/build.md`, it folded the delta into `spec/catalog.md` and **deleted** `spec/changes/filter-catalog-by-price/` — correct behaviour, and it consumes Part 1's starting state. Restoring `app/` and `test/` alone leaves the delta directory gone and Part 1 unrunnable.
 
 ## Where the artifacts came from
 

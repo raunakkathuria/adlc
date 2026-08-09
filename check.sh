@@ -49,7 +49,7 @@ fi
 
 echo
 if [ "$fail" -eq 0 ]; then
-  echo "Ready. Open README.md and start at exercise 1."
+  echo "Ready. Open README.md."
 else
   echo "Come anyway — the exercises work from artifacts/ without a working setup."
 fi
