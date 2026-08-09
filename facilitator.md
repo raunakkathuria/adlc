@@ -18,6 +18,40 @@ Say that in the first four minutes, because it is the difference between a demo 
 
 The second half of the claim is **anywhere**. Nothing in `prompts/` knows anything about this repo that it does not read from the repo at run time. No paths baked into the reasoning, no "the bug is in `createOrder`". That is why the same files work on a codebase they were never written for, and it is the part worth stealing on Monday.
 
+## What to run live, and what to read
+
+Only two of Part 1's six stations are worth running live. The rest are slow, or already committed as evidence, and a room learns nothing from watching a spinner.
+
+| Station | In the room | Why |
+|---|---|---|
+| 01 classify | **run it** | ~1 minute, and its output is data — pipe it to `jq` on screen |
+| 02 spec delta | read the committed one | `delta.md` refuses to overwrite committed work and writes a fresh slug instead. Correct, but two delta directories mid-demo is noise. |
+| 03 spec review | run if the clock allows | read-only, no collision |
+| 04 Gate 1 | the room votes | no command |
+| 05 build | **`git checkout feat/filter-by-price`** | the real run took ~50 minutes. Show [PR #1](https://github.com/raunakkathuria/adlc/pull/1) and the run report. |
+| 06 Verifier | **run it** | read-only, ~4 minutes, and it is the station that lands hardest |
+
+Part 2 is all live — that is the point of Part 2.
+
+## Rehearsing safely
+
+Test the commands without touching your working copy or the repo on GitHub:
+
+```bash
+./run.sh --print prompts/triage.md issues/003-filter-catalog-by-price.md | tail -3
+```
+
+`--print` invokes no agent. It proves the prompt resolved, the target resolved, and the target line was appended — which is the only thing that silently breaks. Re-run it for each station on the morning of the session.
+
+For a full rehearsal with the agents actually running, use a throwaway clone with no remote, so nothing can be pushed and no issue can be closed:
+
+```bash
+git clone https://github.com/raunakkathuria/adlc.git /tmp/rehearsal
+cd /tmp/rehearsal && git remote remove origin && ./check.sh
+```
+
+Only two stations change files: `build.md` (folds the delta in and deletes its directory) and `reproduce.md` / `fix.md`. Nothing in the loop touches GitHub. Worth knowing: `AGENTS.md` has a Git section, so an agent could decide to commit on its own — harmless in a remote-less clone, which is the main argument for using one.
+
 ## Timetable
 
 | Time | Min | Block | Who |

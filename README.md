@@ -28,6 +28,18 @@ Want to see the product first? `npm start`, then open http://localhost:3000.
 
 Follow along. One decision in the middle is yours.
 
+Two of these six are worth running live in a room. The rest you read, because they are either slow or already committed as evidence:
+
+| Step | In the room |
+|---|---|
+| 01 classify | **run it** — about a minute, and its output is data you can pipe |
+| 02 spec delta | read the committed one; a live run will not overwrite it |
+| 03 spec review | run it if the clock allows — read-only, no collision |
+| 04 Gate 1 | the room decides. No command. |
+| 05 build | **switch to the branch.** The real run took ~50 minutes. |
+| 06 Verifier | **run it** — read-only, and it is the station that lands hardest |
+
+
 Somebody in product wants shoppers to be able to narrow the catalogue by price. It arrives as [issue #4](https://github.com/raunakkathuria/adlc/issues/4) — three paragraphs, no ticket template, the way real requests actually turn up.
 
 The first station takes it in: the issue is copied into the repo as [`issues/003-filter-catalog-by-price.md`](issues/003-filter-catalog-by-price.md), and every station after that reads only that file. It makes a run reproducible from the commit alone, and it means none of what follows needs a GitHub token. See [`issues/README.md`](issues/README.md) — `bug-intake.yml` does the same thing automatically.
@@ -38,6 +50,13 @@ The first station takes it in: the issue is copied into the repo as [`issues/003
 ./run.sh prompts/triage.md issues/003-filter-catalog-by-price.md
 ```
 
+This is the one station whose output is **data, not prose** — `bug-intake.yml` parses it to pick the path. Interactively you will see the agent narrate around the JSON. To get it clean enough to pipe:
+
+```bash
+./run.sh --print prompts/triage.md issues/003-filter-catalog-by-price.md \
+  | claude -p --allowedTools "Read Grep Glob" | jq
+```
+
 One question decides how much process this change carries: **would a rebuild from the spec alone lose it?** Here, yes — so the spec moves before any code does. Result: [`artifacts/unattended/triage-003.txt`](artifacts/unattended/triage-003.txt).
 
 ### 2. Change the spec, not the code
@@ -45,6 +64,8 @@ One question decides how much process this change carries: **would a rebuild fro
 ```bash
 ./run.sh prompts/delta.md issues/003-filter-catalog-by-price.md
 ```
+
+**Read the committed one rather than running this live.** The delta is already in the repo as evidence, and `delta.md` will not overwrite committed work — it checks `spec/changes/` first, and writes to a fresh slug while saying why. That refusal is correct and worth knowing about, but two delta directories mid-demo is noise. Delete the extra one with `git checkout -- spec/` if you do try it.
 
 Output: [`spec/changes/filter-catalog-by-price/`](spec/changes/filter-catalog-by-price/) — a proposal for the person deciding, the requirements themselves, and the tasks.
 
@@ -73,16 +94,23 @@ This is the gate that cannot be automated, and it is the cheapest place in the w
 
 ### 5. Build it
 
-Delta A gets merged. Then:
+Delta A gets merged, and the Executor builds it. **Switch to the finished branch rather than running this live** — the build took about 50 minutes, and a spinner in front of a room teaches nothing:
+
+```bash
+git checkout feat/filter-by-price
+git diff main
+```
+
+That branch is [pull request #1](https://github.com/raunakkathuria/adlc/pull/1), and it is the output of:
 
 ```bash
 ./run.sh prompts/build.md spec/changes/filter-catalog-by-price/
 ```
 
-Heads up if you run that here: the build folds the delta into `spec/catalog.md` and **deletes `spec/changes/filter-catalog-by-price/`**, which is correct behaviour and also consumes Part 1's starting state. To get it back:
+If you do run it, know that it folds the delta into `spec/catalog.md` and **deletes `spec/changes/filter-catalog-by-price/`** — correct behaviour, and it consumes Part 1's starting state. Put it back with:
 
 ```bash
-git checkout -- app/ test/ spec/
+git checkout main && git checkout -- app/ test/ spec/
 ```
 
 The delta folds into the living spec, tests come before the implementation, and the gate has to be green at the end.

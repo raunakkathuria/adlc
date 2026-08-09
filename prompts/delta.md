@@ -8,6 +8,12 @@ The issue is named at the end of this prompt. If none is named, use **`issues/00
 
 `AGENTS.md`, that issue, and every file in `spec/` — you need to know what already exists before you propose adding to it.
 
+## If a delta for this change already exists
+
+Check `spec/changes/` before you write anything. If a delta for this issue is already there, **do not overwrite it** — committed work may be referenced elsewhere, and silently replacing it destroys the record of what was agreed.
+
+Say what you found, then either stop and hand it back, or write to a distinct slug and explain in one line why a second delta exists. Either is a defensible answer. Overwriting is not.
+
 ## What you produce
 
 Three files under `spec/changes/<slug>/`, where `<slug>` is a short kebab-case name for the change:
