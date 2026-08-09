@@ -121,6 +121,8 @@ You drive. Everything is already committed, so you can either run the prompts li
 
    **Expect it to flag the seeded search defect, and let it.** The build deliberately left that alone, per-diff review passed it, and the independent check caught it anyway. It is advisory, so the pull request stays mergeable. This is the strongest live proof of independence in the session — do not apologise for it.
 
+   If you name the defect out loud here, name both halves: `app/server.mjs:41` never reads `item.sku`, and the match is case-sensitive. Say only "search is case-sensitive" and the first person who types `BOOK-1` exactly as printed will contradict you. Worked out in full under Part 2 below.
+
 8. **Gate 2.** The pull request is open on green gates. Nothing merges it but a person.
 
    Worth showing the Actions tab here: `verify` runs in about 11 seconds. The gate being that cheap is why it can sit between every station.
