@@ -2,6 +2,7 @@
 id: 001
 reported_by: support (via #bughunt)
 reported_at: 2026-08-04T09:12:00Z
+github: https://github.com/raunakkathuria/adlc/issues/2
 ---
 
 # Ordering too many mugs makes stock disappear

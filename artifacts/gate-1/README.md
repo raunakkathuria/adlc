@@ -10,6 +10,8 @@ It is sound, and it does one thing worth copying: it separates **decisions taken
 
 That is what a delta should feel like arriving on your desk. Not "approve this", but "here is what I decided, here is what is yours."
 
+**One flaw in it, found later and worth knowing before you teach this.** The open question is in the right spirit but the wrong file: it sits inside `spec.md`, the text that *becomes* the living spec, where it both specifies `max_price=0` → `200` and asks you to confirm it. The Executor built what the approved text said and then objected — *"a delta shouldn't ship with an open question inside the text that becomes the spec; the answer belongs there, the question doesn't."* It is right. An open question belongs in `proposal.md`, which is written for the person deciding and does not survive the merge. Good instinct, wrong place — and the loop caught it two stations later.
+
 This one gets merged, and Part 1 of the workshop follows it into the build.
 
 ## Delta B — cancel an order

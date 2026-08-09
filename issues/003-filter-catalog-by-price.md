@@ -2,6 +2,7 @@
 id: 003
 reported_by: product
 reported_at: 2026-08-05T05:01:00Z
+github: https://github.com/raunakkathuria/adlc/issues/4
 ---
 
 # Let shoppers narrow the catalog by price

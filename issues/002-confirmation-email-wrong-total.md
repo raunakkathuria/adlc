@@ -2,6 +2,7 @@
 id: 002
 reported_by: support (forwarded customer email)
 reported_at: 2026-08-04T14:38:00Z
+github: https://github.com/raunakkathuria/adlc/issues/3
 ---
 
 # Order confirmation email shows the wrong total

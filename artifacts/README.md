@@ -11,7 +11,7 @@ That split matters for two reasons. You can do every exercise without an agent C
 The runs used Claude Code in headless mode:
 
 ```bash
-cat prompts/verify.md | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(curl:*)"
+./run.sh prompts/verify.md spec/catalog.md
 ```
 
 Your own runs will not match these, and that is expected. The gate is deterministic; the worker is not.
@@ -20,7 +20,7 @@ Your own runs will not match these, and that is expected. The gate is determinis
 
 | File | The step | What it shows |
 |---|---|---|
-| `01-verify-catalog.md` | verify | An independent pass finds both halves of the search drift, with curl evidence — and flags that the existing test agrees with the code rather than the spec. |
+| `01-verify-catalog.md` | the Verifier | Drift in both directions. **Missing:** both halves of the search defect, with curl evidence. **Extra:** an entire unspecified web UI, an error handler leaking internal messages to clients, three reason codes in no spec, and a silently-ignored `?max_price` — cross-referenced against the delta sitting at Gate 1 whose own rule forbids exactly that. Then a verdict that splits the routing. |
 | `02-reproduce.md` | reproduce | The reasoning behind the reproduction, including why it pinned more than the reported symptom. |
 | `02-reproduce.diff` | reproduce | The actual tests it wrote. Three of them. |
 | `03-fix.md` | fix | The cause named in one sentence, then the patch. |
@@ -46,7 +46,17 @@ Exercise 3. Two proposed behaviour changes with the advisory reviews that ran wh
 ## Regenerating any of this
 
 ```bash
-./run.sh prompts/verify.md
+./run.sh prompts/verify.md spec/catalog.md
 ```
+
+That opens an interactive session, which is what you want when you are watching it work. To **capture** a run to a file the way the ones here were captured, print the prompt and pipe it to a headless CLI instead:
+
+```bash
+./run.sh --print prompts/verify.md spec/catalog.md \
+  | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(curl:*)" \
+  > artifacts/expected/01-verify-catalog.md
+```
+
+Same prompt text either way — `--print` emits exactly what the interactive path hands the CLI, target line included.
 
 Worth doing before you run a session. The output will differ from what is committed, which is honest and worth showing people.

@@ -28,12 +28,14 @@ Want to see the product first? `npm start`, then open http://localhost:3000.
 
 Follow along. One decision in the middle is yours.
 
-Somebody in product wants shoppers to be able to narrow the catalogue by price. That arrives as [`issues/003-filter-catalog-by-price.md`](issues/003-filter-catalog-by-price.md) — three paragraphs, no ticket template, the way real requests actually turn up.
+Somebody in product wants shoppers to be able to narrow the catalogue by price. It arrives as [issue #4](https://github.com/raunakkathuria/adlc/issues/4) — three paragraphs, no ticket template, the way real requests actually turn up.
+
+The first station takes it in: the issue is copied into the repo as [`issues/003-filter-catalog-by-price.md`](issues/003-filter-catalog-by-price.md), and every station after that reads only that file. It makes a run reproducible from the commit alone, and it means none of what follows needs a GitHub token. See [`issues/README.md`](issues/README.md) — `bug-intake.yml` does the same thing automatically.
 
 ### 1. Classify it
 
 ```bash
-./run.sh prompts/triage.md
+./run.sh prompts/triage.md issues/003-filter-catalog-by-price.md
 ```
 
 One question decides how much process this change carries: **would a rebuild from the spec alone lose it?** Here, yes — so the spec moves before any code does. Result: [`artifacts/unattended/triage-003.txt`](artifacts/unattended/triage-003.txt).
@@ -41,7 +43,7 @@ One question decides how much process this change carries: **would a rebuild fro
 ### 2. Change the spec, not the code
 
 ```bash
-./run.sh prompts/delta.md
+./run.sh prompts/delta.md issues/003-filter-catalog-by-price.md
 ```
 
 Output: [`spec/changes/filter-catalog-by-price/`](spec/changes/filter-catalog-by-price/) — a proposal for the person deciding, the requirements themselves, and the tasks.
@@ -51,7 +53,7 @@ Read [`tasks.md`](spec/changes/filter-catalog-by-price/tasks.md) even if you ski
 ### 3. Two reviewers read it, before a human does
 
 ```bash
-./run.sh prompts/spec-review.md
+./run.sh prompts/spec-review.md spec/changes/filter-catalog-by-price/
 ```
 
 A product lens and an architect lens, neither of which wrote the delta. Advisory only. See [`artifacts/gate-1/`](artifacts/gate-1/).
@@ -74,7 +76,7 @@ This is the gate that cannot be automated, and it is the cheapest place in the w
 Delta A gets merged. Then:
 
 ```bash
-./run.sh prompts/build.md
+./run.sh prompts/build.md spec/changes/filter-catalog-by-price/
 ```
 
 Heads up if you run that here: the build folds the delta into `spec/catalog.md` and **deletes `spec/changes/filter-catalog-by-price/`**, which is correct behaviour and also consumes Part 1's starting state. To get it back:
@@ -101,7 +103,7 @@ git diff main feat/filter-by-price
 A third role. It wrote none of this and shares no session with the two that did.
 
 ```bash
-./run.sh prompts/verify.md
+./run.sh prompts/verify.md spec/catalog.md
 ```
 
 It re-derives the feature from the spec *before* reading any code — read the code first and you end up checking whether the code is self-consistent, which it always is. Then it reports drift in both directions: **missing** (a requirement the product does not honour) and **extra** (behaviour that traces back to no requirement at all).
@@ -137,7 +139,7 @@ Now open [`spec/catalog.md`](spec/catalog.md) beside [`app/server.mjs`](app/serv
 Three minutes of reading — you are doing the Verifier's job by hand. Then hand it to the real thing, the same station you watched in Part 1 step 6:
 
 ```bash
-./run.sh prompts/verify.md
+./run.sh prompts/verify.md spec/catalog.md
 ```
 
 Reference run: [`artifacts/expected/01-verify-catalog.md`](artifacts/expected/01-verify-catalog.md).
@@ -146,7 +148,7 @@ Reference run: [`artifacts/expected/01-verify-catalog.md`](artifacts/expected/01
 
 ## Then: the bug loop
 
-Read the report first, written the way support actually writes them: [`issues/001-rejected-order-eats-stock.md`](issues/001-rejected-order-eats-stock.md).
+Read the report first, written the way support actually writes them: [issue #2](https://github.com/raunakkathuria/adlc/issues/2), taken in as [`issues/001-rejected-order-eats-stock.md`](issues/001-rejected-order-eats-stock.md).
 
 ### Judge a test before you write one
 
@@ -159,10 +161,10 @@ It matters more than it looks. A reproduction asserts the behaviour that *should
 ### Run it
 
 ```bash
-./run.sh prompts/reproduce.md     # writes a failing test
-npm test                          # watch it fail — read the failure
-./run.sh prompts/fix.md           # make it pass
-npm run verify                    # green
+./run.sh prompts/reproduce.md issues/001-rejected-order-eats-stock.md   # writes a failing test
+npm test                                                                # watch it fail
+./run.sh prompts/fix.md                                                 # make it pass
+npm run verify                                                          # green
 ```
 
 Your agent will not produce the reference diff, and that is fine. The criterion is `npm run verify` going from red to green.
@@ -196,9 +198,9 @@ Three issues went in. Three different endings, and none was an agent merging its
 
 | Issue | What it was | Where it stopped |
 |---|---|---|
-| [001](issues/001-rejected-order-eats-stock.md) | a bug with a clear symptom | reproduced, fixed, reviewed, pull request on green gates |
-| [002](issues/002-confirmation-email-wrong-total.md) | a report about a surface this system does not own | classified as a product request rather than a bug, and reproduction found nothing to test. Handed to a human. |
-| [003](issues/003-filter-catalog-by-price.md) | a request that changes behaviour | spec delta, Gate 1, then built — Part 1 |
+| [#2](https://github.com/raunakkathuria/adlc/issues/2) | a bug with a clear symptom | reproduced, fixed, reviewed, pull request on green gates |
+| [#3](https://github.com/raunakkathuria/adlc/issues/3) | a report about a surface this system does not own | classified as a product request rather than a bug, and reproduction found nothing to test. Handed to a human. |
+| [#4](https://github.com/raunakkathuria/adlc/issues/4) | a request that changes behaviour | spec delta, Gate 1, then built — Part 1 |
 
 Issue 002 is the one to look at. Two stations reached the same conclusion by different routes — the classifier because the spec never promised a confirmation email, the reproduction step because no endpoint could surface it. Neither guessed. See [`artifacts/unattended/`](artifacts/unattended/).
 

@@ -61,8 +61,8 @@ Every check produces findings in the same shape, so the line can route them with
 
 | What was found | Goes to | Heals |
 |---|---|---|
-| A reviewer or verifier finding | back to the build step, same cycle | the change |
-| A gap, ambiguity, or conflict in the spec | a spec delta, through Gate 1 | the spec |
+| A code review finding | back to the build step, same cycle | the change |
+| A Verifier finding, or a gap in the spec | back to the Planner, then Gate 1 if the spec moves | the spec |
 | Something a user hit in production | the same intake, as a new issue | the product |
 | A finding that keeps coming back | the prompts and the gate themselves | the line |
 

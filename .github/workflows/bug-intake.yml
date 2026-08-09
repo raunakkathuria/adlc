@@ -67,7 +67,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           { cat prompts/triage.md
-            printf '\n\nThe issue to classify is `issues/gh-%s.md`.\n' "${{ github.event.issue.number }}"
+            printf '\n\nThe target for this run is `issues/gh-%s.md`.\n' "${{ github.event.issue.number }}"
           } | claude -p --allowedTools "Read Grep Glob" > triage.json
           cat triage.json
           echo "class=$(node -e 'const t=require("fs").readFileSync("triage.json","utf8");console.log((t.match(/"class"\s*:\s*"(\w+)"/)||[])[1]||"unknown")')" >> "$GITHUB_OUTPUT"
@@ -88,9 +88,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          sed 's|issues/001-rejected-order-eats-stock.md|issues/gh-${{ github.event.issue.number }}.md|g' \
-            prompts/reproduce.md \
-            | claude -p --allowedTools "Read Grep Glob Edit Write Bash(node:*) Bash(npm:*)" \
+          { cat prompts/reproduce.md
+            printf '\n\nThe target for this run is `issues/gh-%s.md`.\n' "${{ github.event.issue.number }}"
+          } | claude -p --allowedTools "Read Grep Glob Edit Write Bash(node:*) Bash(npm:*)" \
             | tee reproduce.md
 
       # A failing test is what makes the bug real. If npm test is green, nothing was reproduced,
