@@ -20,7 +20,7 @@ Your own runs will not match these, and that is expected. The gate is determinis
 
 | File | The step | What it shows |
 |---|---|---|
-| `01-verify-catalog.md` | verify | An independent pass finds both halves of the search drift, with curl evidence — and flags that the existing test agrees with the code rather than the spec. |
+| `01-verify-catalog.md` | the Verifier | Drift in both directions. **Missing:** both halves of the search defect, with curl evidence. **Extra:** an entire unspecified web UI, an error handler leaking internal messages to clients, three reason codes in no spec, and a silently-ignored `?max_price` — cross-referenced against the delta sitting at Gate 1 whose own rule forbids exactly that. Then a verdict that splits the routing. |
 | `02-reproduce.md` | reproduce | The reasoning behind the reproduction, including why it pinned more than the reported symptom. |
 | `02-reproduce.diff` | reproduce | The actual tests it wrote. Three of them. |
 | `03-fix.md` | fix | The cause named in one sentence, then the patch. |
