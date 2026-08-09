@@ -12,30 +12,32 @@ It's like a production line in a factory. Each station does one job. Between the
 flowchart LR
   ISSUE([issue arrives]) --> TRIAGE[classify]
 
-  TRIAGE -->|behaviour change| DELTA[draft spec delta]
-  DELTA --> GATE1{{"Gate 1 · human<br/>approve the intent"}}
+  TRIAGE -->|behaviour change| DELTA["draft spec delta<br/>(Planner)"]
+  DELTA --> SREV["spec review<br/>(advisory)"]
+  SREV --> GATE1{{"Gate 1 · human<br/>approve the intent"}}
 
   TRIAGE -->|bug| REPRO["reproduce<br/>(failing test)"]
 
-  GATE1 --> BUILD[build]
+  GATE1 --> BUILD["build<br/>(Executor)"]
   REPRO --> BUILD
 
   BUILD --> GATE["npm run verify<br/>(deterministic)"]
   GATE --> REVIEW[review]
-  REVIEW --> SPEC[verify against spec]
+  REVIEW --> SPEC["verify against spec<br/>(Verifier)"]
   SPEC --> GATE2{{"Gate 2 · human<br/>ship it"}}
 
   REVIEW -.->|findings| BUILD
-  SPEC -.->|drift| BUILD
-  SPEC -.->|spec gap| DELTA
+  SPEC -.->|"fail · missing or extra"| DELTA
 
   classDef gate fill:#ff454f22,stroke:#ff454f,stroke-width:2px;
   classDef check fill:#0000000d,stroke:#8a8f9a,stroke-dasharray:3 3;
   class GATE1,GATE2 gate;
-  class GATE check;
+  class GATE,SREV check;
 ```
 
 The dotted arrows are the important part. A finding does not go into a report that someone reads later. It goes back to a station.
+
+Note where the Verifier's failures go: **back to the Planner, not to the Executor.** If the spec was silent or wrong, more code will not fix it.
 
 ## The two gates
 
@@ -68,9 +70,22 @@ The second row is the one teams skip. When a reviewer says "the spec doesn't say
 
 That row is not hypothetical here. Run `prompts/review.md` on the fix in `artifacts/expected/` and the reviewer finds exactly that gap between `REQ-ORD-2` and `REQ-ORD-3`.
 
-## Independence — the checker never wrote the code
+## Three roles — two build it, one checks it
 
-Each step is a separate prompt with a fresh context. The one that checks the work has not seen the work being made.
+Four names over eight prompt files. The names matter less than the boundary between them.
+
+| Role | Stations | What it may not do |
+|---|---|---|
+| **Planner** | classify, then draft the spec delta and the per-surface tasks | write code |
+| **Executor** | build an approved delta · or reproduce and fix a bug | renegotiate the spec |
+| **Verifier** | verify against the spec | write code, or share a session with either of the above |
+| Quality check | review, plus `npm run verify` | pass anything the deterministic gate failed |
+
+**Isolation is the design principle.** Planner and Executor share the same business context but never a session, so a plan cannot leak its assumptions into the build. The Verifier shares neither — it re-derives the feature from the spec alone before it opens a single implementation file.
+
+That last part is what stops it becoming a diff-reader. Read the code first and you end up checking whether the code is self-consistent, which it always is.
+
+It also reports drift in **both** directions, which most reviews do not. *Missing* is a requirement the product does not honour. *Extra* is behaviour that traces back to no requirement — and that one matters more than it sounds, because code cannot abstain. Where the spec stayed silent, an implementation detail decided, and nobody chose it. Extra findings go back to the spec, not into the code.
 
 This is not ceremony. It is the same reason a factory's quality inspector does not report to the line supervisor. An agent that just spent twenty minutes convincing itself a change was right is the worst possible reviewer of that change.
 
@@ -141,5 +156,7 @@ The prompts are plain markdown. `run.sh` finds whichever CLI you have and pipes 
 Real in this repo: the spec as source of truth, the deterministic gate, one prompt per station with fresh context, both human gates, and the committed evidence of actual runs.
 
 Missing on purpose, so the repo stays readable in an afternoon: a browser-level test layer, a database, a design system the generated UI is forced onto, business rules held outside the model's reach, and the CI wiring that runs all of this unattended. `.github/workflows/` shows the shape of that last one without the credentials to run it.
+
+Two stations from the wider model are **deliberately absent, not forgotten**. There is no **security review**, which belongs as a hard gate alongside the deterministic one in any real deployment — `review.md` is a code reviewer and nothing more. And a delta here carries `proposal.md`, `spec.md` and `tasks.md`, but no **`design.md`** binding contract; with one service and one surface there is nothing for two components to disagree about, so the Verifier has no contract-mismatch check either. Both would be the first things to add on a real codebase. Neither is pretended at here.
 
 The honest limit: none of this makes an agent reliable. It makes an unreliable agent's output checkable, and it makes the two decisions that matter land on a person who can be held to them.

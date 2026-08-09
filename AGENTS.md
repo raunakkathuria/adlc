@@ -39,16 +39,24 @@ Deterministic. No model in it. It must be green before you say you are done, and
 
 Each step is a separate prompt with a fresh context, because a check that shares the context of the work it is checking is not a check.
 
-| Step | Prompt | What it produces |
-|---|---|---|
-| Classify | [`prompts/triage.md`](prompts/triage.md) | which process path an issue follows |
-| Draft the spec change | [`prompts/delta.md`](prompts/delta.md) | a spec delta for Gate 1 — behaviour changes only |
-| Verify against spec | [`prompts/verify.md`](prompts/verify.md) | drift between spec and code |
-| Reproduce | [`prompts/reproduce.md`](prompts/reproduce.md) | a **failing** test that proves the bug is real |
-| Fix | [`prompts/fix.md`](prompts/fix.md) | the smallest change that turns it green |
-| Review | [`prompts/review.md`](prompts/review.md) | findings on the fix — design, not just behaviour |
+Three roles carry the work, and one of them checks it.
+
+| Role | Step | Prompt | What it produces |
+|---|---|---|---|
+| **Planner** | Classify | [`prompts/triage.md`](prompts/triage.md) | which process path an issue follows |
+| **Planner** | Draft the spec change | [`prompts/delta.md`](prompts/delta.md) | a spec delta for Gate 1 — behaviour changes only |
+| — | Advisory spec review | [`prompts/spec-review.md`](prompts/spec-review.md) | two lenses on the delta, before the human decides |
+| **Executor** | Build | [`prompts/build.md`](prompts/build.md) | an approved delta, implemented — tests first |
+| **Executor** | Reproduce | [`prompts/reproduce.md`](prompts/reproduce.md) | a **failing** test that proves the bug is real |
+| **Executor** | Fix | [`prompts/fix.md`](prompts/fix.md) | the smallest change that turns it green |
+| Quality check | Review | [`prompts/review.md`](prompts/review.md) | findings on the change — design, not just behaviour |
+| **Verifier** | Verify against spec | [`prompts/verify.md`](prompts/verify.md) | drift in both directions — missing *and* extra |
 
 Run one with `./run.sh prompts/<name>.md`, which dispatches to whichever agent CLI you have.
+
+**Isolation is the design principle.** Planner and Executor share the same business context but never a session, so a plan cannot leak its assumptions into the build. The Verifier shares neither: it re-derives the feature from the spec alone before it reads any code. Same reason a factory's quality inspector does not report to the line supervisor.
+
+The Verifier's verdict routes the work — `PASS → ship`, `FAIL → back to the Planner`. Not back to the Executor: if the spec was silent or wrong, more code will not fix it.
 
 ## The two human gates
 

@@ -100,6 +100,20 @@ jobs:
             | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(git:*)" \
             | tee artifacts/demo/03-review.md
 
+      # The Verifier — the third role. It re-derives the feature from the spec before reading any
+      # code, and reports drift in both directions: requirements with no implementation, and
+      # behaviour with no requirement. Advisory, so it cannot block the pull request from opening;
+      # its verdict is for the human at Gate 2 to weigh.
+      - name: Verify against the spec
+        if: steps.runner.outputs.on == 'true' && steps.delta.outputs.found == 'true'
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cat prompts/verify.md \
+            | claude -p --allowedTools "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(curl:*)" \
+            | tee artifacts/demo/04-verify.md
+
       - name: Open a pull request — never merge one
         if: steps.runner.outputs.on == 'true' && steps.delta.outputs.found == 'true'
         env:
@@ -115,7 +129,11 @@ jobs:
           Built from the approved delta. The delta is folded into the living spec and its
           directory removed — the spec is the record of what was agreed."
           git push -u origin "$BRANCH"
+          { cat artifacts/demo/03-review.md
+            printf '\n\n---\n\n## Verifier — independent, spec-first\n\n'
+            cat artifacts/demo/04-verify.md
+          } > pr-body.md
           gh pr create \
             --title "feat: ${{ steps.delta.outputs.slug }}" \
-            --body-file artifacts/demo/03-review.md \
+            --body-file pr-body.md \
             --base main

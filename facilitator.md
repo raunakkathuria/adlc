@@ -72,7 +72,17 @@ You drive. Everything is already committed, so you can either run the prompts li
 
    The fourth beat is the one that earns trust with a sceptical room: four behaviours the delta left unspecified now have answers, decided by an implementation detail rather than a person, and it said so. The loop does not remove unspecified behaviour — it makes it visible at the point it gets decided.
 
-7. **Gate 2.** The pull request is open on green gates. Nothing merges it but a person.
+7. **The Verifier.** `./run.sh prompts/verify.md` — the third role, which wrote none of it and shares no session with the two that did.
+
+   Two things to draw out. It **re-derives the feature from the spec before opening any code**, which is what stops it becoming a diff-reader: read the code first and you only ever check whether the code is self-consistent, which it always is. And it reports drift **in both directions** — *missing* (a requirement the product does not honour) and *extra* (behaviour that traces to no requirement).
+
+   Extra is the one nobody expects, and on this repo it is spectacular. Run it before the session and read `artifacts/expected/01-verify-catalog.md`: it finds an entire unspecified web UI, an error handler leaking internal messages to clients, three reason codes in no spec, and — the best one — that `?max_price=1000` is **silently ignored today**, while cross-referencing the delta sitting at Gate 1 whose own composition rule says a shopper must never receive a plausible-looking list assembled from a filter the system did not understand.
+
+   Its verdict splits the routing rather than saying a bare FAIL: the Extra list needs Gate 1 because a human decides what the spec should say, while `REQ-CAT-3` needs no delta at all because the spec is already correct and only the code is wrong. That distinction is the whole point of `FAIL → back to the Planner`.
+
+   **Expect it to flag the seeded search defect, and let it.** The build deliberately left that alone, per-diff review passed it, and the independent check caught it anyway. It is advisory, so the pull request stays mergeable. This is the strongest live proof of independence in the session — do not apologise for it.
+
+8. **Gate 2.** The pull request is open on green gates. Nothing merges it but a person.
 
    Worth showing the Actions tab here: `verify` runs in about 11 seconds. The gate being that cheap is why it can sit between every station.
 
