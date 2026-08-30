@@ -1,6 +1,6 @@
 // A tiny storefront — items and orders, in memory, zero dependencies.
 //
-// Behaviour is specified in spec/catalog.md and spec/orders.md. The spec is the source of truth:
+// Behaviour is specified in openspec/specs/catalog/spec.md and openspec/specs/orders/spec.md. The spec is the source of truth:
 // if this file and the spec disagree, THIS FILE IS WRONG.
 
 import { createServer } from 'node:http';
