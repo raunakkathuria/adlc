@@ -6,6 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       pr_number: { description: "Approved spec PR number", required: true, type: string }
+# Reusable workflows do not inherit their own concurrency when called — the caller owns it.
+concurrency:
+  group: adlc-build-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
 jobs:
   build:
     if: github.event_name != 'pull_request_review' || (github.event.review.state == 'approved' && startsWith(github.event.pull_request.head.ref, 'spec/'))
@@ -17,6 +22,6 @@ jobs:
       statuses: write
     uses: raunakkathuria/adlc/.github/workflows/build.yml@v1
     with:
-      pr_number: ${{ github.event.pull_request.number || inputs.pr_number }}
+      pr_number: ${{ format('{0}', github.event.pull_request.number || inputs.pr_number) }}
       adlc_ref: v1
     secrets: inherit
