@@ -1,0 +1,204 @@
+# Station: verifier — the independent check for feature drift.
+#
+# Dispatched by build when the implementation PR opens. Its only input is the source issue:
+# the links block on it records the spec PR, the OpenSpec change, and the implementation PR(s).
+# It checks out the implementation head, starts the app, and verifies with a fresh context —
+# a role that wrote neither the spec nor the code and shares no session with those that did.
+#
+# The verdict is two trailers (SPEC-MATCH, FEATURE-IMPLEMENTED) in a comment on the
+# implementation PR. A MISMATCH routes to the PLANNER — the spec station re-runs with the
+# report — never to the Executor: if the spec was silent or wrong, more code will not fix it.
+# Confirmed bugs OUTSIDE the change's scope become new issues, which re-enter the line at
+# intake (depth-capped). Pass hands to the quality station.
+
+name: verifier
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Source issue whose links block records the PRs"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      issue_number:
+        required: true
+        type: string
+      adlc_repo:
+        required: false
+        type: string
+        default: raunakkathuria/adlc
+      adlc_ref:
+        required: false
+        type: string
+        default: main
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  actions: write # dispatches quality.yml, spec.yml (revision), intake.yml (filed findings)
+
+concurrency:
+  group: adlc-issue-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+env:
+  ISSUE: ${{ inputs.issue_number }}
+  ADLC_REPO: ${{ inputs.adlc_repo || 'raunakkathuria/adlc' }}
+  ADLC_REF: ${{ inputs.adlc_ref || 'main' }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is the line switched on?
+        id: runner
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${KEY:-}" ]; then
+            echo "No ANTHROPIC_API_KEY secret. The line stays off — this workflow is documentation."
+            echo "on=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get the line's prompts and scripts
+        if: steps.runner.outputs.on == 'true' && github.repository != env.ADLC_REPO
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ADLC_REPO }}
+          ref: ${{ env.ADLC_REF }}
+          path: .adlc
+      - name: Point at them
+        if: steps.runner.outputs.on == 'true'
+        run: echo "ADLC=$([ -d .adlc ] && echo .adlc || echo .)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        if: steps.runner.outputs.on == 'true'
+        with:
+          node-version: 22
+
+      # Start from the issue alone. No links block, no run — the contract is the architecture.
+      - name: Read the links block
+        if: steps.runner.outputs.on == 'true'
+        id: links
+        run: |
+          mkdir -p work
+          node "$ADLC/scripts/links.mjs" read "$ISSUE" > work/links.json
+          node -e '
+            const links = require("./work/links.json");
+            const fs = require("fs");
+            const impl = (links.implementation_pr ?? []).at(-1);
+            const change = links.openspec_change ?? "";
+            if (!impl || !change) {
+              console.log("The links block on the issue does not record an implementation PR and an OpenSpec change — nothing to verify.");
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, "ok=false\n");
+            } else {
+              fs.appendFileSync(process.env.GITHUB_OUTPUT,
+                `ok=true\nimpl=${impl}\nchange=${change}\nslug=${change.split("/").pop()}\nspec_pr=${links.spec_pr ?? ""}\n`);
+            }
+          '
+
+      - name: Check out the implementation head
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
+        run: gh pr checkout "${{ steps.links.outputs.impl }}"
+
+      - name: Start the app — verify against the running thing, not the diff
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
+        run: |
+          (node app/server.mjs &) && for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/api/items > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:3000/api/items > /dev/null || { echo "::error::The app did not come up."; exit 1; }
+
+      - name: Install the agent CLI
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: The Verifier — fresh context, spec first
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/verify.md" \
+            "Read Grep Glob Bash(curl:*) Bash(node:*) Bash(npm:*)" \
+            "The change under verification is \`${{ steps.links.outputs.change }}/\`." \
+            'The app is running at `http://localhost:3000`.' \
+            | tee work/verifier.md
+
+      # The trailers are the machine-readable verdict. Missing trailers fail closed: treated
+      # as MISMATCH with a note, because an agent that lost its output contract proved nothing.
+      - name: Parse the verdict
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
+        id: verdict
+        run: |
+          node -e '
+            const fs = require("fs");
+            const text = fs.readFileSync("work/verifier.md", "utf8");
+            const match = (text.match(/^SPEC-MATCH:\s*(COMPLETE|MISMATCH)\s*$/m) ?? [])[1];
+            const impl = (text.match(/^FEATURE-IMPLEMENTED:\s*(YES|NO|N\/A)\s*$/m) ?? [])[1];
+            if (!match) fs.appendFileSync("work/verifier.md",
+              "\n\n> The report above did not end with the required trailers; the line treats that as a MISMATCH — fail closed.\n\nSPEC-MATCH: MISMATCH\nFEATURE-IMPLEMENTED: N/A\n");
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `match=${match ?? "MISMATCH"}\nimplemented=${impl ?? "N/A"}\n`);
+          '
+
+      - name: Post the verdict on the implementation PR
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
+        run: |
+          { printf '## Verifier — independent, spec-first\n\n'
+            tail -c 60000 work/verifier.md
+          } > work/verdict-comment.md
+          gh pr comment "${{ steps.links.outputs.impl }}" --body-file work/verdict-comment.md
+
+      - name: File the out-of-scope findings — the line feeding itself
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
+        run: |
+          node "$ADLC/scripts/file-findings.mjs" work/verifier.md "$ISSUE" | tee work/filed.txt
+          grep -o 'Filed https[^ ]*' work/filed.txt | awk '{print $2}' | while read -r URL; do
+            N="${URL##*/}"
+            gh workflow run intake.yml -f issue_number="$N" \
+              || echo "::warning::Could not dispatch intake for $URL"
+          done
+
+      - name: Pass — hand to the quality station
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true' && steps.verdict.outputs.match == 'COMPLETE'
+        run: |
+          node "$ADLC/scripts/labels.mjs" state "$ISSUE" quality
+          IMPL_N=$(basename "${{ steps.links.outputs.impl }}")
+          gh workflow run quality.yml -f pr_number="$IMPL_N" -f issue_number="$ISSUE" \
+            || { echo "::warning::Quality could not be dispatched."; gh issue comment "$ISSUE" --body "Verifier passed, but the quality station could not be dispatched. Run it with: \`gh workflow run quality.yml -f pr_number=$IMPL_N -f issue_number=$ISSUE\`"; }
+
+      # MISMATCH routes to the Planner: the spec station re-runs on the same branch with the
+      # verifier report in the issue thread. New spec commits dismiss the old approval, so
+      # Gate 1 happens again — the loop is honest, and the cap keeps it finite.
+      - name: Mismatch — back to the Planner, within the cap
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true' && steps.verdict.outputs.match == 'MISMATCH'
+        run: |
+          gh issue comment "$ISSUE" --body "$(printf 'The verifier found drift — routed to the **Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it.\n\n%s' "$(tail -c 60000 work/verifier.md)")"
+          if node "$ADLC/scripts/attempts.mjs" record "$ISSUE" verifier; then
+            node "$ADLC/scripts/labels.mjs" state "$ISSUE" spec-draft
+            gh workflow run spec.yml -f issue_number="$ISSUE" -f slug="${{ steps.links.outputs.slug }}" \
+              || { node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human; gh issue comment "$ISSUE" --body "The spec station could not be dispatched for the revision — parked."; }
+          else
+            node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
+            gh issue comment "$ISSUE" --body "The verifier has found drift twice for this issue — the line is parked. A person should read the two reports above and decide whether the spec or the approach is wrong."
+          fi
+
+      - name: Keep the evidence
+        if: always() && steps.runner.outputs.on == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verifier-${{ env.ISSUE }}-${{ github.run_id }}
+          path: work/
+          if-no-files-found: ignore

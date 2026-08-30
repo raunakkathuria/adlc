@@ -1,0 +1,19 @@
+# Caller: spec — copy into your repo as .github/workflows/spec.yml
+name: spec
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number: { description: "Source issue", required: true, type: string }
+      slug: { description: "Change slug", required: true, type: string }
+jobs:
+  spec:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: raunakkathuria/adlc/.github/workflows/spec.yml@v1
+    with:
+      issue_number: ${{ inputs.issue_number }}
+      slug: ${{ inputs.slug }}
+      adlc_ref: v1
+    secrets: inherit

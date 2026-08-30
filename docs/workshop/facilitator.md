@@ -1,5 +1,7 @@
 # Facilitator notes
 
+> **Note:** this facilitator guide belongs to the original 45-minute workshop, built on the v1 layout (`spec/`, `run.sh` paths, `bug-intake.yml`). The committed reference runs in `artifacts/` are still real evidence; the live line has since moved to OpenSpec and the six-station workflows — see README.md.
+
 Everything a participant should discover for themselves is spoiled here. Don't share this file during the session.
 
 ## The one thing they leave with

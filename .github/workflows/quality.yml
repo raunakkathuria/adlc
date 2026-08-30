@@ -1,0 +1,214 @@
+# Station: quality — usability and accessibility, on the running app.
+#
+# Two halves. The deterministic half is Lighthouse (accessibility + performance categories)
+# against thresholds that live at the top of this file — a breach fails the run. The agentic
+# half is the pass a scanner cannot do: a "don't make me think" usability read and the
+# accessibility judgments beyond attributes, from prompts/quality.md.
+#
+# Verify mode (pr_number + issue_number): dispatched by the verifier after SPEC-MATCH: COMPLETE;
+# checks the implementation head, reports on the PR, then hands the issue to Gate 2.
+# Explore mode (no pr_number): the nightly schedule and manual runs — the whole product on the
+# default branch, findings filed as issues that re-enter the line.
+
+name: quality
+
+on:
+  schedule:
+    - cron: "0 5 * * *" # nightly explore of the default branch
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Implementation PR to check (verify mode); blank = explore the default branch"
+        required: false
+        type: string
+      issue_number:
+        description: "Source issue (verify mode)"
+        required: false
+        type: string
+      query:
+        description: "What to focus on (explore mode)"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      pr_number:
+        required: false
+        type: string
+      issue_number:
+        required: false
+        type: string
+      query:
+        required: false
+        type: string
+      adlc_repo:
+        required: false
+        type: string
+        default: raunakkathuria/adlc
+      adlc_ref:
+        required: false
+        type: string
+        default: main
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  actions: write # dispatches intake.yml for filed findings
+
+concurrency:
+  group: adlc-quality-${{ inputs.pr_number || 'explore' }}
+  cancel-in-progress: false
+
+env:
+  PR: ${{ inputs.pr_number }}
+  ISSUE: ${{ inputs.issue_number }}
+  ADLC_REPO: ${{ inputs.adlc_repo || 'raunakkathuria/adlc' }}
+  ADLC_REF: ${{ inputs.adlc_ref || 'main' }}
+  GH_TOKEN: ${{ github.token }}
+  # What "too slow" and "not accessible enough" mean, in one place.
+  LIGHTHOUSE_A11Y_MIN: "90"
+  LIGHTHOUSE_PERF_MIN: "80"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is the line switched on?
+        id: runner
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${KEY:-}" ]; then
+            echo "No ANTHROPIC_API_KEY secret. The line stays off — this workflow is documentation."
+            echo "on=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get the line's prompts and scripts
+        if: steps.runner.outputs.on == 'true' && github.repository != env.ADLC_REPO
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ADLC_REPO }}
+          ref: ${{ env.ADLC_REF }}
+          path: .adlc
+      - name: Point at them
+        if: steps.runner.outputs.on == 'true'
+        run: echo "ADLC=$([ -d .adlc ] && echo .adlc || echo .)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        if: steps.runner.outputs.on == 'true'
+        with:
+          node-version: 22
+
+      - name: Verify mode — check out the implementation head
+        if: steps.runner.outputs.on == 'true' && env.PR != ''
+        run: gh pr checkout "$PR"
+
+      - name: Start the app
+        if: steps.runner.outputs.on == 'true'
+        run: |
+          (node app/server.mjs &) && for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/api/items > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:3000/api/items > /dev/null || { echo "::error::The app did not come up."; exit 1; }
+
+      # The deterministic half. Numbers first, opinions second.
+      - name: Lighthouse — accessibility and performance, against the thresholds
+        if: steps.runner.outputs.on == 'true'
+        id: lighthouse
+        run: |
+          mkdir -p work
+          npx --yes lighthouse http://localhost:3000 \
+            --only-categories=accessibility,performance \
+            --output=json --output-path=work/lighthouse.json \
+            --quiet --chrome-flags="--headless --no-sandbox"
+          node -e '
+            const r = require("./work/lighthouse.json");
+            const fs = require("fs");
+            const a11y = Math.round(r.categories.accessibility.score * 100);
+            const perf = Math.round(r.categories.performance.score * 100);
+            const aMin = Number(process.env.LIGHTHOUSE_A11Y_MIN);
+            const pMin = Number(process.env.LIGHTHOUSE_PERF_MIN);
+            const failed = r.categories.accessibility.auditRefs
+              .map((ref) => r.audits[ref.id])
+              .filter((a) => a && a.score !== null && a.score < 1)
+              .map((a) => `- ${a.title}`);
+            const verdict = a11y >= aMin && perf >= pMin ? "pass" : "fail";
+            fs.writeFileSync("work/lighthouse.md",
+              `| category | score | threshold |\n|---|---|---|\n` +
+              `| accessibility | ${a11y} | ${aMin} |\n| performance | ${perf} | ${pMin} |\n` +
+              (failed.length ? `\nFailing accessibility audits:\n${failed.join("\n")}\n` : "\nNo failing accessibility audits.\n"));
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `verdict=${verdict}\n`);
+          '
+          cat work/lighthouse.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install the agent CLI
+        if: steps.runner.outputs.on == 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      # The agentic half — the questions a scanner cannot answer.
+      - name: Usability and accessibility — the "don't make me think" pass
+        if: steps.runner.outputs.on == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          CHANGE=""
+          if [ -n "$ISSUE" ]; then
+            CHANGE=$(node "$ADLC/scripts/links.mjs" read "$ISSUE" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).openspec_change??""))')
+          fi
+          bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/quality.md" \
+            "Read Grep Glob Bash(curl:*) Bash(node:*)" \
+            'The app is running at `http://localhost:3000`.' \
+            "${CHANGE:+The change under test is \`$CHANGE/\`.}" \
+            "${{ inputs.query && format('Focus: {0}', inputs.query) || '' }}" \
+            | tee work/quality.md
+
+      - name: Report — on the PR in verify mode, in the run summary otherwise
+        if: steps.runner.outputs.on == 'true'
+        run: |
+          { printf '## Quality — usability and accessibility\n\n'
+            cat work/lighthouse.md
+            printf '\n'
+            tail -c 50000 work/quality.md
+          } > work/quality-report.md
+          if [ -n "$PR" ]; then
+            gh pr comment "$PR" --body-file work/quality-report.md
+          fi
+          cat work/quality-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: File the out-of-scope findings — the line feeding itself
+        if: steps.runner.outputs.on == 'true' && env.ISSUE != ''
+        run: |
+          node "$ADLC/scripts/file-findings.mjs" work/quality.md "$ISSUE" | tee work/filed.txt
+          grep -o 'Filed https[^ ]*' work/filed.txt | awk '{print $2}' | while read -r URL; do
+            gh workflow run intake.yml -f issue_number="${URL##*/}" \
+              || echo "::warning::Could not dispatch intake for $URL"
+          done
+
+      - name: Hand the issue to Gate 2
+        if: steps.runner.outputs.on == 'true' && env.ISSUE != ''
+        run: |
+          node "$ADLC/scripts/labels.mjs" state "$ISSUE" gate-2
+          gh issue comment "$ISSUE" --body "Quality has reported on the implementation PR. The line is done — **Gate 2** is yours: merge the implementation PR when the checks and reports read right. Nothing merges it but a person."
+
+      - name: The thresholds have a vote
+        if: steps.runner.outputs.on == 'true' && steps.lighthouse.outputs.verdict == 'fail'
+        run: |
+          echo "::error::Lighthouse scores are below the thresholds — see the run summary."
+          exit 1
+
+      - name: Keep the evidence
+        if: always() && steps.runner.outputs.on == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-${{ env.ISSUE || 'explore' }}-${{ github.run_id }}
+          path: work/
+          if-no-files-found: ignore
