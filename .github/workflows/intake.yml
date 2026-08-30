@@ -1,0 +1,303 @@
+# Station: intake — triage, then (for bugs) validation by reproduction.
+#
+# Every issue that lands in the repo enters the line here, automatically. Triage decides one
+# thing: is this actionable work, and what kind? Not actionable → closed with the reason.
+# A bug → the reproduce station writes the failing test that makes it real; not reproducible →
+# closed with the report, reopenable. Actionable → dispatched to the spec station, because
+# every change here is spec-driven.
+#
+# OFF unless the ANTHROPIC_API_KEY secret is set: without it this workflow explains itself and
+# stops. A repo that can open PRs on its own should require a human to switch it on.
+#
+# Consumers adopt this station with a thin caller: uses: raunakkathuria/adlc/.github/workflows/intake.yml@v1
+
+name: intake
+
+on:
+  issues:
+    types: [opened, reopened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue to (re-)run intake for"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      issue_number:
+        required: false
+        type: string
+      adlc_repo:
+        description: "Hub repo holding prompts/ and scripts/"
+        required: false
+        type: string
+        default: raunakkathuria/adlc
+      adlc_ref:
+        required: false
+        type: string
+        default: main
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+  actions: write # dispatches spec.yml
+
+concurrency:
+  group: adlc-issue-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+env:
+  ISSUE: ${{ github.event.issue.number || inputs.issue_number }}
+  ADLC_REPO: ${{ inputs.adlc_repo || 'raunakkathuria/adlc' }}
+  ADLC_REF: ${{ inputs.adlc_ref || 'main' }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      on: ${{ steps.runner.outputs.on }}
+      actionable: ${{ steps.verdict.outputs.actionable }}
+      type: ${{ steps.verdict.outputs.type }}
+      slug: ${{ steps.verdict.outputs.slug }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is the line switched on?
+        id: runner
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${KEY:-}" ]; then
+            echo "No ANTHROPIC_API_KEY secret. The line stays off — this workflow is documentation."
+            echo "on=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get the line's prompts and scripts
+        if: steps.runner.outputs.on == 'true' && github.repository != env.ADLC_REPO
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ADLC_REPO }}
+          ref: ${{ env.ADLC_REF }}
+          path: .adlc
+      - name: Point at them
+        if: steps.runner.outputs.on == 'true'
+        run: echo "ADLC=$([ -d .adlc ] && echo .adlc || echo .)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        if: steps.runner.outputs.on == 'true'
+        with:
+          node-version: 22
+
+      - name: Labels exist, and this issue is at the triage station
+        if: steps.runner.outputs.on == 'true'
+        run: |
+          node "$ADLC/scripts/labels.mjs" ensure
+          node "$ADLC/scripts/labels.mjs" state "$ISSUE" triaging
+
+      # Depth guard: an issue filed by a run that was itself working a machine-filed issue
+      # waits for a human. Depth 1 runs; depth 2 parks. The brake on the line feeding itself.
+      - name: Depth guard
+        if: steps.runner.outputs.on == 'true'
+        id: depth
+        run: |
+          DEPTH=$(node "$ADLC/scripts/links.mjs" read "$ISSUE" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).depth??0))')
+          echo "Machine-filing depth: $DEPTH"
+          if [ "$DEPTH" -ge 2 ]; then
+            node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
+            gh issue comment "$ISSUE" --body "This issue was filed by a run that was itself investigating a machine-filed issue (depth $DEPTH). The line parks here by design — a person should confirm it before more automated work is spent on it. Remove \`needs-human\` and re-run intake to proceed."
+            echo "parked=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "parked=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The issue becomes files: every later step reads the same bytes, and nothing from the
+      # issue body is ever interpolated into a shell command — it is data, not instructions.
+      - name: Take the issue in, as data
+        if: steps.runner.outputs.on == 'true' && steps.depth.outputs.parked == 'false'
+        run: |
+          mkdir -p work
+          gh issue view "$ISSUE" --json number,title,body,author,labels > work/issue.json
+          node -e '
+            const i = require("./work/issue.json");
+            const fs = require("fs");
+            fs.writeFileSync("work/issue.md", `# ${i.title}\n\n(issue #${i.number}, by @${i.author.login})\n\n${i.body ?? ""}\n`);
+          '
+          gh issue list --state all --limit 100 --json number,title,state,labels \
+            --jq '[.[] | select(.number != ('"$ISSUE"'|tonumber))]' > work/existing.json
+          node -e '
+            const all = require("./work/existing.json");
+            const fs = require("fs");
+            const line = (i) => `#${i.number} [${i.state}${i.labels.some(l=>l.name==="resolution:not-reproducible")?" · not-reproducible":""}] ${i.title}`;
+            fs.writeFileSync("work/existing-issues.md", all.map(line).join("\n") + "\n");
+          '
+
+      - name: Install the agent CLI
+        if: steps.runner.outputs.on == 'true' && steps.depth.outputs.parked == 'false'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Classify it
+        if: steps.runner.outputs.on == 'true' && steps.depth.outputs.parked == 'false'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/triage.md" "Read Grep Glob" \
+            'The issue to triage is `work/issue.md`.' \
+            'The existing-issues listing is `work/existing-issues.md`.' \
+            > work/triage.txt
+          cat work/triage.txt
+
+      # Fail closed: an unparseable verdict parks the issue for a human. It never closes the
+      # issue (that would blame the reporter for the model's failure) and never creates work.
+      - name: Parse the verdict
+        if: steps.runner.outputs.on == 'true' && steps.depth.outputs.parked == 'false'
+        id: verdict
+        run: |
+          node -e '
+            const fs = require("fs");
+            const text = fs.readFileSync("work/triage.txt", "utf8");
+            const line = text.split("\n").find((l) => l.trim().startsWith("{"));
+            let v = null;
+            try { v = JSON.parse(line); } catch {}
+            const ok = v && typeof v.actionable === "boolean";
+            const out = ok
+              ? { parsed: true, actionable: v.actionable, type: v.type ?? "", slug: v.slug ?? "",
+                  duplicate_of: v.duplicate_of ?? "", recurrence_of: v.recurrence_of ?? "", reason: v.reason ?? "" }
+              : { parsed: false, actionable: false, type: "", slug: "", duplicate_of: "", recurrence_of: "", reason: "" };
+            fs.appendFileSync(process.env.GITHUB_OUTPUT,
+              Object.entries(out).map(([k, val]) => `${k}=${val}`).join("\n") + "\n");
+            fs.writeFileSync("work/reason.md", out.reason || "");
+          '
+
+      - name: Unparseable verdict — park, never guess
+        if: steps.runner.outputs.on == 'true' && steps.depth.outputs.parked == 'false' && steps.verdict.outputs.parsed == 'false'
+        run: |
+          node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
+          gh issue comment "$ISSUE" --body "Triage could not produce a valid verdict for this issue, so the line fails closed and parks it. A person should look, then re-run intake."
+
+      - name: Recurrence — reopen the original, it carries the history
+        if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.parsed == 'true' && steps.verdict.outputs.recurrence_of != ''
+        run: |
+          ORIG='${{ steps.verdict.outputs.recurrence_of }}'
+          gh issue reopen "$ORIG" --comment "Reopened: the same problem was reported again in #$ISSUE. Two independent sightings of a bug that would not reproduce is evidence — intake is re-running with both reports."
+          gh issue close "$ISSUE" --reason "not planned" --comment "This matches #$ORIG (closed as not reproducible). That issue has been reopened and carries both reports; the line continues there."
+          node "$ADLC/scripts/labels.mjs" add "$ISSUE" resolution:not-actionable
+          gh workflow run intake.yml -f issue_number="$ORIG" || echo "::warning::Could not dispatch intake for #$ORIG — run it manually."
+
+      - name: Duplicate — link, close, done
+        if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.parsed == 'true' && steps.verdict.outputs.recurrence_of == '' && steps.verdict.outputs.duplicate_of != ''
+        run: |
+          gh issue close "$ISSUE" --reason "not planned" --comment "$(printf 'Duplicate of #%s — the line continues there.\n\n%s' '${{ steps.verdict.outputs.duplicate_of }}' "$(cat work/reason.md)")"
+          node "$ADLC/scripts/labels.mjs" add "$ISSUE" resolution:not-actionable
+
+      - name: Not actionable — close with the reason
+        if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.parsed == 'true' && steps.verdict.outputs.actionable == 'false' && steps.verdict.outputs.duplicate_of == '' && steps.verdict.outputs.recurrence_of == ''
+        run: |
+          node "$ADLC/scripts/labels.mjs" add "$ISSUE" resolution:not-actionable
+          gh issue close "$ISSUE" --reason "not planned" --comment "$(printf 'The line triaged this as not actionable and closed it.\n\n> %s\n\nIf that is wrong, add the missing detail and reopen — reopening re-enters the line.' "$(cat work/reason.md)")"
+
+      - name: Label the type
+        if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.actionable == 'true'
+        run: node "$ADLC/scripts/labels.mjs" add "$ISSUE" "type:${{ steps.verdict.outputs.type }}"
+
+      - name: Not a bug — straight to the spec station
+        if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.actionable == 'true' && steps.verdict.outputs.type != 'bug'
+        run: |
+          gh workflow run spec.yml \
+            -f issue_number="$ISSUE" \
+            -f slug='${{ steps.verdict.outputs.slug }}' \
+            || { node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human; gh issue comment "$ISSUE" --body "Triage passed but the spec station could not be dispatched — parked for a human. Re-run with: \`gh workflow run spec.yml -f issue_number=$ISSUE -f slug=${{ steps.verdict.outputs.slug }}\`"; }
+
+  # A bug is only real once a failing test proves it. Reproduced → spec station, with the
+  # failing test attached as evidence. Not reproduced → closed with the full report, reopenable.
+  reproduce:
+    needs: triage
+    if: needs.triage.outputs.on == 'true' && needs.triage.outputs.actionable == 'true' && needs.triage.outputs.type == 'bug'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get the line's prompts and scripts
+        if: github.repository != env.ADLC_REPO
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ADLC_REPO }}
+          ref: ${{ env.ADLC_REF }}
+          path: .adlc
+      - name: Point at them
+        run: echo "ADLC=$([ -d .adlc ] && echo .adlc || echo .)" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Take the issue in, as data
+        run: |
+          mkdir -p work
+          gh issue view "$ISSUE" --json number,title,body,author,comments > work/issue.json
+          node -e '
+            const i = require("./work/issue.json");
+            const fs = require("fs");
+            const thread = (i.comments ?? []).map((c) => `\n---\ncomment by @${c.author?.login}:\n\n${c.body}`).join("\n");
+            fs.writeFileSync("work/issue.md", `# ${i.title}\n\n(issue #${i.number}, by @${i.author.login})\n\n${i.body ?? ""}\n${thread}\n`);
+          '
+
+      - name: Install the agent CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Try to reproduce it as a failing test
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/reproduce.md" \
+            "Read Grep Glob Edit Write Bash(node:*) Bash(npm:*)" \
+            'The report is `work/issue.md`.' \
+            | tee work/reproduce.md
+
+      # The deterministic question: did anything actually fail? A red test is what makes the
+      # bug real. Green means nothing was reproduced — close with the report, reopenable.
+      - name: Did anything actually fail?
+        id: red
+        run: |
+          if npm test; then
+            echo "reproduced=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "reproduced=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Reproduced — keep the failing test as evidence
+        if: steps.red.outputs.reproduced == 'true'
+        run: |
+          git diff > work/repro.patch
+          git status --porcelain --untracked-files -- test | awk '{print $2}' | while read -r f; do
+            git diff /dev/null "$f" >> work/repro.patch || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: steps.red.outputs.reproduced == 'true'
+        with:
+          name: repro-${{ env.ISSUE }}
+          path: |
+            work/repro.patch
+            work/reproduce.md
+
+      - name: Reproduced — record it and hand to the spec station
+        if: steps.red.outputs.reproduced == 'true'
+        run: |
+          node "$ADLC/scripts/links.mjs" write "$ISSUE" repro_run="${{ github.run_id }}" \
+            --note "Reproduced: a failing test proves this bug is real. The test travels to the build as \`repro-$ISSUE\` from run ${{ github.run_id }}."
+          gh workflow run spec.yml \
+            -f issue_number="$ISSUE" \
+            -f slug='${{ needs.triage.outputs.slug }}' \
+            || { node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human; gh issue comment "$ISSUE" --body "Reproduced, but the spec station could not be dispatched — parked for a human. Re-run with: \`gh workflow run spec.yml -f issue_number=$ISSUE -f slug=${{ needs.triage.outputs.slug }}\`"; }
+
+      - name: Not reproducible — close with the report, reopenable
+        if: steps.red.outputs.reproduced == 'false'
+        run: |
+          node "$ADLC/scripts/labels.mjs" add "$ISSUE" resolution:not-reproducible
+          gh issue comment "$ISSUE" --body-file work/reproduce.md
+          gh issue close "$ISSUE" --reason "not planned" --comment "The reproduce station could not surface this as a failing test — the full report is above. Closed as not reproducible, deliberately: open issues are only things actually moving down the line. Reopen it (or report the problem again) and intake re-runs with all the accumulated reports."

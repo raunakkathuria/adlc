@@ -4,8 +4,9 @@
 // in test/, and every REQ id a test claims must exist in the living spec. That is all it checks.
 // It cannot tell you whether the test asserts the right thing — only that somebody wrote one.
 //
-// Deltas in openspec/changes/ are deliberately invisible here: a requirement becomes
-// gate-visible the moment it is folded into the living spec, and not before.
+// In-flight deltas (openspec/changes/<slug>/specs/, archive excluded) count as specified too:
+// on an implementation branch the delta IS the requirement the new tests name, and it stays
+// valid until finalize archives it into the living spec. Archived deltas are history, not spec.
 
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +31,18 @@ async function collect(dir, filePattern, { recursive = false } = {}) {
 }
 
 const specified = await collect('openspec/specs', /^spec\.md$/, { recursive: true });
+try {
+  for (const [id, where] of await collect('openspec/changes', /^spec\.md$/, { recursive: true })) {
+    for (const path of where) {
+      if (path.includes('/archive/')) continue;
+      if (!specified.has(id)) specified.set(id, new Set());
+      specified.get(id).add(path);
+    }
+  }
+} catch {} // no changes/ directory is a fine state
+
+for (const [id, where] of specified) if (where.size === 0) specified.delete(id);
+
 const tested = await collect('test', /\.test\.js$/);
 
 const uncovered = [...specified.keys()].filter((id) => !tested.has(id)).sort();
