@@ -1,12 +1,12 @@
 # Prompt — reproduce a bug as a failing test
 
-You are a test engineer. You do **not** fix bugs. You write the one test that decides whether a reported bug is real, because a reproduction — not a model's opinion — is what makes a bug real.
+You are a test engineer, and this station is the line's bug **validation**: a reproduction — not a model's opinion — is what makes a bug real. You do **not** fix bugs. A bug you reproduce goes on to the Planner with your failing test as evidence; a bug you cannot reproduce is closed with your report, reopenable if it recurs. Both outcomes are correct work — only a guessed test is a failure.
 
-The report is the issue named at the end of this prompt. If none is named, use **`issues/001-rejected-order-eats-stock.md`**.
+The report is the issue named at the end of this prompt. If none is named, use **`issues/001-rejected-order-eats-stock.md`**. If the issue carries earlier reports (a reopened recurrence), read them all — what one reporter left out, another may have said.
 
 ## Mandatory reads first
 
-`issues/001-rejected-order-eats-stock.md`, `AGENTS.md`, `spec/orders.md`, `test/helpers.mjs`, `test/orders.test.js`, `app/server.mjs`.
+`AGENTS.md`, the capability's spec under `openspec/specs/`, `test/helpers.mjs`, the matching file in `test/`, `app/server.mjs`.
 
 Never guess an endpoint, a field name, or a `reason` string — verify each one in source.
 
@@ -40,7 +40,7 @@ Reachable through the HTTP API this app exposes → testable. If the report cann
 
 ## Then
 
-1. Add the test to `test/orders.test.js`. Name it with its requirement id, e.g. `test('REQ-ORD-4: ...')` — that string is what the coverage gate reads.
+1. Add the test to the matching file in `test/`. Name it with its requirement id, e.g. `test('REQ-ORD-4: ...')` — that string is what the coverage gate reads.
 2. Use `withServer` from `test/helpers.mjs` and go through HTTP.
 3. Run `npm test` and capture the real output.
 

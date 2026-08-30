@@ -1,0 +1,202 @@
+# Station: spec — the Planner drafts the delta and opens the spec PR.
+#
+# Dispatched by intake (fresh work) or by the verifier (a revision: the drift report routed
+# back to the Planner, because if the spec was silent or wrong, more code will not fix it).
+#
+# The spec PR is the shared artifact of the whole change: Gate 1 is an APPROVING REVIEW on it —
+# never a merge. It stays open while implementations are built and merged, and the delta lands
+# on main inside the implementation PR(s) built from this branch. finalize.yml archives it into
+# the living spec after the last implementation merges. main's spec only ever describes what
+# shipped.
+#
+# OFF unless the ANTHROPIC_API_KEY secret is set.
+
+name: spec
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Source issue"
+        required: true
+        type: string
+      slug:
+        description: "Change slug — the delta lives at openspec/changes/<slug>/"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      issue_number:
+        required: true
+        type: string
+      slug:
+        required: true
+        type: string
+      adlc_repo:
+        required: false
+        type: string
+        default: raunakkathuria/adlc
+      adlc_ref:
+        required: false
+        type: string
+        default: main
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: adlc-issue-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+env:
+  ISSUE: ${{ inputs.issue_number }}
+  SLUG: ${{ inputs.slug }}
+  ADLC_REPO: ${{ inputs.adlc_repo || 'raunakkathuria/adlc' }}
+  ADLC_REF: ${{ inputs.adlc_ref || 'main' }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is the line switched on?
+        id: runner
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${KEY:-}" ]; then
+            echo "No ANTHROPIC_API_KEY secret. The line stays off — this workflow is documentation."
+            echo "on=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get the line's prompts and scripts
+        if: steps.runner.outputs.on == 'true' && github.repository != env.ADLC_REPO
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ADLC_REPO }}
+          ref: ${{ env.ADLC_REF }}
+          path: .adlc
+      - name: Point at them
+        if: steps.runner.outputs.on == 'true'
+        run: echo "ADLC=$([ -d .adlc ] && echo .adlc || echo .)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        if: steps.runner.outputs.on == 'true'
+        with:
+          node-version: 22
+
+      - name: This issue is at the spec station
+        if: steps.runner.outputs.on == 'true'
+        run: node "$ADLC/scripts/labels.mjs" state "$ISSUE" spec-draft
+
+      # A revision continues the existing spec branch (the verifier's findings are in the issue
+      # thread the Planner reads); fresh work starts the branch from main.
+      - name: Start or continue the spec branch
+        if: steps.runner.outputs.on == 'true'
+        run: |
+          git config user.name "adlc-line"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git fetch origin "spec/$SLUG" 2>/dev/null; then
+            git checkout "spec/$SLUG"
+            echo "Continuing existing spec branch (revision)."
+          else
+            git checkout -b "spec/$SLUG"
+          fi
+
+      - name: Take the issue thread in, as data
+        if: steps.runner.outputs.on == 'true'
+        run: |
+          mkdir -p work
+          gh issue view "$ISSUE" --json number,title,body,author,comments > work/issue.json
+          node -e '
+            const i = require("./work/issue.json");
+            const fs = require("fs");
+            const thread = (i.comments ?? []).map((c) => `\n---\ncomment by @${c.author?.login}:\n\n${c.body}`).join("\n");
+            fs.writeFileSync("work/issue.md", `# ${i.title}\n\n(issue #${i.number}, by @${i.author.login})\n\n${i.body ?? ""}\n${thread}\n`);
+          '
+
+      - name: Install the agent CLI and OpenSpec
+        if: steps.runner.outputs.on == 'true'
+        run: npm install -g @anthropic-ai/claude-code @fission-ai/openspec
+
+      - name: Draft the delta (the Planner)
+        if: steps.runner.outputs.on == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/spec.md" \
+            "Read Grep Glob Edit Write Bash(openspec:*)" \
+            'The issue is `work/issue.md` (the thread may carry a verifier report — a revision addresses it).' \
+            "The slug is \`$SLUG\` — the delta lives at \`openspec/changes/$SLUG/\`." \
+            | tee work/plan.md
+
+      # Deterministic guards: the delta must validate, and the Planner may only have touched
+      # its own change directory. Anything else is a station overstepping — fail loudly.
+      - name: Validate the delta
+        if: steps.runner.outputs.on == 'true'
+        run: |
+          openspec validate "$SLUG"
+          STRAY=$(git status --porcelain | grep -v -e " openspec/changes/$SLUG/" -e " work/" -e " \.adlc/" || true)
+          if [ -n "$STRAY" ]; then
+            echo "::error::The spec station touched files outside openspec/changes/$SLUG/:"
+            echo "$STRAY"
+            exit 1
+          fi
+
+      - name: Open (or update) the spec PR — Gate 1 is an approving review on it
+        if: steps.runner.outputs.on == 'true'
+        id: pr
+        run: |
+          git add "openspec/changes/$SLUG"
+          if git diff --cached --quiet; then
+            echo "The Planner changed nothing (an existing delta already covers this) — no new commit."
+          else
+            git commit -m "spec: $SLUG
+
+          Delta proposed from #$ISSUE. Gate 1 is an approving review on this PR —
+          it is not merged until every implementation PR built from it has merged."
+          fi
+          git push -u origin "spec/$SLUG"
+          EXISTING=$(gh pr list --head "spec/$SLUG" --state open --json url --jq '.[0].url // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "url=$EXISTING" >> "$GITHUB_OUTPUT"
+            echo "Spec PR already open: $EXISTING (revision pushed)."
+          else
+            { cat "openspec/changes/$SLUG/proposal.md"
+              printf '\n\n---\n\n**Gate 1:** an approving review from someone with write access starts the build. Do not merge this PR — the line merges it after every implementation PR has merged.\n\nRelates to #%s\n' "$ISSUE"
+            } > work/pr-body.md
+            URL=$(gh pr create --base "${{ github.event.repository.default_branch || 'main' }}" --head "spec/$SLUG" \
+              --title "spec: $SLUG" --body-file work/pr-body.md)
+            echo "url=$URL" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Two advisory lenses read the delta before the human does. Advisory: findings inform
+      # Gate 1, they do not block it.
+      - name: Spec review — two lenses, before a human decides
+        if: steps.runner.outputs.on == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/spec-review.md" "Read Grep Glob" \
+            "The delta under review is \`openspec/changes/$SLUG/\`." \
+            | tee work/spec-review.md
+          gh pr comment "${{ steps.pr.outputs.url }}" --body-file work/spec-review.md
+
+      - name: Record the links and hand to Gate 1
+        if: steps.runner.outputs.on == 'true'
+        run: |
+          node "$ADLC/scripts/links.mjs" write "$ISSUE" \
+            spec_pr="${{ steps.pr.outputs.url }}" \
+            openspec_change="openspec/changes/$SLUG" \
+            --note "Spec delta proposed: ${{ steps.pr.outputs.url }} — waiting at **Gate 1** for an approving review."
+          node "$ADLC/scripts/labels.mjs" state "$ISSUE" gate-1
