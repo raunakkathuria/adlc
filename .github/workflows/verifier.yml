@@ -111,12 +111,15 @@ jobs:
 
       - name: Check out the implementation head
         if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
-        run: gh pr checkout "${{ steps.links.outputs.impl }}"
+        env:
+          IMPL: ${{ steps.links.outputs.impl }}
+        run: gh pr checkout "$IMPL"
 
       - name: Start the app — verify against the running thing, not the diff
         if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
         run: |
-          (node app/server.mjs &) && for i in $(seq 1 30); do
+          # env -u: the app is model-written code; it gets no token.
+          (env -u GH_TOKEN node app/server.mjs &) && for i in $(seq 1 30); do
             curl -sf http://localhost:3000/api/items > /dev/null && break
             sleep 1
           done
@@ -128,14 +131,24 @@ jobs:
 
       - name: The Verifier — fresh context, spec first
         if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
+        shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CHANGE: ${{ steps.links.outputs.change }}
         run: |
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/verify.md" \
-            "Read Grep Glob Bash(curl:*) Bash(node:*) Bash(npm:*)" \
-            "The change under verification is \`${{ steps.links.outputs.change }}/\`." \
+            "Read,Grep,Glob,Bash(curl:*),Bash(node:*),Bash(npm:*)" \
+            "The change under verification is \`$CHANGE/\`." \
             'The app is running at `http://localhost:3000`.' \
             | tee work/verifier.md
+
+      - name: The line's own tools must be untouched
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true' && env.ADLC == '.adlc'
+        run: |
+          if [ -n "$(git -C .adlc status --porcelain)" ]; then
+            echo "::error::The agent modified the line's own prompts or scripts (.adlc/) — refusing to continue."
+            exit 1
+          fi
 
       # The trailers are the machine-readable verdict. Missing trailers fail closed: treated
       # as MISMATCH with a note, because an agent that lost its output contract proved nothing.
@@ -155,11 +168,13 @@ jobs:
 
       - name: Post the verdict on the implementation PR
         if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
+        env:
+          IMPL: ${{ steps.links.outputs.impl }}
         run: |
           { printf '## Verifier — independent, spec-first\n\n'
             tail -c 60000 work/verifier.md
           } > work/verdict-comment.md
-          gh pr comment "${{ steps.links.outputs.impl }}" --body-file work/verdict-comment.md
+          gh pr comment "$IMPL" --body-file work/verdict-comment.md
 
       - name: File the out-of-scope findings — the line feeding itself
         if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
@@ -172,10 +187,12 @@ jobs:
           done
 
       - name: Pass — hand to the quality station
-        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true' && steps.verdict.outputs.match == 'COMPLETE'
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true' && steps.verdict.outputs.match == 'COMPLETE' && steps.verdict.outputs.implemented != 'NO'
+        env:
+          IMPL: ${{ steps.links.outputs.impl }}
         run: |
           node "$ADLC/scripts/labels.mjs" state "$ISSUE" quality
-          IMPL_N=$(basename "${{ steps.links.outputs.impl }}")
+          IMPL_N=$(basename "$IMPL")
           gh workflow run quality.yml -f pr_number="$IMPL_N" -f issue_number="$ISSUE" \
             || { echo "::warning::Quality could not be dispatched."; gh issue comment "$ISSUE" --body "Verifier passed, but the quality station could not be dispatched. Run it with: \`gh workflow run quality.yml -f pr_number=$IMPL_N -f issue_number=$ISSUE\`"; }
 
@@ -183,16 +200,19 @@ jobs:
       # verifier report in the issue thread. New spec commits dismiss the old approval, so
       # Gate 1 happens again — the loop is honest, and the cap keeps it finite.
       - name: Mismatch — back to the Planner, within the cap
-        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true' && steps.verdict.outputs.match == 'MISMATCH'
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true' && (steps.verdict.outputs.match == 'MISMATCH' || steps.verdict.outputs.implemented == 'NO')
+        env:
+          SLUG: ${{ steps.links.outputs.slug }}
         run: |
           gh issue comment "$ISSUE" --body "$(printf 'The verifier found drift — routed to the **Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it.\n\n%s' "$(tail -c 60000 work/verifier.md)")"
           if node "$ADLC/scripts/attempts.mjs" record "$ISSUE" verifier; then
             node "$ADLC/scripts/labels.mjs" state "$ISSUE" spec-draft
-            gh workflow run spec.yml -f issue_number="$ISSUE" -f slug="${{ steps.links.outputs.slug }}" \
+            gh workflow run spec.yml -f issue_number="$ISSUE" -f slug="$SLUG" \
               || { node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human; gh issue comment "$ISSUE" --body "The spec station could not be dispatched for the revision — parked."; }
           else
             node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
-            gh issue comment "$ISSUE" --body "The verifier has found drift twice for this issue — the line is parked. A person should read the two reports above and decide whether the spec or the approach is wrong."
+            gh issue comment "$ISSUE" --body "The verifier has found drift twice for this issue — the line is parked. A person should read the two reports above and decide whether the spec or the approach is wrong. Removing \`needs-human\` and re-approving the spec PR starts a fresh cycle."
+            node "$ADLC/scripts/attempts.mjs" reset "$ISSUE" verifier # the park starts a fresh cycle
           fi
 
       - name: Keep the evidence

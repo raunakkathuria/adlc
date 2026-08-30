@@ -85,23 +85,26 @@ jobs:
       - name: Gate 1 fine print
         if: steps.runner.outputs.on == 'true'
         id: gate
+        env:
+          REVIEWER: ${{ github.event.review.user.login || github.actor }}
         run: |
           mkdir -p work
           gh pr view "$PR" --json state,headRefName,files,body,reviews > work/pr.json
           node -e '
             const pr = require("./work/pr.json");
             const fs = require("fs");
-            const fail = (why) => { console.log(`skip=${why}`); fs.appendFileSync(process.env.GITHUB_OUTPUT, `ok=false\nwhy=${why}\n`); process.exit(0); };
+            const fail = (why) => { console.log(`skip: ${why}`); fs.appendFileSync(process.env.GITHUB_OUTPUT, `ok=false\nwhy=${why}\n`); process.exit(0); };
             if (pr.state !== "OPEN") fail("the spec PR is not open");
             if (!pr.headRefName.startsWith("spec/")) fail("not a spec branch");
+            const slug = pr.headRefName.slice("spec/".length);
+            if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(slug)) fail("branch name is not a valid change slug");
             const offside = pr.files.filter((f) => !f.path.startsWith("openspec/changes/"));
             if (offside.length) fail("the PR touches files outside openspec/changes/ - not a pure spec PR");
-            const issue = (pr.body.match(/Relates to #(\d+)/) ?? [])[1];
+            const issue = ((pr.body ?? "").match(/Relates to #(\d+)/) ?? [])[1];
             if (!issue) fail("no Relates-to issue recorded on the PR");
-            const slug = pr.headRefName.slice("spec/".length);
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `ok=true\nissue=${issue}\nslug=${slug}\n`);
           '
-          APPROVER='${{ github.event.review.user.login || github.actor }}'
+          APPROVER="$REVIEWER"
           PERM=$(gh api "repos/${{ github.repository }}/collaborators/$APPROVER/permission" --jq .permission)
           echo "Approver $APPROVER has permission: $PERM"
           case "$PERM" in
@@ -148,6 +151,7 @@ jobs:
             echo "within=false" >> "$GITHUB_OUTPUT"
             node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
             gh issue comment "$ISSUE" --body "The build station has hit its attempt cap for this issue. The line is parked — a person should read the attempts above and decide, then remove \`needs-human\` and re-approve the spec PR to try again."
+            node "$ADLC/scripts/attempts.mjs" reset "$ISSUE" build # the park itself starts a fresh cycle for the next human-initiated try
           fi
 
       - name: The Executor is at work
@@ -169,7 +173,7 @@ jobs:
           RUN=$(node "$ADLC/scripts/links.mjs" read "$ISSUE" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).repro_run??""))')
           if [ -n "$RUN" ]; then
             gh run download "$RUN" -n "repro-$ISSUE" -D work/repro \
-              && git apply work/repro/work/repro.patch \
+              && git apply work/repro/repro.patch \
               && echo "REPRO=The failing test from the reproduce station is already applied to the working tree — it is your red test." >> "$GITHUB_ENV" \
               || echo "::warning::Reproduce artifact from run $RUN could not be applied — the Executor writes the red test from the spec instead."
           fi
@@ -180,14 +184,23 @@ jobs:
 
       - name: Build it (the Executor)
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
+        shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/build.md" \
-            "Read Grep Glob Edit Write Bash(node:*) Bash(npm:*)" \
+            "Read,Grep,Glob,Edit,Write,Bash(node:*),Bash(npm:*)" \
             "The delta is \`openspec/changes/$SLUG/\`." \
             "${REPRO:-}" \
             | tee work/build.md
+
+      - name: The line's own tools must be untouched
+        if: env.GO == 'true' && steps.attempts.outputs.within == 'true' && env.ADLC == '.adlc'
+        run: |
+          if [ -n "$(git -C .adlc status --porcelain)" ]; then
+            echo "::error::The agent modified the line's own prompts or scripts (.adlc/) — refusing to continue."
+            exit 1
+          fi
 
       # The deterministic gate. Red gate, no PR — the run stops and reports what it tried.
       - name: The gate
@@ -211,18 +224,22 @@ jobs:
       # either. Its findings go in the PR body — where the human at Gate 2 reads them.
       - name: Independent review, fresh context
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true' && steps.verify.outputs.green == 'true'
+        shell: bash # pipefail
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/review.md" \
-            "Read Grep Glob Bash(node:*) Bash(npm:*) Bash(git:*)" \
+            "Read,Grep,Glob,Bash(node:*),Bash(npm:*),Bash(git:*)" \
             | tee work/review.md
 
       - name: Open the implementation PR — never merge it
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true' && steps.verify.outputs.green == 'true'
         id: pr
         run: |
-          git add app test "openspec/changes/$SLUG"
+          # Stage everything the gate just verified — except the run's own scratch. (The
+          # working tree IS what npm run verify passed; under-staging would ship a PR that
+          # differs from what was verified.)
+          git add -A -- . ':!work' ':!.adlc'
           git commit -m "impl: $SLUG
 
           Built from the spec delta approved at Gate 1 (spec PR stays open until this merges).
@@ -243,10 +260,12 @@ jobs:
 
       - name: Record the link, hand to the verifier
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true' && steps.verify.outputs.green == 'true'
+        env:
+          PR_URL: ${{ steps.pr.outputs.url }}
         run: |
           node "$ADLC/scripts/links.mjs" write "$ISSUE" \
-            implementation_pr="${{ steps.pr.outputs.url }}" \
-            --note "Implementation opened: ${{ steps.pr.outputs.url }} — the independent verifier has been dispatched."
+            implementation_pr="$PR_URL" \
+            --note "Implementation opened: $PR_URL — the independent verifier has been dispatched."
           node "$ADLC/scripts/labels.mjs" state "$ISSUE" verifying
           gh workflow run verifier.yml -f issue_number="$ISSUE" \
             || { echo "::warning::Verifier could not be dispatched — run it manually: gh workflow run verifier.yml -f issue_number=$ISSUE"; gh issue comment "$ISSUE" --body "The implementation PR is open, but the verifier could not be dispatched automatically. Run it with: \`gh workflow run verifier.yml -f issue_number=$ISSUE\`"; }

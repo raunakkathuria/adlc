@@ -5,6 +5,11 @@ on:
     inputs:
       issue_number: { description: "Source issue", required: true, type: string }
       slug: { description: "Change slug", required: true, type: string }
+# Reusable workflows do not inherit their own concurrency when called — the caller owns it.
+concurrency:
+  group: adlc-issue-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
 jobs:
   spec:
     permissions:

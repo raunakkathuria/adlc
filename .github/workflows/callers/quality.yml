@@ -8,6 +8,11 @@ on:
       pr_number: { description: "Implementation PR (verify mode); blank = explore", required: false, type: string }
       issue_number: { description: "Source issue (verify mode)", required: false, type: string }
       query: { description: "Focus (explore mode)", required: false, type: string }
+# Reusable workflows do not inherit their own concurrency when called — the caller owns it.
+concurrency:
+  group: adlc-quality-${{ inputs.pr_number || 'explore' }}
+  cancel-in-progress: false
+
 jobs:
   quality:
     permissions:

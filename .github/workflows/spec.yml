@@ -72,6 +72,8 @@ jobs:
         env:
           KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          # The slug becomes a branch name and a path — refuse anything but its strict shape.
+          echo "$SLUG" | grep -Eq '^[a-z0-9][a-z0-9-]{0,60}$' || { echo "::error::slug '$SLUG' is not a valid change slug"; exit 1; }
           if [ -z "${KEY:-}" ]; then
             echo "No ANTHROPIC_API_KEY secret. The line stays off — this workflow is documentation."
             echo "on=false" >> "$GITHUB_OUTPUT"
@@ -131,20 +133,26 @@ jobs:
 
       - name: Draft the delta (the Planner)
         if: steps.runner.outputs.on == 'true'
+        shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/spec.md" \
-            "Read Grep Glob Edit Write Bash(openspec:*)" \
+            "Read,Grep,Glob,Edit,Write,Bash(openspec:*)" \
             'The issue is `work/issue.md` (the thread may carry a verifier report — a revision addresses it).' \
             "The slug is \`$SLUG\` — the delta lives at \`openspec/changes/$SLUG/\`." \
             | tee work/plan.md
 
-      # Deterministic guards: the delta must validate, and the Planner may only have touched
-      # its own change directory. Anything else is a station overstepping — fail loudly.
+      # Deterministic guards: the delta must validate, the Planner may only have touched its
+      # own change directory, and the line's own prompts/scripts must be untouched. Anything
+      # else is a station overstepping — fail loudly.
       - name: Validate the delta
         if: steps.runner.outputs.on == 'true'
         run: |
+          if [ "$ADLC" = ".adlc" ] && [ -n "$(git -C .adlc status --porcelain)" ]; then
+            echo "::error::The agent modified the line's own prompts or scripts (.adlc/) — refusing to continue."
+            exit 1
+          fi
           openspec validate "$SLUG"
           STRAY=$(git status --porcelain | grep -v -e " openspec/changes/$SLUG/" -e " work/" -e " \.adlc/" || true)
           if [ -n "$STRAY" ]; then
@@ -166,6 +174,12 @@ jobs:
           Delta proposed from #$ISSUE. Gate 1 is an approving review on this PR —
           it is not merged until every implementation PR built from it has merged."
           fi
+          BASE="${{ github.event.repository.default_branch || 'main' }}"
+          if [ "$(git rev-list --count "origin/$BASE..HEAD" 2>/dev/null || echo 0)" = "0" ]; then
+            node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
+            gh issue comment "$ISSUE" --body "The Planner produced no delta commit for \`$SLUG\`, so there is nothing to open a spec PR from — parked for a human to read the run log."
+            exit 1
+          fi
           git push -u origin "spec/$SLUG"
           EXISTING=$(gh pr list --head "spec/$SLUG" --state open --json url --jq '.[0].url // empty')
           if [ -n "$EXISTING" ]; then
@@ -184,19 +198,23 @@ jobs:
       # Gate 1, they do not block it.
       - name: Spec review — two lenses, before a human decides
         if: steps.runner.outputs.on == 'true'
+        shell: bash # pipefail
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_URL: ${{ steps.pr.outputs.url }}
         run: |
-          bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/spec-review.md" "Read Grep Glob" \
+          bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/spec-review.md" "Read,Grep,Glob" \
             "The delta under review is \`openspec/changes/$SLUG/\`." \
             | tee work/spec-review.md
-          gh pr comment "${{ steps.pr.outputs.url }}" --body-file work/spec-review.md
+          gh pr comment "$PR_URL" --body-file work/spec-review.md
 
       - name: Record the links and hand to Gate 1
         if: steps.runner.outputs.on == 'true'
+        env:
+          PR_URL: ${{ steps.pr.outputs.url }}
         run: |
           node "$ADLC/scripts/links.mjs" write "$ISSUE" \
-            spec_pr="${{ steps.pr.outputs.url }}" \
+            spec_pr="$PR_URL" \
             openspec_change="openspec/changes/$SLUG" \
-            --note "Spec delta proposed: ${{ steps.pr.outputs.url }} — waiting at **Gate 1** for an approving review."
+            --note "Spec delta proposed: $PR_URL — waiting at **Gate 1** for an approving review."
           node "$ADLC/scripts/labels.mjs" state "$ISSUE" gate-1

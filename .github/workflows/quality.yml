@@ -114,7 +114,8 @@ jobs:
       - name: Start the app
         if: steps.runner.outputs.on == 'true'
         run: |
-          (node app/server.mjs &) && for i in $(seq 1 30); do
+          # env -u: the app is model-written code; it gets no token.
+          (env -u GH_TOKEN node app/server.mjs &) && for i in $(seq 1 30); do
             curl -sf http://localhost:3000/api/items > /dev/null && break
             sleep 1
           done
@@ -157,19 +158,29 @@ jobs:
       # The agentic half — the questions a scanner cannot answer.
       - name: Usability and accessibility — the "don't make me think" pass
         if: steps.runner.outputs.on == 'true'
+        shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          QUERY: ${{ inputs.query }}
         run: |
           CHANGE=""
           if [ -n "$ISSUE" ]; then
             CHANGE=$(node "$ADLC/scripts/links.mjs" read "$ISSUE" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).openspec_change??""))')
           fi
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/quality.md" \
-            "Read Grep Glob Bash(curl:*) Bash(node:*)" \
+            "Read,Grep,Glob,Bash(curl:*),Bash(node:*)" \
             'The app is running at `http://localhost:3000`.' \
             "${CHANGE:+The change under test is \`$CHANGE/\`.}" \
-            "${{ inputs.query && format('Focus: {0}', inputs.query) || '' }}" \
+            "${QUERY:+Focus: $QUERY}" \
             | tee work/quality.md
+
+      - name: The line's own tools must be untouched
+        if: steps.runner.outputs.on == 'true' && env.ADLC == '.adlc'
+        run: |
+          if [ -n "$(git -C .adlc status --porcelain)" ]; then
+            echo "::error::The agent modified the line's own prompts or scripts (.adlc/) — refusing to continue."
+            exit 1
+          fi
 
       - name: Report — on the PR in verify mode, in the run summary otherwise
         if: steps.runner.outputs.on == 'true'
@@ -184,26 +195,33 @@ jobs:
           fi
           cat work/quality-report.md >> "$GITHUB_STEP_SUMMARY"
 
+      # Explore runs have no source issue: findings file at depth 1 with no origin link.
       - name: File the out-of-scope findings — the line feeding itself
-        if: steps.runner.outputs.on == 'true' && env.ISSUE != ''
+        if: steps.runner.outputs.on == 'true'
         run: |
-          node "$ADLC/scripts/file-findings.mjs" work/quality.md "$ISSUE" | tee work/filed.txt
+          node "$ADLC/scripts/file-findings.mjs" work/quality.md "${ISSUE:--}" | tee work/filed.txt
           grep -o 'Filed https[^ ]*' work/filed.txt | awk '{print $2}' | while read -r URL; do
             gh workflow run intake.yml -f issue_number="${URL##*/}" \
               || echo "::warning::Could not dispatch intake for $URL"
           done
 
-      - name: Hand the issue to Gate 2
-        if: steps.runner.outputs.on == 'true' && env.ISSUE != ''
-        run: |
-          node "$ADLC/scripts/labels.mjs" state "$ISSUE" gate-2
-          gh issue comment "$ISSUE" --body "Quality has reported on the implementation PR. The line is done — **Gate 2** is yours: merge the implementation PR when the checks and reports read right. Nothing merges it but a person."
-
+      # The thresholds vote BEFORE the issue advances: a red quality run must not hand the
+      # issue to Gate 2 as if nothing happened.
       - name: The thresholds have a vote
         if: steps.runner.outputs.on == 'true' && steps.lighthouse.outputs.verdict == 'fail'
         run: |
+          if [ -n "$ISSUE" ]; then
+            node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
+            gh issue comment "$ISSUE" --body "Quality thresholds failed on the implementation PR — see the report there. The line is parked short of Gate 2 until the numbers are addressed."
+          fi
           echo "::error::Lighthouse scores are below the thresholds — see the run summary."
           exit 1
+
+      - name: Hand the issue to Gate 2
+        if: steps.runner.outputs.on == 'true' && env.ISSUE != '' && steps.lighthouse.outputs.verdict == 'pass'
+        run: |
+          node "$ADLC/scripts/labels.mjs" state "$ISSUE" gate-2
+          gh issue comment "$ISSUE" --body "Quality has reported on the implementation PR. The line is done — **Gate 2** is yours: merge the implementation PR when the checks and reports read right. Nothing merges it but a person."
 
       - name: Keep the evidence
         if: always() && steps.runner.outputs.on == 'true'

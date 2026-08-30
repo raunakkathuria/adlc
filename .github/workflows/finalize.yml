@@ -44,6 +44,11 @@ permissions:
   issues: write
   pull-requests: write
 
+# Two implementation merges landing close together must not race the archive step.
+concurrency:
+  group: adlc-finalize
+  cancel-in-progress: false
+
 env:
   PR: ${{ github.event.pull_request.number || inputs.pr_number }}
   ADLC_REPO: ${{ inputs.adlc_repo || 'raunakkathuria/adlc' }}
@@ -81,7 +86,7 @@ jobs:
         run: |
           mkdir -p work
           gh pr view "$PR" --json body,headRefName > work/pr.json
-          ISSUE=$(node -e 'console.log(require("./work/pr.json").body.match(/Relates to #(\d+)/)?.[1] ?? "")')
+          ISSUE=$(node -e 'console.log((require("./work/pr.json").body ?? "").match(/Relates to #(\d+)/)?.[1] ?? "")')
           SLUG=$(node -e 'console.log(require("./work/pr.json").headRefName.replace(/^impl\//, ""))')
           if [ -z "$ISSUE" ]; then
             echo "No Relates-to issue on the PR — nothing to finalize."
@@ -108,8 +113,11 @@ jobs:
       - name: Archive the change into the living spec
         if: steps.state.outputs.ok == 'true' && steps.state.outputs.all_merged == 'true'
         id: archive
+        env:
+          SLUG: ${{ steps.state.outputs.slug }}
+          ISSUE_N: ${{ steps.state.outputs.issue }}
         run: |
-          SLUG='${{ steps.state.outputs.slug }}'
+          echo "$SLUG" | grep -Eq '^[a-z0-9][a-z0-9-]{0,60}$' || { echo "::error::branch name is not a valid change slug"; exit 1; }
           if [ ! -d "openspec/changes/$SLUG" ]; then
             echo "openspec/changes/$SLUG is not on main — already archived, or the implementation did not carry it. Nothing to archive."
             echo "archived=skip" >> "$GITHUB_OUTPUT"
@@ -126,13 +134,14 @@ jobs:
             echo "archived=true" >> "$GITHUB_OUTPUT"
           else
             echo "archived=false" >> "$GITHUB_OUTPUT"
-            gh issue comment "${{ steps.state.outputs.issue }}" --body "Every implementation is merged, but the archive commit could not be pushed to the default branch (branch protection). Archive by hand: \`openspec archive ${{ steps.state.outputs.slug }} --yes\` on main, or allow github-actions to push."
+            gh issue comment "$ISSUE_N" --body "Every implementation is merged, but the archive commit could not be pushed to the default branch (branch protection). Archive by hand: \`openspec archive $SLUG --yes\` on main, or allow github-actions to push."
           fi
 
       - name: Resolve the spec PR
         if: steps.state.outputs.ok == 'true' && steps.state.outputs.all_merged == 'true' && steps.state.outputs.spec_pr != ''
+        env:
+          SPEC: ${{ steps.state.outputs.spec_pr }}
         run: |
-          SPEC='${{ steps.state.outputs.spec_pr }}'
           STATE=$(gh pr view "$SPEC" --json state --jq .state)
           if [ "$STATE" = "OPEN" ]; then
             gh pr merge "$SPEC" --merge --subject "spec: land $(basename "$SPEC") after its implementations" \
@@ -143,8 +152,9 @@ jobs:
 
       - name: Close the loop
         if: steps.state.outputs.ok == 'true' && steps.state.outputs.all_merged == 'true'
+        env:
+          ISSUE: ${{ steps.state.outputs.issue }}
         run: |
-          ISSUE='${{ steps.state.outputs.issue }}'
           node "$ADLC/scripts/labels.mjs" state "$ISSUE" shipped
           gh issue close "$ISSUE" --reason completed \
             --comment "Shipped. Every implementation PR is merged and the spec delta is archived into the living spec — main now describes exactly what the product does. This issue's thread is the full record of the run: triage, spec, gates, verification, quality." \
