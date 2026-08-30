@@ -1,0 +1,7 @@
+# Keep the pinned actions current — the line's own supply chain is part of production grade.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -13,7 +13,7 @@ The first station of the loop is *"take the issue in"* — copy it into the repo
 - **A run becomes reproducible from the commit alone.** Every later station reads the same bytes. Nobody has to wonder whether the issue was edited halfway through, or what it said when the delta was written.
 - **The loop does not need credentials.** You can run all of this on a plane, on a fork, or on a machine that has never seen a GitHub token.
 
-That is not a workshop shortcut. It is what [`.github/workflows/bug-intake.yml`](../.github/workflows/bug-intake.yml) does on a real run — look at its **"Take the issue in"** step. It reads `github.event.issue`, writes `issues/gh-<number>.md`, and everything after that point works from the file. The three files here are the same move, done by hand so the workshop has something to start from.
+That is not a workshop shortcut. It is what [`.github/workflows/intake.yml`](../.github/workflows/intake.yml) does on a real run — look at its **"Take the issue in, as data"** step. It reads the issue with `gh issue view`, writes it to a file, and everything after that point works from the file — nothing from an issue body is ever interpolated into a shell command. The three files here are the same move, done by hand, so the stations can be run locally without a GitHub token.
 
 ## The three, and why they are different shapes
 

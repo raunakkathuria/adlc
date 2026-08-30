@@ -1,0 +1,18 @@
+# Caller: verifier — copy into your repo as .github/workflows/verifier.yml
+name: verifier
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number: { description: "Source issue", required: true, type: string }
+jobs:
+  verifier:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      actions: write
+    uses: raunakkathuria/adlc/.github/workflows/verifier.yml@v1
+    with:
+      issue_number: ${{ inputs.issue_number }}
+      adlc_ref: v1
+    secrets: inherit
