@@ -1,0 +1,18 @@
+#!/bin/bash
+# Buildwright pre-commit hook
+# If any staged file is under .buildwright/, run the Buildwright sync before
+# committing. Never blocks the commit — sync is a convenience to keep
+# generated files current.
+
+set -e
+
+if git diff --cached --name-only | grep -q '^\.buildwright/'; then
+  ROOT="$(git rev-parse --show-toplevel)"
+  SYNC="$ROOT/.buildwright/scripts/sync-agents.sh"
+  [ -f "$SYNC" ] || exit 0
+  echo "Buildwright: .buildwright/ changes detected — running sync..."
+  bash "$SYNC"
+  echo "Buildwright: sync complete."
+fi
+
+exit 0

@@ -1,0 +1,161 @@
+# Station: finalize — close the loop after Gate 2.
+#
+# A human merged an implementation PR (Gate 2). When EVERY implementation PR recorded on the
+# source issue is merged, the change has shipped: the delta directory is now on main (it rode
+# inside the implementation), so the line archives it — `openspec archive` folds it into the
+# living spec — resolves the spec PR, closes the issue, and stamps state:shipped.
+#
+# main's spec only ever describes what shipped, and this is the moment that becomes true.
+#
+# Note: the spec PR usually needs no merge of its own — its commits reached main inside the
+# implementation PR, and GitHub marks it merged. If it is still open, the line merges it; if
+# it cannot, it closes it as landed. Either way the record is on the issue.
+
+name: finalize
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Merged implementation PR number"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      pr_number:
+        required: false
+        type: string
+      adlc_repo:
+        required: false
+        type: string
+        default: raunakkathuria/adlc
+      adlc_ref:
+        required: false
+        type: string
+        default: main
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+# Two implementation merges landing close together must not race the archive step.
+concurrency:
+  group: adlc-finalize
+  cancel-in-progress: false
+
+env:
+  PR: ${{ github.event.pull_request.number || inputs.pr_number }}
+  ADLC_REPO: ${{ inputs.adlc_repo || 'raunakkathuria/adlc' }}
+  ADLC_REF: ${{ inputs.adlc_ref || 'main' }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  finalize:
+    # Only a MERGED implementation PR finalizes anything. (No off-switch here: this station
+    # runs no model — it is bookkeeping a human's merge already authorized.)
+    if: github.event_name != 'pull_request' || (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'impl/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+
+      - name: Get the line's prompts and scripts
+        if: github.repository != env.ADLC_REPO
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ADLC_REPO }}
+          ref: ${{ env.ADLC_REF }}
+          path: .adlc
+      - name: Point at them
+        run: echo "ADLC=$([ -d .adlc ] && echo .adlc || echo .)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Which issue, and is every implementation merged?
+        id: state
+        run: |
+          mkdir -p work
+          gh pr view "$PR" --json body,headRefName > work/pr.json
+          ISSUE=$(node -e 'console.log((require("./work/pr.json").body ?? "").match(/Relates to #(\d+)/)?.[1] ?? "")')
+          SLUG=$(node -e 'console.log(require("./work/pr.json").headRefName.replace(/^impl\//, ""))')
+          if [ -z "$ISSUE" ]; then
+            echo "No Relates-to issue on the PR — nothing to finalize."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          { echo "ok=true"; echo "issue=$ISSUE"; echo "slug=$SLUG"; } >> "$GITHUB_OUTPUT"
+          node "$ADLC/scripts/links.mjs" read "$ISSUE" > work/links.json
+          ALL_MERGED=true
+          for URL in $(node -e 'console.log((require("./work/links.json").implementation_pr ?? []).join("\n"))'); do
+            STATE=$(gh pr view "$URL" --json state --jq .state)
+            echo "$URL is $STATE"
+            [ "$STATE" = "MERGED" ] || ALL_MERGED=false
+          done
+          echo "all_merged=$ALL_MERGED" >> "$GITHUB_OUTPUT"
+          echo "spec_pr=$(node -e 'console.log(require("./work/links.json").spec_pr ?? "")')" >> "$GITHUB_OUTPUT"
+
+      - name: Some implementations still open — wait for them
+        if: steps.state.outputs.ok == 'true' && steps.state.outputs.all_merged != 'true'
+        run: echo "Not every implementation PR is merged yet. Finalize runs again on the next merge."
+
+      # The archive: the delta (already on main, it rode in the implementation) folds into the
+      # living spec. From here the coverage gate reads the requirement from openspec/specs/.
+      - name: Archive the change into the living spec
+        if: steps.state.outputs.ok == 'true' && steps.state.outputs.all_merged == 'true'
+        id: archive
+        env:
+          SLUG: ${{ steps.state.outputs.slug }}
+          ISSUE_N: ${{ steps.state.outputs.issue }}
+        run: |
+          echo "$SLUG" | grep -Eq '^[a-z0-9][a-z0-9-]{0,60}$' || { echo "::error::branch name is not a valid change slug"; exit 1; }
+          if [ ! -d "openspec/changes/$SLUG" ]; then
+            echo "openspec/changes/$SLUG is not on main — already archived, or the implementation did not carry it. Nothing to archive."
+            echo "archived=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          npm install -g @fission-ai/openspec
+          git config user.name "adlc-line"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          openspec archive "$SLUG" --yes
+          npm run verify
+          git add openspec
+          git commit -m "spec: archive $SLUG — the living spec now describes what shipped"
+          if git push; then
+            echo "archived=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "archived=false" >> "$GITHUB_OUTPUT"
+            gh issue comment "$ISSUE_N" --body "Every implementation is merged, but the archive commit could not be pushed to the default branch (branch protection). Archive by hand: \`openspec archive $SLUG --yes\` on main, or allow github-actions to push."
+          fi
+
+      - name: Resolve the spec PR
+        if: steps.state.outputs.ok == 'true' && steps.state.outputs.all_merged == 'true' && steps.state.outputs.spec_pr != ''
+        env:
+          SPEC: ${{ steps.state.outputs.spec_pr }}
+        run: |
+          STATE=$(gh pr view "$SPEC" --json state --jq .state)
+          if [ "$STATE" = "OPEN" ]; then
+            gh pr merge "$SPEC" --merge --subject "spec: land $(basename "$SPEC") after its implementations" \
+              || gh pr close "$SPEC" --comment "Every implementation PR built from this spec has merged, and the delta has been archived into the living spec on main. Closing as landed — the spec merged last, as designed."
+          else
+            echo "Spec PR is $STATE — nothing to do."
+          fi
+
+      - name: Close the loop
+        if: steps.state.outputs.ok == 'true' && steps.state.outputs.all_merged == 'true'
+        env:
+          ISSUE: ${{ steps.state.outputs.issue }}
+        run: |
+          node "$ADLC/scripts/labels.mjs" state "$ISSUE" shipped
+          gh issue close "$ISSUE" --reason completed \
+            --comment "Shipped. Every implementation PR is merged and the spec delta is archived into the living spec — main now describes exactly what the product does. This issue's thread is the full record of the run: triage, spec, gates, verification, quality." \
+            || echo "Issue already closed (the merge's 'Closes #' may have beaten us) — the labels and archive still landed."

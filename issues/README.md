@@ -13,14 +13,14 @@ The first station of the loop is *"take the issue in"* — copy it into the repo
 - **A run becomes reproducible from the commit alone.** Every later station reads the same bytes. Nobody has to wonder whether the issue was edited halfway through, or what it said when the delta was written.
 - **The loop does not need credentials.** You can run all of this on a plane, on a fork, or on a machine that has never seen a GitHub token.
 
-That is not a workshop shortcut. It is what [`.github/workflows/bug-intake.yml`](../.github/workflows/bug-intake.yml) does on a real run — look at its **"Take the issue in"** step. It reads `github.event.issue`, writes `issues/gh-<number>.md`, and everything after that point works from the file. The three files here are the same move, done by hand so the workshop has something to start from.
+That is not a workshop shortcut. It is what [`.github/workflows/intake.yml`](../.github/workflows/intake.yml) does on a real run — look at its **"Take the issue in, as data"** step. It reads the issue with `gh issue view`, writes it to a file, and everything after that point works from the file — nothing from an issue body is ever interpolated into a shell command. The three files here are the same move, done by hand, so the stations can be run locally without a GitHub token.
 
 ## The three, and why they are different shapes
 
 | File | GitHub | What it is | Where it goes |
 |---|---|---|---|
-| `001-rejected-order-eats-stock.md` | [#2](https://github.com/raunakkathuria/adlc/issues/2) | a bug with a clear symptom | reproduce → fix. No spec delta: a rebuild from the spec would not lose it. |
-| `002-confirmation-email-wrong-total.md` | [#3](https://github.com/raunakkathuria/adlc/issues/3) | a report about a surface this system does not own | nothing. Two stations concluded there was nothing here to fix, and it went to a human. |
+| `001-rejected-order-eats-stock.md` | [#2](https://github.com/raunakkathuria/adlc/issues/2) | a bug with a clear symptom | reproduce (the failing test makes it real) → a short spec delta → Gate 1 → build. Bugs are spec-driven too; the delta is just small. |
+| `002-confirmation-email-wrong-total.md` | [#3](https://github.com/raunakkathuria/adlc/issues/3) | a report about a surface this system does not own | closed, with the reason. Triage concluded there is nothing here the line can act on — and reopening re-enters the line. |
 | `003-filter-catalog-by-price.md` | [#4](https://github.com/raunakkathuria/adlc/issues/4) | a request that changes behaviour | spec delta → Gate 1 → build. The spec moves before any code does. |
 
 None of them is written in a ticket template, on purpose. Real requests do not arrive that way, and a loop that only works on well-formed input is not much of a loop.
