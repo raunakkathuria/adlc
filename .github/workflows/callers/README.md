@@ -2,8 +2,10 @@
 
 Copy these six files into your repository's `.github/workflows/` directory (drop them in
 as-is — the filenames matter, because the stations dispatch each other by filename), add one
-Actions secret, `ANTHROPIC_API_KEY`, and the line is on. Delete the secret and it is off —
-every workflow then explains itself and stops.
+Actions secret, and the line is on. Either credential works: `ANTHROPIC_API_KEY` for API
+billing, or `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` if you are on a Claude
+subscription. Set both and the API key wins — that is the CLI's own precedence, not a rule this
+line invents. Delete the secret and it is off — every workflow then explains itself and stops.
 
 Each caller is a thin trigger that runs the real station from this repository at a pinned
 tag. Upgrading the line is bumping `@v1` — you own no station logic.
