@@ -19,8 +19,8 @@ That is not a workshop shortcut. It is what [`.github/workflows/intake.yml`](../
 
 | File | GitHub | What it is | Where it goes |
 |---|---|---|---|
-| `001-rejected-order-eats-stock.md` | [#2](https://github.com/raunakkathuria/adlc/issues/2) | a bug with a clear symptom | reproduce → fix. No spec delta: a rebuild from the spec would not lose it. |
-| `002-confirmation-email-wrong-total.md` | [#3](https://github.com/raunakkathuria/adlc/issues/3) | a report about a surface this system does not own | nothing. Two stations concluded there was nothing here to fix, and it went to a human. |
+| `001-rejected-order-eats-stock.md` | [#2](https://github.com/raunakkathuria/adlc/issues/2) | a bug with a clear symptom | reproduce (the failing test makes it real) → a short spec delta → Gate 1 → build. Bugs are spec-driven too; the delta is just small. |
+| `002-confirmation-email-wrong-total.md` | [#3](https://github.com/raunakkathuria/adlc/issues/3) | a report about a surface this system does not own | closed, with the reason. Triage concluded there is nothing here the line can act on — and reopening re-enters the line. |
 | `003-filter-catalog-by-price.md` | [#4](https://github.com/raunakkathuria/adlc/issues/4) | a request that changes behaviour | spec delta → Gate 1 → build. The spec moves before any code does. |
 
 None of them is written in a ticket template, on purpose. Real requests do not arrive that way, and a loop that only works on well-formed input is not much of a loop.
