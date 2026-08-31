@@ -17,6 +17,13 @@ PROMPT="$1"
 TOOLS="$2"
 shift 2
 
+# Either credential switches the line on, so both arrive as env vars — and a secret the repo does
+# not have arrives as the empty string: present, but useless. Claude Code tries ANTHROPIC_API_KEY
+# first, so an empty one would shadow a valid OAuth token. Unset is the only way to say "not this
+# credential".
+[ -n "${ANTHROPIC_API_KEY:-}" ] || unset ANTHROPIC_API_KEY
+[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || unset CLAUDE_CODE_OAUTH_TOKEN
+
 {
   cat "$PROMPT"
   if [ "$#" -gt 0 ]; then

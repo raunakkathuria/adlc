@@ -22,9 +22,9 @@ Everything between the two gates is automated. Every check is run by something t
 
 ## See it run
 
-The line is **off** unless the repo has an `ANTHROPIC_API_KEY` Actions secret — without it every workflow runs, explains itself, and stops. That is the whole switch: a repo that can open PRs on its own should require a human to turn it on.
+The line is **off** unless the repo has a credential: either an `ANTHROPIC_API_KEY` Actions secret, or a `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` if you are on a Claude subscription. Without one, every workflow runs, explains itself, and stops. That is the whole switch: a repo that can open PRs on its own should require a human to turn it on.
 
-With the secret set, open an issue and watch the labels move: `state:triaging → state:spec-draft → state:gate-1` — then approve the spec PR (Gate 1) and follow it through `state:building → state:verifying → state:quality → state:gate-2`. Merge the implementation PR (Gate 2) and the spec archives itself, the issue closes, and the label reads `state:shipped`. The issue list *is* the factory floor.
+With a credential set, open an issue and watch the labels move: `state:triaging → state:spec-draft → state:gate-1` — then approve the spec PR (Gate 1) and follow it through `state:building → state:verifying → state:quality → state:gate-2`. Merge the implementation PR (Gate 2) and the spec archives itself, the issue closes, and the label reads `state:shipped`. The issue list *is* the factory floor.
 
 Want the product first? `npm start`, then http://localhost:3000. The gate is `npm run verify` — tests plus requirement coverage, deterministic, about a tenth of a second, no model in it.
 
@@ -51,7 +51,7 @@ Three properties do most of the work:
 
 ## Adopt it in your repo
 
-Copy the six thin callers from [`.github/workflows/callers/`](.github/workflows/callers/) into your repo's `.github/workflows/`, add the `ANTHROPIC_API_KEY` secret, run `openspec init`, and give the line a deterministic `npm run verify`. That's the whole setup — the callers run these stations at a pinned tag, so you own no workflow logic and upgrade by bumping `@v1`. Details and the recommended branch-protection settings: [callers/README.md](.github/workflows/callers/README.md).
+Copy the six thin callers from [`.github/workflows/callers/`](.github/workflows/callers/) into your repo's `.github/workflows/`, add one credential secret — `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` — run `openspec init`, and give the line a deterministic `npm run verify`. That's the whole setup — the callers run these stations at a pinned tag, so you own no workflow logic and upgrade by bumping `@v1`. Details and the recommended branch-protection settings: [callers/README.md](.github/workflows/callers/README.md).
 
 Security posture, since the line runs agents over text strangers wrote: issue bodies are handled as files, never interpolated into shell; agent steps run with allowlisted tools; every job has least-privilege permissions and a timeout; triage fails closed; and both accountable decisions belong to humans with write access — an approval from a drive-by account does not start a build.
 

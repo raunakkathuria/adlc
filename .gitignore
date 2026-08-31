@@ -3,6 +3,10 @@ node_modules/
 *.log
 .env
 
+# --- buildwright plan deliverables ---
+# /bw-plan writes here. Plans are working notes for one change, not repo docs — keep them local.
+docs/plans/
+
 # --- buildwright generated ---
 # Generated from .buildwright/ by the Buildwright sync — do not commit.
 .claude/agents/
