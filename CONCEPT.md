@@ -10,24 +10,28 @@ It's like a production line in a factory. Each station does one job. Between the
 
 ```mermaid
 flowchart LR
-  ISSUE([issue arrives]) --> TRIAGE[classify]
+  ISSUE([issue opened]) --> TRIAGE[triage]
 
-  TRIAGE -->|behaviour change| DELTA["draft spec delta<br/>(Planner)"]
+  TRIAGE -->|not actionable| CLOSED1([closed, with the reason])
+  TRIAGE -->|bug| REPRO["reproduce<br/>(failing test = the bug is real)"]
+  REPRO -->|not reproducible| CLOSED2([closed, reopenable])
+
+  TRIAGE -->|feature / chore| DELTA["spec delta<br/>(Planner)"]
+  REPRO -->|reproduced| DELTA
   DELTA --> SREV["spec review<br/>(advisory)"]
-  SREV --> GATE1{{"Gate 1 · human<br/>approve the intent"}}
+  SREV --> GATE1{{"Gate 1 · human<br/>APPROVES the spec PR"}}
 
-  TRIAGE -->|bug| REPRO["reproduce<br/>(failing test)"]
-
-  GATE1 --> BUILD["build<br/>(Executor)"]
-  REPRO --> BUILD
-
+  GATE1 --> BUILD["build<br/>(Executor, from the approved spec head)"]
   BUILD --> GATE["npm run verify<br/>(deterministic)"]
-  GATE --> REVIEW[review]
-  REVIEW --> SPEC["verify against spec<br/>(Verifier)"]
-  SPEC --> GATE2{{"Gate 2 · human<br/>ship it"}}
+  GATE --> REVIEW["review<br/>(fresh context)"]
+  REVIEW --> VERIF["verify vs spec<br/>(Verifier · independent)"]
+  VERIF --> QUAL["quality<br/>(usability + accessibility)"]
+  QUAL --> GATE2{{"Gate 2 · human<br/>merges each impl PR"}}
+  GATE2 --> ARCHIVE["spec archived into openspec/specs/<br/>issue closed · state:shipped"]
 
-  REVIEW -.->|findings| BUILD
-  SPEC -.->|"fail · missing or extra"| DELTA
+  VERIF -.->|"MISMATCH · back to the Planner, not the Executor"| DELTA
+  VERIF -.->|"out-of-scope findings"| ISSUE
+  QUAL -.->|"out-of-scope findings"| ISSUE
 
   classDef gate fill:#ff454f22,stroke:#ff454f,stroke-width:2px;
   classDef check fill:#0000000d,stroke:#8a8f9a,stroke-dasharray:3 3;
@@ -35,51 +39,51 @@ flowchart LR
   class GATE,SREV check;
 ```
 
-The dotted arrows are the important part. A finding does not go into a report that someone reads later. It goes back to a station.
+The dotted arrows are the important part. A finding does not go into a report that someone reads later. It goes back to a station — and two of those arrows point all the way back to intake, which is the line feeding itself.
 
 Note where the Verifier's failures go: **back to the Planner, not to the Executor.** If the spec was silent or wrong, more code will not fix it.
 
-## The two gates
+## The two gates — and why the spec merges last
 
-**Gate 1 — approve the intent.** A human reads and merges the spec delta. An agent never approves a spec. Merging the delta *is* the approval, so the record of what was agreed is the same file the build reads.
+**Gate 1 — approve the intent.** A human with write access submits an *approving review* on the spec PR, while it contains nothing but `openspec/changes/<slug>/`. An agent never approves a spec. The approval — not a merge — is what starts the build.
 
-**Gate 2 — ship it.** A human merges the pull request, on green gates.
+**Gate 2 — ship it.** A human merges each implementation PR, on green gates. The line opens implementation PRs. It never merges one.
 
-Everything between the two is the agent's to run. That includes the review, which is why the review has to be independent.
+The spec PR itself **stays open until the last implementation PR has merged**, and this is deliberate, for two reasons. First, one spec is the shared artifact of every implementation built from it — a single delta can fan out to an implementation PR per repo (web, mobile, api), each branched from the same approved spec head and each verified against it. Second, it keeps `main` honest: the living spec updates only when `openspec archive` folds the delta in after shipping, so **the spec on `main` only ever describes what the product actually does.** A spec that merges before its implementation is a promise; a spec that merges after is a record.
+
+The mechanics fall out of git: the implementation branches from the spec branch, so the delta rides inside the implementation PR and lands on `main` at Gate 2; the archive step then folds it into `openspec/specs/` and the spec PR resolves. If a verifier mismatch sends the Planner back to revise the spec, the new commits dismiss the old approval — Gate 1 simply happens again, which is exactly right.
 
 ## Intake — anything in, one shape out
 
-Work arrives from wherever people are: a chat message, a support ticket, a customer email, someone's idea in a meeting. The line accepts it only one way, as a tracked issue.
+Work arrives from wherever people are: a chat message, a support ticket, a customer email, someone's idea in a meeting. The line accepts it exactly one way — as a GitHub issue — and everything after that is automatic while the `ANTHROPIC_API_KEY` secret is set. There is no label to remember, no command to run. Opening the issue is putting the part on the belt.
 
-In this repo that's the `issues/` directory. Three real ones ship with it, and they are deliberately different shapes: a bug with a clear symptom, a report about a surface this system does not own, and a product request that changes behaviour.
+Triage is the first station, not a person's job, and it **fails closed**: an unparseable verdict parks the issue for a human rather than inventing work. Not-actionable issues close with the reason and reopen into the line if the reporter adds what was missing. A bug is only accepted once the reproduce station turns it into a **failing test** — a reproduction, not a model's opinion, is what makes a bug real. A bug that will not reproduce is *closed*, deliberately, with the full report and the `resolution:not-reproducible` label: open issues are only things actually moving down the line. Report it again and triage recognizes the recurrence, reopens the original with both reports attached, and two independent sightings become the evidence the first run lacked.
 
-Classification is the first station, not a human's job. The routing question is one sentence: **would a rebuild from the spec alone lose this change?** If yes, the spec moves first. If no, it's code-only.
+**Everything actionable is spec-driven — bugs included.** A bug's delta is small (the corrected behaviour as a scenario, evidenced by the failing test), but it passes the same Gate 1, because the question "what *should* this do" is a human's to answer no matter how the wrong behaviour was discovered.
 
-## What each defect heals
+## What each finding heals
 
 Every check produces findings in the same shape, so the line can route them without a person reading a report.
 
 | What was found | Goes to | Heals |
 |---|---|---|
-| A code review finding | back to the build step, same cycle | the change |
-| A Verifier finding, or a gap in the spec | back to the Planner, then Gate 1 if the spec moves | the spec |
-| Something a user hit in production | the same intake, as a new issue | the product |
+| A code review finding | back to the build, same cycle | the change |
+| A Verifier finding — drift, or a gap in the spec | the Planner, then Gate 1 again | the spec |
+| A confirmed defect outside the change's scope | intake, as a new `origin:adlc` issue | the product |
 | A finding that keeps coming back | the prompts and the gate themselves | the line |
 
 The second row is the one teams skip. When a reviewer says "the spec doesn't say which of these two rules wins," that is not a nuisance. It is the most valuable thing the run produced, and it belongs in the spec before the next person guesses.
 
-That row is not hypothetical here. Run `prompts/review.md` on the fix in `artifacts/expected/` and the reviewer finds exactly that gap between `REQ-ORD-2` and `REQ-ORD-3`.
+The third row is bounded, because a line that feeds itself can also chase its own tail: machine-filed issues run at depth 1, and issues *they* would file park for a person. Every station's bounce-back is capped at two attempts; the third parks with a summary of everything tried. State for all of this lives on the issue — labels and a hidden links block — never in a runner, which is why any station can be re-run from the issue number alone.
 
 ## Three roles — two build it, one checks it
 
-Four names over eight prompt files. The names matter less than the boundary between them.
-
 | Role | Stations | What it may not do |
 |---|---|---|
-| **Planner** | classify, then draft the spec delta and the per-surface tasks | write code |
-| **Executor** | build an approved delta · or reproduce and fix a bug | renegotiate the spec |
-| **Verifier** | verify against the spec | write code, or share a session with either of the above |
-| Quality check | review, plus `npm run verify` | pass anything the deterministic gate failed |
+| **Planner** | draft (and revise) the spec delta and per-surface tasks | write code |
+| **Executor** | reproduce a bug · build an approved delta | renegotiate the spec |
+| **Verifier** | verify the shipped behaviour against the spec | write code, or share a session with either of the above |
+| Quality check | review · `npm run verify` · usability + accessibility | pass anything the deterministic gate failed |
 
 **Isolation is the design principle.** Planner and Executor share the same business context but never a session, so a plan cannot leak its assumptions into the build. The Verifier shares neither — it re-derives the feature from the spec alone before it opens a single implementation file.
 
@@ -89,8 +93,6 @@ It also reports drift in **both** directions, which most reviews do not. *Missin
 
 This is not ceremony. It is the same reason a factory's quality inspector does not report to the line supervisor. An agent that just spent twenty minutes convincing itself a change was right is the worst possible reviewer of that change.
 
-The repo has a concrete demonstration. `artifacts/expected/` holds two reviews of two different fixes for the same bug. Both fixes pass all 17 tests. One review says `APPROVE`, the other says `REQUEST CHANGES`. The deterministic gate could not tell them apart. The independent reviewer could.
-
 ## What the gate is, and is not
 
 ```bash
@@ -99,64 +101,26 @@ npm run verify     # node --test  +  requirement coverage
 
 No model in it. It runs in about a tenth of a second, and it is the only thing in the loop that gets a vote on whether the work is done.
 
-It is also not enough on its own, and the repo proves it. `npm run req-coverage` checks that every requirement in `spec/` is named by at least one test. It cannot check whether that test asserts the right thing. `REQ-CAT-3` has a passing test, full coverage, a green pipeline, and behaviour that is plainly wrong.
+It is also not enough on its own. `npm run req-coverage` checks that every requirement in the living spec — and in any in-flight delta on the branch — is named by at least one test. It cannot check whether that test asserts the right thing. A test written from the implementation agrees with the implementation, passes forever, and reports nothing.
 
-Coverage is not proof. A green pipeline is only as true as the thing it compares against.
+Coverage is not proof. A green pipeline is only as true as the thing it compares against — which is exactly the gap the Verifier exists to close, and why it is a different thing from the gate.
 
-## The repo
+## Quality — don't make me think
 
-```
-adlc/
-├── AGENTS.md              the only instruction file — the standards live here
-├── CLAUDE.md              ┐
-├── GEMINI.md              ├ three-line pointers to AGENTS.md, so nothing drifts
-├── .cursor/rules/         │
-├── .github/               ┘ copilot-instructions.md + the workflows
-│
-├── spec/                  the source of truth
-│   ├── catalog.md          REQ-CAT-1..3, with WHEN/THEN scenarios
-│   ├── orders.md           REQ-ORD-1..6
-│   └── changes/            spec deltas — a behaviour change starts here
-│
-├── issues/                intake. Anything in, one shape out.
-│
-├── prompts/               one per station, plain markdown, no tool lock-in
-│   ├── triage.md           classify — which path does this change take
-│   ├── delta.md            draft the spec change      ┐ the feature path,
-│   ├── spec-review.md      advisory review for Gate 1 ├ before any code
-│   ├── build.md            build an approved delta    ┘ exists
-│   ├── reproduce.md        write the failing test     ┐ the bug path,
-│   ├── fix.md              make it pass               ┘ no delta needed
-│   ├── review.md           check the change, fresh context
-│   └── verify.md           spec vs code, independent
-│
-├── app/                   the product. ~170 lines, no dependencies.
-├── test/                  every test names its requirement
-├── scripts/               req-coverage.mjs — the deterministic half of the gate
-│
-├── artifacts/             real runs, committed. Not written by hand.
-│   ├── expected/           one reference run per exercise
-│   ├── gate-1/             spec deltas waiting on a human
-│   └── unattended/         three issues in, three different endings, nobody steering
-│
-├── check.sh               pre-flight: Node, the gate, which CLI you have
-└── run.sh                 ./run.sh prompts/fix.md — dispatches to your CLI
-```
-
-Four things and nothing else: what the product should do (`spec/`), what it does (`app/`, `test/`), how each step is carried out (`prompts/`), and the standards all of them answer to (`AGENTS.md`).
+The last guardrail before Gate 2 asks the user's questions rather than the spec's. The deterministic half is Lighthouse accessibility and performance scores against thresholds with a vote — a breach fails the check. The agentic half is the pass a scanner cannot do: is the first click obvious, do controls say what they do in the user's units, does the page say what just happened — including the empty and error states — and can a keyboard user actually get around. In-scope findings land on the PR for the human at Gate 2; everything else files as an issue and re-enters the line.
 
 ## Any agent, on purpose
 
-`AGENTS.md` holds the standards. The other four instruction files are pointers to it. One file to change, four tools that read it, no drift between them.
+`AGENTS.md` holds the standards. `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/` and `copilot-instructions.md` are pointers to it. One file to change, every tool reads it, no drift.
 
-The prompts are plain markdown. `run.sh` finds whichever CLI you have and pipes the prompt to it. If your tool isn't covered, `./run.sh --print prompts/fix.md` gives you the text to paste, and you lose nothing. Nothing in the loop depends on a particular vendor, because the parts that matter are the spec, the gate, and the independence.
+The stations are plain-markdown prompts in `prompts/`. CI pins one CLI for reproducible runs, in exactly one file (`scripts/run-station.sh`); locally, `./run.sh prompts/<name>.md [target]` dispatches to whichever CLI you have, and `--print` gives you the text to paste anywhere. Nothing in the loop depends on a particular vendor, because the parts that matter are the spec, the gate, and the independence.
 
-## What's real here, and what a real system adds
+## What's real here, and what an org-scale system adds
 
-Real in this repo: the spec as source of truth, the deterministic gate, one prompt per station with fresh context, both human gates, and the committed evidence of actual runs.
+Real in this repo: the spec as source of truth, the deterministic gate, one prompt per station with fresh context, both human gates, the full unattended line in `.github/workflows/`, and the adoption kit (`.github/workflows/callers/`) that runs the same stations in any repo from a pinned tag.
 
-Missing on purpose, so the repo stays readable in an afternoon: a browser-level test layer, a database, a design system the generated UI is forced onto, business rules held outside the model's reach, and the CI wiring that runs all of this unattended. `.github/workflows/` shows the shape of that last one without the credentials to run it.
+What an org-scale deployment adds on top — and what Deriv's internal system does add: a GitHub App instead of the repo token, so stations work across an organization; a central hub repo holding secrets and model routing; real preview deploys instead of an app started in the runner; a pipeline dashboard instead of labels; browser-fleet e2e and security review as additional hard gates; a `design.md` contract check for changes that span services. Every one of those is the same station, scaled — none of them changes the shape of the line.
 
-Two stations from the wider model are **deliberately absent, not forgotten**. There is no **security review**, which belongs as a hard gate alongside the deterministic one in any real deployment — `review.md` is a code reviewer and nothing more. And a delta here carries `proposal.md`, `spec.md` and `tasks.md`, but no **`design.md`** binding contract; with one service and one surface there is nothing for two components to disagree about, so the Verifier has no contract-mismatch check either. Both would be the first things to add on a real codebase. Neither is pretended at here.
+Two stations from the wider model are **deliberately absent, not forgotten**: a security review (which belongs beside the deterministic gate as a hard gate in any real deployment) and the contract-binding `design.md` check (with one service and one surface, there is nothing for two components to disagree about). Both would be the first things to add on a real codebase. Neither is pretended at here.
 
 The honest limit: none of this makes an agent reliable. It makes an unreliable agent's output checkable, and it makes the two decisions that matter land on a person who can be held to them.

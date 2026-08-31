@@ -1,0 +1,25 @@
+# Caller: finalize — copy into your repo as .github/workflows/finalize.yml
+name: finalize
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number: { description: "Merged implementation PR number", required: true, type: string }
+# Reusable workflows do not inherit their own concurrency when called — the caller owns it.
+concurrency:
+  group: adlc-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'impl/'))
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: raunakkathuria/adlc/.github/workflows/finalize.yml@v1
+    with:
+      pr_number: ${{ format('{0}', github.event.pull_request.number || inputs.pr_number) }}
+      adlc_ref: v1
+    secrets: inherit

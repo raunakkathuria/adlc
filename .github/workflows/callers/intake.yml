@@ -1,0 +1,24 @@
+# Caller: intake — copy into your repo as .github/workflows/intake.yml
+name: intake
+on:
+  issues:
+    types: [opened, reopened]
+  workflow_dispatch:
+    inputs:
+      issue_number: { description: "Issue to (re-)run intake for", required: true, type: string }
+# Reusable workflows do not inherit their own concurrency when called — the caller owns it.
+concurrency:
+  group: adlc-issue-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    uses: raunakkathuria/adlc/.github/workflows/intake.yml@v1
+    with:
+      issue_number: ${{ format('{0}', github.event.issue.number || inputs.issue_number) }}
+      adlc_ref: v1
+    secrets: inherit

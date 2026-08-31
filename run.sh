@@ -3,8 +3,8 @@
 #
 #   ./run.sh prompts/triage.md issues/003-filter-catalog-by-price.md   run it on a target
 #   ./run.sh prompts/reproduce.md                                      no target — the prompt's default
-#   ./run.sh --print prompts/verify.md spec/catalog.md                 print it, paste it anywhere
-#   AGENT_CMD='my-cli --headless' ./run.sh prompts/fix.md
+#   ./run.sh --print prompts/verify.md openspec/specs/catalog/spec.md                 print it, paste it anywhere
+#   AGENT_CMD='my-cli --headless' ./run.sh prompts/build.md
 #
 # The second argument is optional and is appended to the prompt as one line naming the target.
 # Most stations need one — which issue to classify, which delta to build, which spec to verify —

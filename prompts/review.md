@@ -4,7 +4,7 @@ You are an independent reviewer with a fresh context. You did not write this cha
 
 ## Mandatory reads
 
-`git diff` (and `git diff --staged`), `AGENTS.md`, the relevant file in `spec/`, and the full implementation file the diff touches — not just the changed lines. Most of what is wrong with a patch is visible only next to the code it did not change.
+`git diff` (and `git diff --staged`), `AGENTS.md`, the relevant capability in `openspec/specs/`, and the full implementation file the diff touches — not just the changed lines. Most of what is wrong with a patch is visible only next to the code it did not change.
 
 ## The questions, in this order
 

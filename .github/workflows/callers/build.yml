@@ -1,0 +1,27 @@
+# Caller: build — copy into your repo as .github/workflows/build.yml
+name: build
+on:
+  pull_request_review:
+    types: [submitted]
+  workflow_dispatch:
+    inputs:
+      pr_number: { description: "Approved spec PR number", required: true, type: string }
+# Reusable workflows do not inherit their own concurrency when called — the caller owns it.
+concurrency:
+  group: adlc-build-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name != 'pull_request_review' || (github.event.review.state == 'approved' && startsWith(github.event.pull_request.head.ref, 'spec/'))
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+      statuses: write
+    uses: raunakkathuria/adlc/.github/workflows/build.yml@v1
+    with:
+      pr_number: ${{ format('{0}', github.event.pull_request.number || inputs.pr_number) }}
+      adlc_ref: v1
+    secrets: inherit

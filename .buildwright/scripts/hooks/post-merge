@@ -1,0 +1,18 @@
+#!/bin/bash
+# Buildwright post-merge hook
+# Runs after git pull / git merge.
+# If any file under .buildwright/ changed in the merge, run the Buildwright
+# sync automatically.
+
+set -e
+
+if git diff --name-only ORIG_HEAD HEAD 2>/dev/null | grep -q '^\.buildwright/'; then
+  ROOT="$(git rev-parse --show-toplevel)"
+  SYNC="$ROOT/.buildwright/scripts/sync-agents.sh"
+  [ -f "$SYNC" ] || exit 0
+  echo "Buildwright: .buildwright/ changed in merge — running sync..."
+  bash "$SYNC"
+  echo "Buildwright: sync complete."
+fi
+
+exit 0

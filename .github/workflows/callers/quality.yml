@@ -1,0 +1,29 @@
+# Caller: quality — copy into your repo as .github/workflows/quality.yml
+name: quality
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      pr_number: { description: "Implementation PR (verify mode); blank = explore", required: false, type: string }
+      issue_number: { description: "Source issue (verify mode)", required: false, type: string }
+      query: { description: "Focus (explore mode)", required: false, type: string }
+# Reusable workflows do not inherit their own concurrency when called — the caller owns it.
+concurrency:
+  group: adlc-quality-${{ inputs.pr_number || 'explore' }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      actions: write
+    uses: raunakkathuria/adlc/.github/workflows/quality.yml@v1
+    with:
+      pr_number: ${{ inputs.pr_number }}
+      issue_number: ${{ inputs.issue_number }}
+      query: ${{ inputs.query }}
+      adlc_ref: v1
+    secrets: inherit
