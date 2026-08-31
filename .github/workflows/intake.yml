@@ -93,7 +93,7 @@ jobs:
         if: steps.runner.outputs.on == 'true'
         run: echo "ADLC=$([ -d .adlc ] && echo .adlc || echo .)" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.runner.outputs.on == 'true'
         with:
           node-version: 22
@@ -261,7 +261,7 @@ jobs:
           path: .adlc
       - name: Point at them
         run: echo "ADLC=$([ -d .adlc ] && echo .adlc || echo .)" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 

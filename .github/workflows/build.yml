@@ -135,7 +135,7 @@ jobs:
           echo "ISSUE=${{ steps.gate.outputs.issue }}" >> "$GITHUB_ENV"
           echo "SLUG=${{ steps.gate.outputs.slug }}" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.GO == 'true'
         with:
           node-version: 22
