@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Is the line switched on?
         id: runner
@@ -83,7 +83,7 @@ jobs:
 
       - name: Get the line's prompts and scripts
         if: steps.runner.outputs.on == 'true' && github.repository != env.ADLC_REPO
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.ADLC_REPO }}
           ref: ${{ env.ADLC_REF }}

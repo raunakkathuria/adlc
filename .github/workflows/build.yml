@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -122,7 +122,7 @@ jobs:
 
       - name: Get the line's prompts and scripts
         if: steps.runner.outputs.on == 'true' && steps.gate.outputs.ok == 'true' && steps.gate.outputs.approver_ok == 'true' && github.repository != env.ADLC_REPO
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.ADLC_REPO }}
           ref: ${{ env.ADLC_REF }}
