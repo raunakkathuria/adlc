@@ -9,7 +9,7 @@
 # the living spec after the last implementation merges. main's spec only ever describes what
 # shipped.
 #
-# OFF unless the ANTHROPIC_API_KEY secret is set.
+# OFF unless the ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret is set.
 
 name: spec
 
@@ -43,6 +43,8 @@ on:
     secrets:
       ANTHROPIC_API_KEY:
         required: false
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
 
 permissions:
   contents: write
@@ -71,11 +73,12 @@ jobs:
         id: runner
         env:
           KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           # The slug becomes a branch name and a path — refuse anything but its strict shape.
           echo "$SLUG" | grep -Eq '^[a-z0-9][a-z0-9-]{0,60}$' || { echo "::error::slug '$SLUG' is not a valid change slug"; exit 1; }
-          if [ -z "${KEY:-}" ]; then
-            echo "No ANTHROPIC_API_KEY secret. The line stays off — this workflow is documentation."
+          if [ -z "${KEY:-}" ] && [ -z "${OAUTH:-}" ]; then
+            echo "No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret. The line stays off — this workflow is documentation."
             echo "on=false" >> "$GITHUB_OUTPUT"
           else
             echo "on=true" >> "$GITHUB_OUTPUT"
@@ -136,6 +139,7 @@ jobs:
         shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/spec.md" \
             "Read,Grep,Glob,Edit,Write,Bash(openspec:*)" \
@@ -201,6 +205,7 @@ jobs:
         shell: bash # pipefail
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           PR_URL: ${{ steps.pr.outputs.url }}
         run: |
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/spec-review.md" "Read,Grep,Glob" \

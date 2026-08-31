@@ -55,7 +55,7 @@ The mechanics fall out of git: the implementation branches from the spec branch,
 
 ## Intake — anything in, one shape out
 
-Work arrives from wherever people are: a chat message, a support ticket, a customer email, someone's idea in a meeting. The line accepts it exactly one way — as a GitHub issue — and everything after that is automatic while the `ANTHROPIC_API_KEY` secret is set. There is no label to remember, no command to run. Opening the issue is putting the part on the belt.
+Work arrives from wherever people are: a chat message, a support ticket, a customer email, someone's idea in a meeting. The line accepts it exactly one way — as a GitHub issue — and everything after that is automatic while a credential secret is set (`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`). There is no label to remember, no command to run. Opening the issue is putting the part on the belt.
 
 Triage is the first station, not a person's job, and it **fails closed**: an unparseable verdict parks the issue for a human rather than inventing work. Not-actionable issues close with the reason and reopen into the line if the reporter adds what was missing. A bug is only accepted once the reproduce station turns it into a **failing test** — a reproduction, not a model's opinion, is what makes a bug real. A bug that will not reproduce is *closed*, deliberately, with the full report and the `resolution:not-reproducible` label: open issues are only things actually moving down the line. Report it again and triage recognizes the recurrence, reopens the original with both reports attached, and two independent sightings become the evidence the first run lacked.
 

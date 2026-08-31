@@ -253,10 +253,13 @@ Two workflows are wired and both are **off until someone adds a secret**, which 
 | `bug-intake.yml` | an issue is opened or labelled | The bug path: classify, reproduce, fix, review, open a PR. |
 | `feature-build.yml` | a delta lands on `main`, or manual | The feature path, starting *after* Gate 1 — because merging the delta is the approval. |
 
-To switch the agent ones on, add your key once:
+To switch the agent ones on, add one credential once — an API key, or a subscription token from `claude setup-token`:
 
 ```bash
 gh secret set ANTHROPIC_API_KEY --repo raunakkathuria/adlc
+
+# or, on a Claude subscription — `claude setup-token` prints the token to paste:
+gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo raunakkathuria/adlc
 ```
 
 Then trigger the feature build deliberately, **well before the session**:

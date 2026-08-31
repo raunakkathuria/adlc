@@ -28,7 +28,7 @@ issue opened → triage → [bug? reproduce] → spec PR → GATE 1 (human appro
                                             all merged → spec PR merges · archive · issue closes
 ```
 
-Fully automated from the moment an issue lands (when the `ANTHROPIC_API_KEY` secret is set — without it every workflow explains itself and stops). Labels are written only by the line and show which station the work is at: one `state:*` at a time.
+Fully automated from the moment an issue lands (when a credential secret is set — `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`; without either, every workflow explains itself and stops). Labels are written only by the line and show which station the work is at: one `state:*` at a time.
 
 **The spec PR merges last.** Gate 1 is an *approving review* on the spec PR, not a merge — the PR stays open as the shared artifact every implementation is built from and verified against (one spec can fan out to several implementation PRs). When the last linked implementation PR merges, the line merges the spec PR and runs `openspec archive`. `main`'s spec only ever describes what shipped.
 

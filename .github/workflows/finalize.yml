@@ -35,9 +35,6 @@ on:
         required: false
         type: string
         default: main
-    secrets:
-      ANTHROPIC_API_KEY:
-        required: false
 
 permissions:
   contents: write
