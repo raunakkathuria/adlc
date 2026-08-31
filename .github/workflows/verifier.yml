@@ -217,7 +217,7 @@ jobs:
 
       - name: Keep the evidence
         if: always() && steps.runner.outputs.on == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: verifier-${{ env.ISSUE }}-${{ github.run_id }}
           path: work/
