@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { parseSections, auditIds } from '../scripts/req-ids.mjs';
+import { parseSections, auditIds, groupBySlug } from '../scripts/req-ids.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DELTA = readFileSync(join(HERE, 'fixtures/delta-sections.md'), 'utf8');
@@ -78,4 +78,42 @@ test('req-ids: two deltas adding different ids is the normal, quiet case', () =>
   });
   assert.deepEqual(collisions, []);
   assert.deepEqual(unknown, []);
+});
+
+// --- Deltas in flight live on their own branches ------------------------------------------------
+// The spec station checks out main plus its own spec branch, so a delta being drafted elsewhere is
+// invisible in the working tree. Both sources — the tree and the other spec/* branches — are
+// grouped by slug through here, so one delta split across capability files counts once, and the
+// branch copy of the delta you are drafting does not collide with itself.
+
+const CATALOG = readFileSync(join(HERE, 'fixtures/split-catalog.md'), 'utf8');
+const ORDERS = readFileSync(join(HERE, 'fixtures/split-orders.md'), 'utf8');
+const SPLIT = JSON.parse(readFileSync(join(HERE, 'fixtures/split.expected.json'), 'utf8'));
+
+test('req-ids: one delta split across capability files is grouped into a single claim', () => {
+  const [delta] = groupBySlug([
+    { slug: 'both', text: CATALOG },
+    { slug: 'both', text: ORDERS },
+  ]);
+  assert.equal(delta.slug, 'both');
+  assert.deepEqual([...delta.added].sort(), SPLIT.both);
+});
+
+test('req-ids: separate slugs stay separate claims, each with its own ids', () => {
+  const out = groupBySlug([
+    { slug: 'one', text: CATALOG },
+    { slug: 'two', text: ORDERS },
+  ]);
+  assert.deepEqual(out.map((d) => d.slug).sort(), ['one', 'two']);
+  assert.deepEqual([...out.find((d) => d.slug === 'one').added], SPLIT.catalogOnly);
+});
+
+test('req-ids: the same slug from tree and branch is one delta, never a self-collision', () => {
+  // The remote copy of the delta being drafted must not read as a second claimant.
+  const deltas = groupBySlug([
+    { slug: 'mine', text: CATALOG },
+    { slug: 'mine', text: CATALOG },
+  ]);
+  assert.deepEqual([...deltas[0].added], SPLIT.catalogOnly);
+  assert.deepEqual(auditIds({ living: new Set(), deltas }).collisions, []);
 });
