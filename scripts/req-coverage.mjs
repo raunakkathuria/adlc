@@ -5,13 +5,19 @@
 // checks. It cannot tell you whether the test asserts the right thing — only that somebody
 // wrote one.
 //
-// In-flight deltas (openspec/changes/<slug>/specs/, archive excluded) make an id KNOWN but not
-// yet OWED, and the difference is load-bearing. A spec PR contains only the delta: the
-// requirement exists, and its tests arrive later, with the implementation built from it. Counting
-// a delta as owing a test would therefore fail every spec PR by construction — a red gate on the
-// one artifact a human is being asked to approve at Gate 1. Known-but-not-owed keeps the other
-// direction working: a test on the implementation PR may name the delta it implements. When
-// finalize archives the delta into openspec/specs/, the requirement starts owing a test like
+// In-flight deltas (openspec/changes/<slug>/specs/, archive excluded) make an id KNOWN, and a
+// delta whose tasks.md is fully ticked makes its ids OWED as well. The difference is load-bearing:
+//
+//   nothing ticked   a spec PR is nothing but the delta — the requirement exists and its tests
+//                    arrive later, with the implementation. Owing a test here would fail every
+//                    spec PR by construction, reddening the one artifact Gate 1 must approve.
+//   fully ticked     the build says the work is done, so the tests must exist. This is the same
+//                    condition the verifier requires for SPEC-MATCH: COMPLETE, read
+//                    deterministically and earlier — build.yml runs this gate BEFORE opening the
+//                    implementation PR, so a forgotten test costs no PR and no loop-cap attempt.
+//
+// Either way a test may name an in-flight id: that is what makes an implementation PR's new tests
+// legal. When finalize archives the delta into openspec/specs/, the requirement owes a test like
 // every other. Archived deltas are history, not spec.
 
 import { readdir, readFile } from 'node:fs/promises';
@@ -49,6 +55,16 @@ export function audit({ specified, known, tested }) {
   };
 }
 
+/**
+ * Does this delta's tasks.md claim the work is finished? Every box ticked and at least one box —
+ * a file with no checkboxes claims nothing. Lenient about `- [X]`, because failing to recognise a
+ * tick would silently drop enforcement, and silence is the wrong way to be wrong.
+ */
+export function tasksComplete(tasksText) {
+  const boxes = tasksText.match(/^[ \t]*[-*]\s\[[ xX]\]/gm) ?? [];
+  return boxes.length > 0 && boxes.every((box) => !box.endsWith('[ ]'));
+}
+
 const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
 
 if (isMain) {
@@ -65,10 +81,23 @@ if (isMain) {
     }
   } catch {} // no changes/ directory is a fine state
 
+  // Tick state is per change directory, so ask each one whether it claims to be done.
+  const slugOf = (path) => path.split('/')[2];
+  const finished = new Set();
+  for (const slug of new Set([...delta.values()].flatMap((paths) => [...paths].map(slugOf)))) {
+    const tasks = await readFile(join(ROOT, 'openspec/changes', slug, 'tasks.md'), 'utf8').catch(() => '');
+    if (tasksComplete(tasks)) finished.add(slug);
+  }
+
+  const owed = new Set(spec.keys());
+  for (const [id, paths] of delta) {
+    if ([...paths].some((path) => finished.has(slugOf(path)))) owed.add(id);
+  }
+
   const tested = await collect('test', /\.test\.js$/);
 
   const { uncovered, unknown } = audit({
-    specified: new Set(spec.keys()),
+    specified: owed,
     known: new Set([...spec.keys(), ...delta.keys()]),
     tested: new Set(tested.keys()),
   });
@@ -78,10 +107,13 @@ if (isMain) {
     console.log(`  ${where ? '✓' : '✗'} ${id}  ${where ? [...where].join(', ') : 'NO TEST'}`);
   }
 
-  // In flight: listed so a human at Gate 1 can see what the delta adds, but not owed a test.
+  // In flight: listed so a human at Gate 1 can see what the delta adds. Marked `·` while the
+  // delta is still open, `✗` once it claims to be finished and the test is still missing.
   for (const id of [...delta.keys()].filter((id) => !spec.has(id)).sort()) {
     const where = tested.get(id);
-    console.log(`  ${where ? '✓' : '·'} ${id}  ${where ? [...where].join(', ') : `in flight — ${[...delta.get(id)].join(', ')}`}`);
+    if (where) console.log(`  ✓ ${id}  ${[...where].join(', ')}`);
+    else if (owed.has(id)) console.log(`  ✗ ${id}  NO TEST — tasks.md is fully ticked, so this owes one`);
+    else console.log(`  · ${id}  in flight — ${[...delta.get(id)].join(', ')}`);
   }
 
   if (uncovered.length === 0 && unknown.length === 0) {

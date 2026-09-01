@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audit } from '../scripts/req-coverage.mjs';
+import { audit, tasksComplete } from '../scripts/req-coverage.mjs';
 
 const sets = ({ specified = [], known = [], tested = [] }) => ({
   specified: new Set(specified),
@@ -39,4 +39,37 @@ test('coverage: a test citing a requirement nobody specified is unknown', () => 
 test('coverage: once archived into the living spec, the requirement owes a test', () => {
   const { uncovered } = audit(sets({ specified: ['DELTA-1'] }));
   assert.deepEqual(uncovered, ['DELTA-1'], 'finalize moving it into openspec/specs/ makes it owed');
+});
+
+// --- When a delta starts owing its tests -------------------------------------------------------
+// A spec PR is nothing but the delta, so nothing is owed. Once the build has ticked every box,
+// the work is claimed done and the tests must exist. This is the same condition the verifier
+// requires for SPEC-MATCH: COMPLETE (prompts/verify.md), read deterministically and earlier.
+
+test('coverage: a delta with nothing ticked owes no tests — the spec PR case', () => {
+  assert.equal(tasksComplete('- [ ] 1.1 write the test\n- [ ] 1.2 make it pass\n'), false);
+});
+
+test('coverage: a partially ticked delta owes no tests — mid-build', () => {
+  assert.equal(tasksComplete('- [x] 1.1 write the test\n- [ ] 1.2 make it pass\n'), false);
+});
+
+test('coverage: a fully ticked delta owes its tests', () => {
+  assert.equal(tasksComplete('- [x] 1.1 write the test\n- [x] 1.2 make it pass\n'), true);
+});
+
+test('coverage: an uppercase tick counts as ticked', () => {
+  // Not recognising `- [X]` would silently drop enforcement, which is the wrong way to be wrong.
+  assert.equal(tasksComplete('- [X] 1.1 write the test\n- [x] 1.2 make it pass\n'), true);
+});
+
+test('coverage: indented, nested and asterisk-bulleted boxes count too', () => {
+  assert.equal(tasksComplete('- [x] 1 parent\n  - [ ] 1.1 child\n'), false);
+  assert.equal(tasksComplete('- [x] 1 parent\n  - [x] 1.1 child\n'), true);
+  assert.equal(tasksComplete('* [x] 1.1 done\n* [ ] 1.2 not\n'), false);
+});
+
+test('coverage: a tasks file with no checkboxes owes nothing', () => {
+  assert.equal(tasksComplete('all done, trust me\n'), false);
+  assert.equal(tasksComplete(''), false);
 });
