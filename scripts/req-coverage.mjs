@@ -27,7 +27,7 @@ import { dirname, join, resolve } from 'node:path';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REQ_ID = /\bREQ-[A-Z]+-\d+\b/g;
 
-async function collect(dir, filePattern, { recursive = false } = {}) {
+export async function collect(dir, filePattern, { recursive = false } = {}) {
   const byId = new Map();
   const entries = await readdir(join(ROOT, dir), { recursive, withFileTypes: true });
   for (const entry of entries) {
@@ -71,6 +71,17 @@ export function audit({ specified, known, tested }) {
 export function tasksComplete(tasksText) {
   const boxes = tasksText.match(/^[ \t]*[-*]\s\[[ xX]\]/gm) ?? [];
   return boxes.length > 0 && boxes.every((box) => !box.endsWith('[ ]'));
+}
+
+/**
+ * The all-clear line. Counts what was ENFORCED (`owed`), not the living spec — a delta that is
+ * owed and covered has been checked, and reporting it only as "in flight" understated the gate.
+ * `inFlight` is the remainder: ids that legitimately owe nothing yet.
+ */
+export function summarise({ owed, inFlight }) {
+  const n = owed.size;
+  return `req-coverage: ${n} requirement${n === 1 ? '' : 's'}, all covered` +
+    (inFlight.size ? `; ${inFlight.size} in flight` : '') + '.';
 }
 
 const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
@@ -125,7 +136,8 @@ if (isMain) {
   }
 
   if (uncovered.length === 0 && unknown.length === 0) {
-    console.log(`\nreq-coverage: ${spec.size} requirements, all covered${delta.size ? `; ${[...delta.keys()].filter((id) => !spec.has(id)).length} in flight` : ''}.`);
+    const inFlight = new Set([...delta.keys()].filter((id) => !owed.has(id)));
+    console.log('\n' + summarise({ owed, inFlight }));
     process.exit(0);
   }
 
