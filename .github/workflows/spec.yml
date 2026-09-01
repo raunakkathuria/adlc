@@ -158,7 +158,11 @@ jobs:
             exit 1
           fi
           openspec validate "$SLUG"
-          STRAY=$(git status --porcelain | grep -v -e " openspec/changes/$SLUG/" -e " work/" -e " \.adlc/" || true)
+          # -uall matters: without it git collapses a wholly-untracked directory into one entry
+          # ("?? openspec/changes/"), which never matches the filter below — so the change's own
+          # files read as strays. openspec/changes/ is untracked on main by design, so the first
+          # delta any repo drafts would fail this guard.
+          STRAY=$(git status --porcelain -uall | grep -v -e " openspec/changes/$SLUG/" -e " work/" -e " \.adlc/" || true)
           if [ -n "$STRAY" ]; then
             echo "::error::The spec station touched files outside openspec/changes/$SLUG/:"
             echo "$STRAY"
