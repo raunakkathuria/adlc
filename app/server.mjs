@@ -35,10 +35,11 @@ reset();
 
 // --- domain ------------------------------------------------------------------
 
-export function listItems(query) {
-  const all = [...items.values()];
-  if (!query) return all;
-  return all.filter((item) => item.name.includes(query));
+export function listItems(query, maxPrice) {
+  let result = [...items.values()];
+  if (query) result = result.filter((item) => item.name.includes(query));
+  if (maxPrice !== undefined) result = result.filter((item) => item.price <= maxPrice);
+  return result;
 }
 
 export function getItem(sku) {
@@ -102,7 +103,12 @@ export function createApp() {
 
     try {
       if (req.method === 'GET' && path === '/api/items') {
-        return json(res, 200, listItems(url.searchParams.get('q')));
+        const maxPriceValues = url.searchParams.getAll('max_price');
+        if (maxPriceValues.length > 1 || (maxPriceValues.length === 1 && !/^\d+$/.test(maxPriceValues[0]))) {
+          return json(res, 400, { reason: 'invalid_max_price' });
+        }
+        const maxPrice = maxPriceValues.length === 1 ? Number(maxPriceValues[0]) : undefined;
+        return json(res, 200, listItems(url.searchParams.get('q'), maxPrice));
       }
 
       if (req.method === 'GET' && path.startsWith('/api/items/')) {
