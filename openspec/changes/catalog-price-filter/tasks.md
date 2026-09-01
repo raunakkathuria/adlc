@@ -9,10 +9,11 @@
 - [ ] 1.7 `REQ-CAT-4`: a negative `max_price` is refused with `400` and `{"reason":"invalid_max_price"}`
 - [ ] 1.8 `REQ-CAT-4`: an empty `max_price` (`?max_price=`) is refused with `400` and `{"reason":"invalid_max_price"}`
 - [ ] 1.9 `REQ-CAT-4`: a borderline numeric form (e.g. `+10`, `1e3`, or leading/trailing whitespace) is refused with `400` and `{"reason":"invalid_max_price"}`
+- [ ] 1.10 `REQ-CAT-4`: a repeated `max_price` (`?max_price=100&max_price=200`) is refused with `400` and `{"reason":"invalid_max_price"}`, even when both values are individually well-formed
 
 ## 2. Implementation (green)
 
-- [ ] 2.1 Validate `max_price` from the query string against `^\d+$`; reject anything that doesn't match, including empty, before filtering
+- [ ] 2.1 Validate `max_price` from the query string — reject if it appears more than once, or if the single value doesn't match `^\d+$` (including empty) — before filtering
 - [ ] 2.2 Filter the catalog listing by `max_price`, composing with the existing search filter
 
 ## 3. Verification

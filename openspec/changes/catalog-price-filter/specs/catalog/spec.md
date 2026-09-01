@@ -2,9 +2,9 @@
 
 ### Requirement: REQ-CAT-4 — narrow the catalog by maximum price
 
-`GET /api/items?max_price={cents}` SHALL return only the items whose `price` is less than or equal to `max_price`. `max_price` SHALL match `^\d+$` — a non-negative whole number of cents, in the same minor-units representation the API already returns for `price`. A `max_price` present together with a search query (`q`, REQ-CAT-3) SHALL narrow the list to items that satisfy **both** at once.
+`GET /api/items?max_price={cents}` SHALL return only the items whose `price` is less than or equal to `max_price`. `max_price` SHALL appear **at most once** and, when present, match `^\d+$` — a non-negative whole number of cents, in the same minor-units representation the API already returns for `price`. A `max_price` present together with a search query (`q`, REQ-CAT-3) SHALL narrow the list to items that satisfy **both** at once.
 
-Any `max_price` value that does not match `^\d+$` — including an empty value, a decimal, a signed number, a value with leading or trailing whitespace, or any other non-digit content — SHALL be refused with a `400` and `{"reason":"invalid_max_price"}`; the list is never silently returned unfiltered when the filter itself is malformed.
+Any request where `max_price` is supplied more than once, or where the (single) supplied value does not match `^\d+$` — including an empty value, a decimal, a signed number, a value with leading or trailing whitespace, or any other non-digit content — SHALL be refused with a `400` and `{"reason":"invalid_max_price"}`; the list is never silently returned unfiltered, and no one occurrence is silently preferred over another, when the filter itself is malformed.
 
 #### Scenario: only items at or under the ceiling are returned
 
@@ -50,3 +50,8 @@ Any `max_price` value that does not match `^\d+$` — including an empty value, 
 
 - **WHEN** `max_price` does not match `^\d+$` in form even though it looks numeric — for example a signed value like `+10`, scientific notation like `1e3`, or a value with leading or trailing whitespace like ` 10`
 - **THEN** the response is `400` with `{"reason":"invalid_max_price"}`
+
+#### Scenario: a repeated max_price is refused
+
+- **WHEN** `max_price` is supplied more than once (`GET /api/items?max_price=100&max_price=200`), even though both values are individually well-formed
+- **THEN** the response is `400` with `{"reason":"invalid_max_price"}` — the ambiguity of which value to honor is itself the defect, and neither value is silently picked
