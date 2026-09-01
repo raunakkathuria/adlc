@@ -40,7 +40,7 @@ npm run verify     # node --test  +  requirement coverage
 
 Deterministic. No model in it. It must be green before you say you are done, and it runs in about a tenth of a second, so run it often.
 
-`npm run req-coverage` checks that every requirement in `openspec/specs/` is named by at least one test. It cannot check whether that test asserts the *right* thing — only that somebody wrote one. Deltas in `openspec/changes/` are invisible to the gate until archived into the living spec — deliberately.
+`npm run req-coverage` checks that every requirement in `openspec/specs/` is named by at least one test. It cannot check whether that test asserts the *right* thing — only that somebody wrote one. A requirement in an `openspec/changes/` delta is **known but not owed**: a test may name it — that is what makes an implementation PR's new tests legal — but it only starts owing one when that delta's `tasks.md` is **fully ticked**. A spec PR is therefore never red for describing work nobody has built, while a build that ticks every box and forgets the test is — and because the gate runs before the implementation PR opens, that costs no PR and no attempt. Archiving into the living spec makes the requirement owe a test permanently, like every other.
 
 ## Rules that must hold
 
@@ -73,7 +73,7 @@ Run any station locally with `./run.sh prompts/<name>.md [target]` — the workf
 
 **Isolation is the design principle.** Planner and Executor share the same business context but never a session, so a plan cannot leak its assumptions into the build. The Verifier shares neither: it re-derives expected behaviour from the spec alone before it reads any code. Same reason a factory's quality inspector does not report to the line supervisor.
 
-The Verifier's verdict routes the work — pass → Gate 2; fail → **back to the Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it. Findings outside the change's scope become new issues (labeled `origin:adlc`), which re-enter the line at triage.
+The Verifier's verdict routes the work — pass → Gate 2; fail → **back to the Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it. A human asks for the same thing by commenting **`/revise <what to change>`** on the issue: the comment is both the trigger and the instruction, because the Planner reads the whole thread. It needs write access, and it revises the open spec PR rather than opening a second one. Findings outside the change's scope become new issues (labeled `origin:adlc`), which re-enter the line at triage.
 
 ## The two human gates
 
