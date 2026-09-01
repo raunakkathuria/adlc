@@ -131,6 +131,15 @@ Plus: `type:bug|feature|chore|docs` (from triage), `needs-human` (loop cap tripp
 | Supabase pipeline dashboard | labels + links block + run summaries | the issue thread is the dashboard |
 | Figma visual-acceptance gate | out (YAGNI) | needs a design source; add when one exists |
 
+### Known gaps, found by running it
+
+The table above is what was simplified on purpose. These were found by putting a real issue through the line, and are open rather than decided. They are recorded here because **the line has nowhere else to keep them** — see the first one.
+
+- **No backlog state. Filing an issue *is* starting the work.** `intake.yml` triggers on `issues: [opened]`, so an issue cannot be written down and deferred; triage runs immediately and closes anything that is not a single actionable change. `needs-human` parks machine-filed findings at depth 1, but a person cannot file-and-defer. This is not abstract: the attempt to record these very gaps as an issue was closed as not-planned, which is why they live in this file. For a team with a real backlog, decide this before adopting.
+- **Nothing automated compares issue intent to delta scope.** The verifier checks spec against implementation, so a delta that under-specifies what the issue asked for passes it. Gate 1 and the two review lenses are the only guard; `prompts/spec.md`'s surface rule and the Product lens's "name the surface" question were added after a delta gave shoppers an API and no page.
+- **Bot-opened PRs start no `pull_request` workflows**, so their `verify` run is held as `action_required` and the PR shows no check. Cosmetic: `build.yml` publishes its own `adlc/verify` commit status, and `finalize.yml` merges the spec PR or closes it as landed either way. It matters only if an adopter makes the *workflow* a required check — require the status instead.
+- **Three stations the pipeline does not have yet**: a security-review gate, browser end-to-end checks in quality, and deploy. Each is independently shippable and each carries a real decision — whether a model may block a build, whether the repo takes its first dependency, and whether deploy belongs to the line at all.
+
 ## 6. Repo layout
 
 ```
