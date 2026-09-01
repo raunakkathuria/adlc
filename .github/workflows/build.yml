@@ -5,8 +5,10 @@
 # change should exist — a person already did, by approving.
 #
 # The implementation branches FROM THE SPEC PR HEAD, so the approved delta is the build's input
-# and rides inside the implementation PR. The spec PR itself stays open — it merges (or is
-# marked merged by GitHub, since its commits land via the implementation) only after Gate 2.
+# and rides inside the implementation PR, then merges main in so the build runs against current
+# tooling and the delta cannot arrive twice by two routes. The spec PR itself stays open — it
+# merges (or is marked merged by GitHub, since its commits land via the implementation) only
+# after Gate 2. That last part needs merge commits: squash and rebase break the ancestry.
 #
 # Opens an implementation PR. Never merges one — Gate 2 is a person.
 
@@ -166,8 +168,18 @@ jobs:
         run: |
           git config user.name "adlc-line"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin "spec/$SLUG"
+          git fetch origin "spec/$SLUG" main
           git checkout -B "impl/$SLUG" "origin/spec/$SLUG"
+          # Then bring main in. A spec branch cut before a change to the line carries that
+          # change's absence — the first build here ran a req-coverage predating the fix that
+          # was supposed to guard it. Merging also means the delta arrives with main's history
+          # behind it, so the delta files never collide add/add at Gate 2.
+          if ! git merge --no-edit origin/main; then
+            git merge --abort || true
+            gh issue comment "$ISSUE" --body "The approved spec branch \`spec/$SLUG\` conflicts with \`main\` and the line will not guess at a resolution — parked for a human. Rebase or re-run the spec station once \`main\` and the delta agree."
+            node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
+            exit 1
+          fi
 
       - name: Bring the reproduce evidence, if a bug travelled here
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true'

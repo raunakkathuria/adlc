@@ -20,6 +20,10 @@ Recommended repo settings (production hardening):
   Comment `/revise <what to change>` on the issue — that revises the open spec PR in place.
 - CODEOWNERS on `openspec/**` if you want Gate 1 role-aware.
 - Allow GitHub Actions to create pull requests (Settings → Actions → General).
+- **Merge commits only** — turn off "Allow squash merging" and "Allow rebase merging"
+  (Settings → General → Pull Requests). The line needs the spec PR's commits to reach your
+  default branch *inside* the implementation PR; squash and rebase rewrite commit identity, so
+  the spec branch stops being an ancestor and the two arrive as an add/add conflict instead.
 - Prefer `ANTHROPIC_API_KEY` on a dedicated service account over a personal
   `CLAUDE_CODE_OAUTH_TOKEN`: the OAuth token is account-level, and every agent step's
   environment is readable by the tools that step allows. Same exposure path either way —

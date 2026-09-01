@@ -12,6 +12,8 @@ Engineering philosophy, always: **KISS, YAGNI, DRY** (see `.buildwright/steering
 
 The living spec is [`openspec/specs/`](openspec/specs/) — one capability per directory ([`catalog/spec.md`](openspec/specs/catalog/spec.md), [`orders/spec.md`](openspec/specs/orders/spec.md)), managed with [OpenSpec](https://github.com/Fission-AI/OpenSpec). Requirements are numbered (`REQ-CAT-1`, `REQ-ORD-4`, …) and carry WHEN/THEN scenarios.
 
+**A capability is a slice of the product, and the spec covers all of it** — the HTTP API *and* the page a person uses. Not a layer: there is no UI capability, because a requirement about what a shopper sees belongs with the behaviour it serves. In a larger org the API and the front end live in separate repos and each spec covers its own surface; here they are one repo, so one capability file covers both. A change that gives a user something must say what they see, not only what an endpoint returns — `npm run req-ids` guards id allocation across deltas in flight, but nothing but the spec guards this.
+
 **If the code and the spec disagree, the code is wrong.** Fix the code, not the spec.
 
 **Every change is spec-driven — bugs included.** A change starts as a delta in `openspec/changes/<slug>/` (proposal, spec delta, tasks), opened as a **spec PR**. A bug's delta is short: the corrected behaviour as a scenario, evidenced by a failing test from the reproduce station.
@@ -85,3 +87,5 @@ Everything between the gates is the line's to run.
 ## Git
 
 Conventional commits (`feat:` / `fix:` / `refactor:` / `docs:` / `chore:`), atomic, and stage only the files you changed — never `git add -A`. Spec branches are `spec/<slug>`; implementation branches are `impl/<slug>`.
+
+**Merge commits only — squash and rebase are disabled on this repo, deliberately.** The line's bookkeeping depends on the spec PR's commits reaching `main` *inside* the implementation PR, after which GitHub marks the spec PR merged and `finalize` has nothing left to do. Squash and rebase both rewrite commit identity, so the spec branch stops being an ancestor of `main`: the delta then arrives twice by two different routes and the implementation PR conflicts add/add against files identical to its own. That is not a discipline to remember — the setting enforces it.
