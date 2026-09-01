@@ -139,7 +139,7 @@ adlc/
 ├── openspec/                      # specs/ = living spec · changes/ = deltas in flight
 ├── .buildwright/                  # engineering discipline (KISS·YAGNI·DRY·TDD in steering/)
 ├── prompts/                       # one markdown file per station, CLI-agnostic
-├── scripts/                       # links.mjs (the contract) · req-coverage.mjs (the gate)
+├── scripts/                       # links.mjs (the contract) · req-coverage.mjs (the gate) · req-ids.mjs (id allocation)
 ├── .github/workflows/
 │   ├── verify.yml                 # deterministic gate, every push/PR — no model
 │   ├── intake.yml  spec.yml  build.yml  verifier.yml  quality.yml  finalize.yml
