@@ -7,10 +7,12 @@
 - [ ] 1.5 `REQ-CAT-4`: `max_price` combined with `q` returns only items matching both
 - [ ] 1.6 `REQ-CAT-4`: a non-numeric `max_price` (e.g. `abc`, `10.50`) is refused with `400` and `{"reason":"invalid_max_price"}`
 - [ ] 1.7 `REQ-CAT-4`: a negative `max_price` is refused with `400` and `{"reason":"invalid_max_price"}`
+- [ ] 1.8 `REQ-CAT-4`: an empty `max_price` (`?max_price=`) is refused with `400` and `{"reason":"invalid_max_price"}`
+- [ ] 1.9 `REQ-CAT-4`: a borderline numeric form (e.g. `+10`, `1e3`, or leading/trailing whitespace) is refused with `400` and `{"reason":"invalid_max_price"}`
 
 ## 2. Implementation (green)
 
-- [ ] 2.1 Validate `max_price` from the query string; reject non-integer or negative values before filtering
+- [ ] 2.1 Validate `max_price` from the query string against `^\d+$`; reject anything that doesn't match, including empty, before filtering
 - [ ] 2.2 Filter the catalog listing by `max_price`, composing with the existing search filter
 
 ## 3. Verification

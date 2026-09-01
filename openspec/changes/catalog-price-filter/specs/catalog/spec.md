@@ -2,9 +2,9 @@
 
 ### Requirement: REQ-CAT-4 — narrow the catalog by maximum price
 
-`GET /api/items?max_price={cents}` SHALL return only the items whose `price` is less than or equal to `max_price`. `max_price` SHALL be expressed as an integer in **minor units (cents)**, matching how `price` is represented in every item the API returns. A `max_price` present together with a search query (`q`, REQ-CAT-3) SHALL narrow the list to items that satisfy **both** at once.
+`GET /api/items?max_price={cents}` SHALL return only the items whose `price` is less than or equal to `max_price`. `max_price` SHALL match `^\d+$` — a non-negative whole number of cents, in the same minor-units representation the API already returns for `price`. A `max_price` present together with a search query (`q`, REQ-CAT-3) SHALL narrow the list to items that satisfy **both** at once.
 
-`max_price` SHALL be a non-negative integer. Any other value — non-numeric, a decimal, or negative — SHALL be refused with a `400` and `{"reason":"invalid_max_price"}`; the list is never silently returned unfiltered when the filter itself is malformed.
+Any `max_price` value that does not match `^\d+$` — including an empty value, a decimal, a signed number, a value with leading or trailing whitespace, or any other non-digit content — SHALL be refused with a `400` and `{"reason":"invalid_max_price"}`; the list is never silently returned unfiltered when the filter itself is malformed.
 
 #### Scenario: only items at or under the ceiling are returned
 
@@ -39,4 +39,14 @@
 #### Scenario: negative max_price is refused
 
 - **WHEN** `max_price` is negative
+- **THEN** the response is `400` with `{"reason":"invalid_max_price"}`
+
+#### Scenario: an empty max_price is refused
+
+- **WHEN** `max_price` is present but empty (`GET /api/items?max_price=`)
+- **THEN** the response is `400` with `{"reason":"invalid_max_price"}`, the same treatment as a non-numeric value — a present-but-empty parameter is a client bug, not an intent to omit the filter
+
+#### Scenario: a borderline numeric form is refused
+
+- **WHEN** `max_price` does not match `^\d+$` in form even though it looks numeric — for example a signed value like `+10`, scientific notation like `1e3`, or a value with leading or trailing whitespace like ` 10`
 - **THEN** the response is `400` with `{"reason":"invalid_max_price"}`
