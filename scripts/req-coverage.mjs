@@ -56,9 +56,17 @@ export function audit({ specified, known, tested }) {
 }
 
 /**
- * Does this delta's tasks.md claim the work is finished? Every box ticked and at least one box —
- * a file with no checkboxes claims nothing. Lenient about `- [X]`, because failing to recognise a
- * tick would silently drop enforcement, and silence is the wrong way to be wrong.
+ * Does this delta's tasks.md claim the work is finished? Every box ticked, and at least one box.
+ *
+ * Lenient about what counts as a box (`- [X]`, `* [x]`, indented) because failing to recognise a
+ * tick would drop enforcement without saying so.
+ *
+ * The `at least one box` guard drops enforcement without saying so too, for a tasks.md that is
+ * missing or written as prose — an accepted blind spot, because both alternatives are worse.
+ * Treating no-boxes as finished would owe tests that cannot exist yet and redden the spec PR,
+ * which is the bug this two-stage rule exists to fix. Erroring would add a way for the gate to
+ * fail over a malformed delta that people and the spec-review lenses already read. If a third
+ * reader ever needs it, make it visible in the listing rather than fatal.
  */
 export function tasksComplete(tasksText) {
   const boxes = tasksText.match(/^[ \t]*[-*]\s\[[ xX]\]/gm) ?? [];
