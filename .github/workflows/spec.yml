@@ -197,6 +197,9 @@ jobs:
             exit 1
           fi
           openspec validate "$SLUG"
+          # Ids are allocated by a model that cannot see the other deltas in flight, so the
+          # allocation is checked deterministically here — before the spec PR exists.
+          node "$ADLC/scripts/req-ids.mjs"
           # -uall matters: without it git collapses a wholly-untracked directory into one entry
           # ("?? openspec/changes/"), which never matches the filter below — so the change's own
           # files read as strays. openspec/changes/ is untracked on main by design, so the first

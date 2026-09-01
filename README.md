@@ -64,7 +64,7 @@ None of this makes an agent reliable. It makes an unreliable agent's output **ch
 ```
 openspec/           the living spec (specs/) and deltas in flight (changes/, on spec branches)
 prompts/            one markdown file per station — the single definition, CLI-agnostic
-scripts/            links.mjs · labels.mjs · attempts.mjs · file-findings.mjs · req-coverage.mjs
+scripts/            links.mjs · labels.mjs · attempts.mjs · file-findings.mjs · req-coverage.mjs · req-ids.mjs
 .github/workflows/  the six stations + verify.yml (the gate) · callers/ = the adoption kit
 .buildwright/       the engineering discipline the Executor works to (KISS · YAGNI · DRY · TDD)
 app/  test/         the storefront and its tests — the product that ships through the line
