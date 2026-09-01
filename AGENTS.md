@@ -40,7 +40,7 @@ npm run verify     # node --test  +  requirement coverage
 
 Deterministic. No model in it. It must be green before you say you are done, and it runs in about a tenth of a second, so run it often.
 
-`npm run req-coverage` checks that every requirement in `openspec/specs/` is named by at least one test. It cannot check whether that test asserts the *right* thing — only that somebody wrote one. Deltas in `openspec/changes/` are invisible to the gate until archived into the living spec — deliberately.
+`npm run req-coverage` checks that every requirement in `openspec/specs/` is named by at least one test. It cannot check whether that test asserts the *right* thing — only that somebody wrote one. A requirement in an `openspec/changes/` delta is **known but not owed**: a test may name it — that is what makes an implementation PR's new tests legal — but it never fails the gate for lacking one, because a spec PR's tests do not exist yet. Archiving into the living spec is what makes a requirement start owing a test.
 
 ## Rules that must hold
 

@@ -101,7 +101,7 @@ npm run verify     # node --test  +  requirement coverage
 
 No model in it. It runs in about a tenth of a second, and it is the only thing in the loop that gets a vote on whether the work is done.
 
-It is also not enough on its own. `npm run req-coverage` checks that every requirement in the living spec — and in any in-flight delta on the branch — is named by at least one test. It cannot check whether that test asserts the right thing. A test written from the implementation agrees with the implementation, passes forever, and reports nothing.
+It is also not enough on its own. `npm run req-coverage` checks that every requirement in the living spec is named by at least one test. A requirement still in flight in a delta may be named by a test but is not yet owed one, so a spec PR is not red merely for describing work nobody has built. It cannot check whether that test asserts the right thing. A test written from the implementation agrees with the implementation, passes forever, and reports nothing.
 
 Coverage is not proof. A green pipeline is only as true as the thing it compares against — which is exactly the gap the Verifier exists to close, and why it is a different thing from the gate.
 
