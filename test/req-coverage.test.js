@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audit, tasksComplete } from '../scripts/req-coverage.mjs';
+import { audit, tasksComplete, summarise } from '../scripts/req-coverage.mjs';
 
 const sets = ({ specified = [], known = [], tested = [] }) => ({
   specified: new Set(specified),
@@ -72,4 +72,24 @@ test('coverage: indented, nested and asterisk-bulleted boxes count too', () => {
 test('coverage: a tasks file with no checkboxes owes nothing', () => {
   assert.equal(tasksComplete('all done, trust me\n'), false);
   assert.equal(tasksComplete(''), false);
+});
+
+// --- What the summary line claims ---------------------------------------------------------------
+// It used to print the living-spec count, so a delta that was owed AND covered was reported as
+// "9 requirements, all covered; 1 in flight" when ten had in fact been enforced.
+
+test('coverage: the summary counts what was enforced, not just the living spec', () => {
+  const line = summarise({ owed: new Set(['LIVING-1', 'DELTA-1']), inFlight: new Set() });
+  assert.match(line, /2 requirements/);
+  assert.doesNotMatch(line, /in flight/);
+});
+
+test('coverage: a requirement owing nothing yet is reported as in flight, not counted', () => {
+  const line = summarise({ owed: new Set(['LIVING-1']), inFlight: new Set(['DELTA-1']) });
+  assert.match(line, /1 requirement, all covered; 1 in flight/);
+});
+
+test('coverage: owed and in-flight are reported together when both exist', () => {
+  const line = summarise({ owed: new Set(['LIVING-1', 'DELTA-1']), inFlight: new Set(['DELTA-2']) });
+  assert.match(line, /2 requirements, all covered; 1 in flight/);
 });
