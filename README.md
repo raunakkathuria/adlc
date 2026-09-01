@@ -33,7 +33,7 @@ Want the product first? `npm start`, then http://localhost:3000. The gate is `np
 | Station | Workflow | Trigger | What it does |
 |---|---|---|---|
 | Intake | [`intake.yml`](.github/workflows/intake.yml) | issue opened / reopened | triage (fail-closed) → not actionable is closed with the reason; a bug goes to **reproduce**, which writes the failing test that makes it real — or closes it as not-reproducible, reopenable |
-| Spec | [`spec.yml`](.github/workflows/spec.yml) | dispatched by intake (or verifier, for a revision) | the **Planner** drafts `openspec/changes/<slug>/`, opens the spec PR, two advisory review lenses comment |
+| Spec | [`spec.yml`](.github/workflows/spec.yml) | dispatched by intake · by the verifier, for a revision · or `/revise` on the issue | the **Planner** drafts `openspec/changes/<slug>/`, opens the spec PR, two advisory review lenses comment |
 | **Gate 1** | — | a human **approves** the spec PR | approval, not merge — the branch stays open as the shared artifact |
 | Build | [`build.yml`](.github/workflows/build.yml) | the approving review | the **Executor** branches from the approved spec head, tests first, ticks `tasks.md`, opens the implementation PR after the gate is green; a fresh-context review lands in the PR body |
 | Verifier | [`verifier.yml`](.github/workflows/verifier.yml) | dispatched by build | the independent drift check: re-derives from the spec, walks every scenario against the **running app**, reports `missing` and `extra`, verdict trailers `SPEC-MATCH` / `FEATURE-IMPLEMENTED`; mismatch routes to the **Planner** |
