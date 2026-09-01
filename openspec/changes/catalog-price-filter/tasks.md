@@ -1,6 +1,6 @@
 ## 1. Tests (red)
 
-- [ ] 1.1 `REQ-CAT-4`: `GET /api/items?max_price=` returns only items priced at or under the ceiling
+- [ ] 1.1 `REQ-CAT-4`: `GET /api/items?max_price=1000` returns only items priced at or under the ceiling
 - [ ] 1.2 `REQ-CAT-4`: an item priced exactly at `max_price` is included (boundary is inclusive)
 - [ ] 1.3 `REQ-CAT-4`: a `max_price` under every item's price returns `200` with an empty array
 - [ ] 1.4 `REQ-CAT-4`: an absent `max_price` returns every item, unaffected
