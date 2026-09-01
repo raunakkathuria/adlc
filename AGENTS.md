@@ -73,7 +73,7 @@ Run any station locally with `./run.sh prompts/<name>.md [target]` — the workf
 
 **Isolation is the design principle.** Planner and Executor share the same business context but never a session, so a plan cannot leak its assumptions into the build. The Verifier shares neither: it re-derives expected behaviour from the spec alone before it reads any code. Same reason a factory's quality inspector does not report to the line supervisor.
 
-The Verifier's verdict routes the work — pass → Gate 2; fail → **back to the Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it. Findings outside the change's scope become new issues (labeled `origin:adlc`), which re-enter the line at triage.
+The Verifier's verdict routes the work — pass → Gate 2; fail → **back to the Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it. A human asks for the same thing by commenting **`/revise <what to change>`** on the issue: the comment is both the trigger and the instruction, because the Planner reads the whole thread. It needs write access, and it revises the open spec PR rather than opening a second one. Findings outside the change's scope become new issues (labeled `origin:adlc`), which re-enter the line at triage.
 
 ## The two human gates
 

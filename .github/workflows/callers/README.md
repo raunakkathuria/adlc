@@ -16,7 +16,8 @@ Recommended repo settings (production hardening):
   a private repo needs Pro or above. Gate 2 holds without it either way, because no station
   ever merges an implementation PR; branch protection is the belt to that pair of braces.
 - "Dismiss stale approvals" ON: a spec revision after verifier findings then re-requires
-  Gate 1, which is exactly right.
+  Gate 1, which is exactly right. Reviewing at Gate 1 and want the delta changed first?
+  Comment `/revise <what to change>` on the issue — that revises the open spec PR in place.
 - CODEOWNERS on `openspec/**` if you want Gate 1 role-aware.
 - Allow GitHub Actions to create pull requests (Settings → Actions → General).
 - Prefer `ANTHROPIC_API_KEY` on a dedicated service account over a personal

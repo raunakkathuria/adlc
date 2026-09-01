@@ -2,6 +2,9 @@
 #
 # Dispatched by intake (fresh work) or by the verifier (a revision: the drift report routed
 # back to the Planner, because if the spec was silent or wrong, more code will not fix it).
+# A human asks for one the same way they would explain it: comment `/revise <what to change>`
+# on the source issue. The comment is both the trigger and the instruction, because the Planner
+# reads the whole issue thread.
 #
 # The spec PR is the shared artifact of the whole change: Gate 1 is an APPROVING REVIEW on it —
 # never a merge. It stays open while implementations are built and merged, and the delta lands
@@ -14,6 +17,8 @@
 name: spec
 
 on:
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -52,18 +57,31 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: adlc-issue-${{ inputs.issue_number }}
+  group: adlc-issue-${{ github.event.issue.number || inputs.issue_number }}
   cancel-in-progress: false
 
 env:
-  ISSUE: ${{ inputs.issue_number }}
-  SLUG: ${{ inputs.slug }}
+  ISSUE: ${{ github.event.issue.number || inputs.issue_number }}
+  # SLUG is resolved by "Which change is this?" below — a dispatch passes it, a `/revise`
+  # comment does not. Deliberately NOT set here: a workflow-level env of the same name would
+  # shadow what that step writes to $GITHUB_ENV.
   ADLC_REPO: ${{ inputs.adlc_repo || 'raunakkathuria/adlc' }}
   ADLC_REF: ${{ inputs.adlc_ref || 'main' }}
   GH_TOKEN: ${{ github.token }}
 
 jobs:
   plan:
+    # `/revise` is what turns a comment into a revision request — and what breaks the self-loop:
+    # this station comments on the issue itself (the links block), and nothing the line writes
+    # starts with `/revise`. Never loosen this marker into something the line's own comments
+    # could match. Write access is required, and it is checked HERE rather than through the
+    # collaborator API so a drive-by comment never even starts a runner.
+    if: >-
+      github.event_name != 'issue_comment' || (
+        github.event.issue.pull_request == null &&
+        startsWith(github.event.comment.body, '/revise') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -75,8 +93,6 @@ jobs:
           KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          # The slug becomes a branch name and a path — refuse anything but its strict shape.
-          echo "$SLUG" | grep -Eq '^[a-z0-9][a-z0-9-]{0,60}$' || { echo "::error::slug '$SLUG' is not a valid change slug"; exit 1; }
           if [ -z "${KEY:-}" ] && [ -z "${OAUTH:-}" ]; then
             echo "No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret. The line stays off — this workflow is documentation."
             echo "on=false" >> "$GITHUB_OUTPUT"
@@ -94,6 +110,29 @@ jobs:
       - name: Point at them
         if: steps.runner.outputs.on == 'true'
         run: echo "ADLC=$([ -d .adlc ] && echo .adlc || echo .)" >> "$GITHUB_ENV"
+
+      # A dispatch names the change; a `/revise` comment does not, so the slug comes from the
+      # issue's links block — scripts/links.mjs is the only thing that reads it, and it validates
+      # every field's shape before handing it over. Fails loudly: `/revise` on an issue with no
+      # change in flight has nothing to revise.
+      - name: Which change is this?
+        if: steps.runner.outputs.on == 'true'
+        env:
+          SLUG_INPUT: ${{ inputs.slug }}
+        run: |
+          SLUG="${SLUG_INPUT:-}"
+          if [ -z "$SLUG" ]; then
+            SLUG=$(node "$ADLC/scripts/links.mjs" read "$ISSUE" 2>/dev/null \
+              | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8")||"{}");process.stdout.write((j.openspec_change||"").replace(/^openspec\/changes\//,""))' || true)
+          fi
+          # The slug becomes a branch name and a path — refuse anything but its strict shape.
+          if ! echo "$SLUG" | grep -Eq '^[a-z0-9][a-z0-9-]{0,60}$'; then
+            gh issue comment "$ISSUE" --body "No change is in flight for this issue, so there is nothing to revise. \`/revise\` takes the slug from the issue's links block, which the spec station writes when it opens the spec PR."
+            echo "::error::no valid change slug for issue #$ISSUE (got '$SLUG')"
+            exit 1
+          fi
+          echo "SLUG=$SLUG" >> "$GITHUB_ENV"
+          echo "Planning change: $SLUG"
 
       - uses: actions/setup-node@v7
         if: steps.runner.outputs.on == 'true'
