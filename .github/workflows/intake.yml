@@ -250,6 +250,14 @@ jobs:
 
   # A bug is only real once a failing test proves it. Reproduced → spec station, with the
   # failing test attached as evidence. Not reproduced → closed with the full report, reopenable.
+      # A fail-closed park is only useful if you can see WHY. work/triage.txt is the raw verdict.
+      - name: Keep the evidence
+        if: always() && steps.runner.outputs.on == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: triage-${{ env.ISSUE }}-${{ github.run_id }}
+          path: work/
+
   reproduce:
     needs: triage
     if: needs.triage.outputs.on == 'true' && needs.triage.outputs.route == 'reproduce'
@@ -361,3 +369,10 @@ jobs:
           node "$ADLC/scripts/labels.mjs" add "$ISSUE" resolution:not-reproducible
           gh issue comment "$ISSUE" --body-file work/reproduce.md
           gh issue close "$ISSUE" --reason "not planned" --comment "The reproduce station could not surface this as a failing test — the full report is above. Closed as not reproducible, deliberately: open issues are only things actually moving down the line. Reopen it (or report the problem again) and intake re-runs with all the accumulated reports."
+
+      - name: Keep the evidence
+        if: always() && steps.baseline.outputs.green == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: reproduce-${{ env.ISSUE }}-${{ github.run_id }}
+          path: work/
