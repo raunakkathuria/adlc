@@ -66,7 +66,7 @@ Confirmed defects you observed that are **outside this change's scope** — pre-
 
 ### Verdict
 
-The last two lines of your report, exactly this shape — a machine maps them to the PR review:
+The last two lines of your report, exactly this shape and **flush left** — a machine maps them to the PR review. They appear indented below only as illustration, as does the findings line above:
 
     SPEC-MATCH: COMPLETE|MISMATCH
     FEATURE-IMPLEMENTED: YES|NO|N/A
