@@ -17,7 +17,7 @@ That delta (`proposal.md`, `specs/<capability>/spec.md`, `tasks.md`), plus every
 - **Is the user's problem clear, and does this solve it?** Or does it solve an adjacent, easier problem?
 - **Every path, including refusal.** For each new behaviour: what happens when the input is wrong, missing, or when the request conflicts with a rule that already exists? A rejection path with no scenario is the most common way a delta looks finished and is not.
 - **What does it do to what already works?** Name every existing requirement this touches, and say what happens when both apply. Somebody will hit that combination on day one.
-- **Can the person in the issue actually reach this? Name the surface.** If the issue describes a shopper, an operator, anyone using the product, say which surface the delta gives them — the page, the API, both. A delta that moves only an API when the issue named a user has solved the adjacent, easier problem, and that is a finding, not taste.
+- **Can the person in the issue actually reach this? Name the surface.** If the issue describes a shopper, an operator, anyone using the product, say which surface the delta gives them — the page, the API, both. A delta that moves only an API when the issue named a user has solved the adjacent, easier problem, and that is a finding, not taste. But check before you flag it: a page that only relays the endpoint inherits the behaviour and needs no scenario of its own, and demanding one is busywork. The question is whether the person can reach it, not whether every surface has its own WHEN/THEN.
 - **Is anything promised that nobody asked for**, or asked for and quietly dropped?
 
 ### Architect
