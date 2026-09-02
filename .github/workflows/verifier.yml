@@ -208,7 +208,11 @@ jobs:
         env:
           SLUG: ${{ steps.links.outputs.slug }}
         run: |
-          gh issue comment "$ISSUE" --body "$(printf 'The verifier found drift — routed to the **Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it.\n\n%s' "$(tail -c 60000 work/verifier.md)")"
+          # The drift report is model output, so it travels as a file.
+          { printf 'The verifier found drift — routed to the **Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it.\n\n'
+            tail -c 60000 work/verifier.md
+          } > work/drift-comment.md
+          gh issue comment "$ISSUE" --body-file work/drift-comment.md
           if node "$ADLC/scripts/attempts.mjs" record "$ISSUE" verifier; then
             node "$ADLC/scripts/labels.mjs" state "$ISSUE" spec-draft
             gh workflow run spec.yml -f issue_number="$ISSUE" -f slug="$SLUG" \
