@@ -144,12 +144,20 @@ jobs:
             const fs = require("fs");
             fs.writeFileSync("work/issue.md", `# ${i.title}\n\n(issue #${i.number}, by @${i.author.login})\n\n${i.body ?? ""}\n`);
           '
-          gh issue list --state all --limit 100 --json number,title,state,labels \
+          gh issue list --state all --limit 100 --json number,title,state,stateReason,labels \
             --jq '[.[] | select(.number != ('"$ISSUE"'|tonumber))]' > work/existing.json
           node -e '
             const all = require("./work/existing.json");
             const fs = require("fs");
-            const line = (i) => `#${i.number} [${i.state}${i.labels.some(l=>l.name==="resolution:not-reproducible")?" · not-reproducible":""}] ${i.title}`;
+            // Why a closed issue closed is the whole question: shipped means the work is done,
+            // not-planned means somebody declined it and the problem may well still be there.
+            const why = (i) => {
+              if (i.state !== "CLOSED") return "";
+              if (i.labels.some((l) => l.name === "resolution:not-reproducible")) return " · not-reproducible";
+              if (i.stateReason === "COMPLETED" || i.labels.some((l) => l.name === "state:shipped")) return " · shipped";
+              return " · not planned, so the problem may remain";
+            };
+            const line = (i) => `#${i.number} [${i.state}${why(i)}] ${i.title}`;
             fs.writeFileSync("work/existing-issues.md", all.map(line).join("\n") + "\n");
           '
 
