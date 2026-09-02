@@ -46,7 +46,16 @@ async function loadClientPage(base) {
       await sandbox.order(sku);
     },
     noteHtml: () => element('note').innerHTML,
+    itemsHtml: () => element('items').innerHTML,
+    search: async (query) => {
+      element('q').value = query;
+      await sandbox.loadItems();
+    },
   };
+}
+
+function orderButtonMarkup(itemsHtml, sku) {
+  return itemsHtml.match(new RegExp(`<button[^>]*data-sku="${sku}"[^>]*>[\\s\\S]*?</button>`))?.[0];
 }
 
 test('REQ-ORD-1: an accepted order is created and takes units out of stock', () =>
@@ -165,4 +174,46 @@ test("REQ-ORD-7: a second order's outcome replaces the live region's content rat
     assert.match(html, /Order #\d+ placed/);
     assert.doesNotMatch(html, /Rejected/);
     assert.equal((html.match(/<p/g) ?? []).length, 1);
+  }));
+
+test("REQ-ORD-8: an item's Order button has an accessible name that includes the item's name", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    const button = orderButtonMarkup(page.itemsHtml(), 'MUG-1');
+    assert.ok(button, 'expected an Order button for MUG-1');
+    assert.match(button, /aria-label="[^"]*Enamel Mug[^"]*"/);
+  }));
+
+test("REQ-ORD-8: each item's Order button has a distinct accessible name from the others", () =>
+  withServer(async ({ base, get }) => {
+    const page = await loadClientPage(base);
+    const { body: items } = await get('/api/items');
+    assert.ok(items.length > 1, 'need at least two items to check distinctness');
+
+    const names = items.map((item) => {
+      const button = orderButtonMarkup(page.itemsHtml(), item.sku);
+      assert.ok(button, `expected an Order button for ${item.sku}`);
+      return button.match(/aria-label="([^"]*)"/)?.[1];
+    });
+
+    for (const [i, item] of items.entries()) {
+      assert.ok(names[i]?.includes(item.name), `Order button for ${item.sku} should name "${item.name}"`);
+    }
+    assert.equal(new Set(names).size, items.length, 'no two items should share an Order button accessible name');
+  }));
+
+test("REQ-ORD-8: the Order button's visible label is unaffected", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    const button = orderButtonMarkup(page.itemsHtml(), 'MUG-1');
+    assert.match(button, />Order<\/button>$/);
+  }));
+
+test('REQ-ORD-8: a remaining item keeps its accessible name after a search narrows the list', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.search('mug');
+    const button = orderButtonMarkup(page.itemsHtml(), 'MUG-1');
+    assert.ok(button, 'expected MUG-1 to remain after searching "mug"');
+    assert.match(button, /aria-label="[^"]*Enamel Mug[^"]*"/);
   }));
