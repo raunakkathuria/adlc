@@ -1,8 +1,10 @@
 ## ADDED Requirements
 
-### Requirement: REQ-CAT-7 — the catalogue list announces its changes to assistive technology
+### Requirement: REQ-CAT-7 — the catalogue list announces its changes to assistive technology, proportionately
 
-The catalogue page's items region SHALL be exposed as an ARIA live region (for example, `role="status"` or an equivalent `aria-live` announcement), so that assistive technology announces its content automatically whenever it changes, without the user needing to move focus to it.
+The catalogue page's items region SHALL be exposed as an ARIA live region (for example, `role="status"` or an equivalent `aria-live` announcement), so that assistive technology announces automatically whenever its content changes, without the user needing to move focus to it.
+
+The announcement SHALL be proportionate to what changed: it SHALL convey that the list changed and how many items now match, without reciting every displayed item's individual details (name, SKU, price, stock). When a search query is still being typed, the live region SHALL NOT announce once per keystroke; it SHALL announce once the query has settled, reflecting the outcome the user is left looking at rather than every intermediate one.
 
 #### Scenario: the region announces from the first page load
 
@@ -18,18 +20,32 @@ The catalogue page's items region SHALL be exposed as an ARIA live region (for e
 #### Scenario: a return to matching results is announced
 
 - **WHEN** a search that previously matched nothing is edited so that it matches items again
-- **THEN** the resulting list is written into the same live region
+- **THEN** a concise announcement of the new match count is written into the same live region
 - **AND** assistive technology announces the change automatically
 
 #### Scenario: a change triggered by an order is announced
 
 - **WHEN** an order changes a displayed item's stock count and the catalogue list re-renders to reflect it
-- **THEN** the updated list is written into the live region
-- **AND** assistive technology announces the change automatically, independently of the order-outcome announcement (`REQ-ORD-7`) that fires at the same time
+- **THEN** a concise announcement of the change is written into the live region
+- **AND** assistive technology announces it automatically, independently of the order-outcome announcement (`REQ-ORD-7`) that fires at the same time
 
-### Requirement: REQ-CAT-8 — catalogue items are exposed as a list
+#### Scenario: the announcement states that the list changed and how many items match, not each item's details
+
+- **WHEN** the catalogue list changes for any reason — a search, an order, or otherwise
+- **THEN** the live region's announcement conveys that the list changed and how many items now match
+- **AND** it does not recite the name, SKU, price, or stock of every item in the list
+
+#### Scenario: typing a multi-character search produces one announcement, not one per keystroke
+
+- **WHEN** a user types several characters into the search field in quick succession, changing the results after each keystroke
+- **THEN** the live region announces the outcome once, after the query has settled
+- **AND** it does not announce once per keystroke while the user is still typing
+
+### Requirement: REQ-CAT-8 — catalogue items are exposed as a list, as the page is actually presented
 
 When the catalogue page displays one or more items, it SHALL expose them as a semantic list (native list markup, or an equivalent ARIA `role="list"` with `role="listitem"` children), so that assistive technology reports how many items there are and lets a user navigate between them as list items.
+
+This SHALL hold for the page as it is actually rendered and styled, not only for the underlying markup considered in isolation. A presentation choice — visual styling, layout, or any other page-level treatment — SHALL NOT cause assistive technology to lose the list's item count or the ability to navigate between items, on the combinations of browser and assistive technology the page needs to support.
 
 #### Scenario: multiple items are exposed as a list
 
@@ -45,6 +61,11 @@ When the catalogue page displays one or more items, it SHALL expose them as a se
 
 - **WHEN** a search matches no items
 - **THEN** the empty-state message (`REQ-CAT-6`) is displayed as before, and this requirement does not apply — there is no list of zero items to expose
+
+#### Scenario: list semantics survive the page's own styling
+
+- **WHEN** the catalogue page applies its own visual styling to the rendered list — for example, removing the default list bullet
+- **THEN** assistive technology still reports the item count and still allows navigating between items as list items, despite that styling
 
 ### Requirement: REQ-CAT-9 — item names display as inert text wherever the catalogue renders them
 
