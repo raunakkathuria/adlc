@@ -77,6 +77,18 @@ export function groupBySlug(entries) {
 }
 
 /**
+ * The slugs of changes that have already shipped, from the names of the archive directories
+ * (`openspec/changes/archive/2026-09-02-note-aria-live-announcement`).
+ *
+ * A shipped change's spec branch lingers unless the repo deletes branches on merge, and its
+ * delta claims ids that the archive has since folded INTO the living spec. Reading it as a
+ * live claimant makes the guard collide a change with its own shipped self.
+ */
+export function archivedSlugs(dirNames) {
+  return new Set(dirNames.map((name) => name.replace(/^\d{4}-\d{2}-\d{2}-/, '')));
+}
+
+/**
  * The whole decision, as set arithmetic — so it can be tested without a repo on disk.
  * `living` is every id in openspec/specs/. `deltas` is one entry per active change directory.
  */
@@ -134,6 +146,16 @@ if (isMain) {
 
   // 2. Every other spec branch — the deltas in flight that the tree cannot see. Best effort: no
   //    git, no refs, or a shallow clone simply means nothing extra is known, never a false alarm.
+  //    Shipped changes are skipped: their branch may still exist, but their ids are in the living
+  //    spec now, so counting them collides a change with its own archived self.
+  let shipped = new Set();
+  try {
+    shipped = archivedSlugs(
+      (await readdir(join(ROOT, 'openspec/changes/archive'), { withFileTypes: true }))
+        .filter((e) => e.isDirectory()).map((e) => e.name),
+    );
+  } catch {} // no archive yet is a fine state
+
   const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
   try {
     const refs = git('for-each-ref', '--format=%(refname)', 'refs/remotes/origin/spec/')
@@ -141,7 +163,7 @@ if (isMain) {
     for (const ref of refs) {
       for (const path of git('ls-tree', '-r', '--name-only', ref, '--', 'openspec/changes').split('\n')) {
         const slug = (path.match(SLUG_OF) ?? [])[1];
-        if (!slug || slug === 'archive') continue;
+        if (!slug || slug === 'archive' || shipped.has(slug)) continue;
         entries.push({ slug, text: git('show', `${ref}:${path}`) });
       }
     }

@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { parseSections, auditIds, groupBySlug } from '../scripts/req-ids.mjs';
+import { parseSections, auditIds, groupBySlug, archivedSlugs } from '../scripts/req-ids.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DELTA = readFileSync(join(HERE, 'fixtures/delta-sections.md'), 'utf8');
@@ -128,4 +128,23 @@ test('req-ids: only the requirement heading is a claim, never a cross-reference'
   const expected = JSON.parse(readFileSync(join(HERE, 'fixtures/crossref.expected.json'), 'utf8'));
   const { added } = parseSections(text);
   assert.deepEqual([...added], expected.added);
+});
+
+// --- A shipped change is not in flight -----------------------------------------------------------
+// Reading every origin/spec/* branch means reading branches whose change has already shipped: the
+// branch lingers unless the repo deletes it on merge, and its delta claims ids that are now IN the
+// living spec by way of the archive. So the guard reported a collision against a change of its own
+// making and blocked unrelated work — issue #13's spec run died on note-aria-live-announcement.
+
+test('req-ids: an archived directory yields the slug that shipped', () => {
+  const slugs = archivedSlugs(['2026-09-01-catalog-price-filter', '2026-09-02-label-search-input']);
+  assert.deepEqual([...slugs].sort(), ['catalog-price-filter', 'label-search-input']);
+});
+
+test('req-ids: a slug with dates in its own name survives the date prefix strip', () => {
+  assert.deepEqual([...archivedSlugs(['2026-09-02-report-2026-summary'])], ['report-2026-summary']);
+});
+
+test('req-ids: anything not date-prefixed is left alone rather than mangled', () => {
+  assert.deepEqual([...archivedSlugs(['not-a-dated-dir'])], ['not-a-dated-dir']);
 });
