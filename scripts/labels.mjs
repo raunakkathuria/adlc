@@ -9,9 +9,10 @@
 //   node scripts/labels.mjs add <issue> <label>...     -> add labels (needs-human, origin:adlc)
 //
 // state and type are families: an issue carries exactly one of each, so setting one withdraws
-// the last. `add` is for labels that stand alone. Setting a state also clears needs-human,
-// because a station announcing where the work is means the line has resumed — every park either
-// exits immediately or is mutually exclusive with the state call that follows it.
+// the last. `add` is for labels that stand alone. Setting a state also clears needs-human and any
+// resolution:* — a station announcing where the work is means the line has resumed, so a park and
+// a terminal verdict are both stale. Every park either exits immediately or is mutually exclusive
+// with the state call that follows it, so this cannot erase a live one.
 //
 // Needs `gh` and GH_TOKEN. Unknown labels are refused — a typo must fail loudly, not create
 // a new lane on the board.
@@ -52,17 +53,22 @@ function ensure(names) {
  * Which label to add and which to withdraw so an issue carries exactly one of a family.
  * `alsoRemove` is for labels outside the family that this transition invalidates.
  */
-export function exclusive(current, next, prefix, alsoRemove = []) {
+export function exclusive(current, next, prefix, alsoRemove = [], alsoPrefixes = []) {
   return {
     add: next,
-    remove: current.filter((n) => (n.startsWith(prefix) && n !== next) || alsoRemove.includes(n)),
+    remove: current.filter(
+      (n) =>
+        (n.startsWith(prefix) && n !== next) ||
+        alsoRemove.includes(n) ||
+        alsoPrefixes.some((p) => n.startsWith(p)),
+    ),
   };
 }
 
-function setExclusive(issue, next, prefix, alsoRemove = []) {
+function setExclusive(issue, next, prefix, alsoRemove = [], alsoPrefixes = []) {
   ensure([next]);
   const current = JSON.parse(gh('issue', 'view', issue, '--json', 'labels')).labels.map((l) => l.name);
-  const { add, remove } = exclusive(current, next, prefix, alsoRemove);
+  const { add, remove } = exclusive(current, next, prefix, alsoRemove, alsoPrefixes);
   const args = ['issue', 'edit', issue, '--add-label', add];
   if (remove.length) args.push('--remove-label', remove.join(','));
   gh(...args);
@@ -77,7 +83,7 @@ if (cmd === 'ensure') {
   const [issue, state] = rest;
   const name = `state:${state}`;
   if (!LABELS[name]) throw new Error(`unknown state: ${state}`);
-  setExclusive(issue, name, 'state:', ['needs-human']);
+  setExclusive(issue, name, 'state:', ['needs-human'], ['resolution:']);
 } else if (cmd === 'type') {
   const [issue, type] = rest;
   const name = `type:${type}`;

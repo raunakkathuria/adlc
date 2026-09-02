@@ -35,3 +35,37 @@ test('labels: unrelated families are untouched', () => {
   const { remove } = exclusive(['type:bug', 'origin:adlc', 'state:triaging'], 'state:building', 'state:');
   assert.deepEqual(remove, ['state:triaging']);
 });
+
+// --- A terminal verdict is stale the moment the line resumes -------------------------------------
+// resolution:* records how an issue ENDED. #29 was closed not-actionable, reopened, and reached
+// state:spec-draft still wearing that label — the board claiming both "being drafted" and
+// "closed: too thin to act on". Same family as needs-human, same cure.
+
+test('labels: setting a state clears a resolution — the issue is being worked again', () => {
+  const { remove } = exclusive(
+    ['state:triaging', 'resolution:not-actionable', 'type:feature'],
+    'state:spec-draft', 'state:', ['needs-human'], ['resolution:'],
+  );
+  assert.deepEqual(remove.sort(), ['resolution:not-actionable', 'state:triaging']);
+});
+
+test('labels: not-reproducible clears too — reopening it is the retry it invites', () => {
+  const { remove } = exclusive(
+    ['state:triaging', 'resolution:not-reproducible'],
+    'state:spec-draft', 'state:', ['needs-human'], ['resolution:'],
+  );
+  assert.ok(remove.includes('resolution:not-reproducible'));
+});
+
+test('labels: a park and a verdict clear together, and nothing else does', () => {
+  const { remove } = exclusive(
+    ['state:triaging', 'needs-human', 'resolution:not-actionable', 'type:bug', 'origin:adlc'],
+    'state:building', 'state:', ['needs-human'], ['resolution:'],
+  );
+  assert.deepEqual(remove.sort(), ['needs-human', 'resolution:not-actionable', 'state:triaging']);
+});
+
+test('labels: setting a type leaves state, park and verdict alone', () => {
+  const { remove } = exclusive(['type:bug', 'state:triaging', 'needs-human'], 'type:feature', 'type:');
+  assert.deepEqual(remove, ['type:bug'], 'type is its own family and minds its own business');
+});
