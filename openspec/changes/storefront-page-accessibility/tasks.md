@@ -1,0 +1,30 @@
+# Tasks
+
+## REQ-CAT-7 — catalogue items region announces changes
+
+- [ ] 1.1 Write a test asserting `#items` is served with `role="status"` (or an equivalent `aria-live` attribute) on first page load. Watch it fail against today's plain `<div id="items">`.
+- [ ] 1.2 Write a test asserting that a search transitioning the list to and from the empty state (`REQ-CAT-6`) writes its content inside that same live region.
+- [ ] 1.3 Write a test asserting that an order which changes a displayed item's stock also updates content inside that live region, independently of the `#note` outcome announcement (`REQ-ORD-7`).
+- [ ] 1.4 Add the live-region attribute to `#items` in `app/index.html`.
+
+## REQ-CAT-8 — catalogue items are exposed as a list
+
+- [ ] 2.1 Write a test asserting the catalogue exposes its items as a semantic list (native `<ul>`/`<li>` or `role="list"`/`role="listitem"`) when it holds more than one item. Watch it fail against today's bare `div.card` siblings.
+- [ ] 2.2 Write a test asserting the list structure survives a search that narrows the results to fewer items.
+- [ ] 2.3 Wrap the rendered item cards in list/listitem markup in `app/index.html`, keeping the existing visual layout.
+
+## REQ-CAT-9 — item names render as inert text everywhere they appear
+
+- [ ] 3.1 Write a test asserting an item name containing markup characters (e.g. a quote or `<`) displays as inert text in the visible name element, the quantity control's accessible name, and the Order button's accessible name — not parsed as markup. Watch it fail against today's unescaped `${item.name}` interpolation at all three sites.
+- [ ] 3.2 Write a test asserting a script-injection-shaped name (e.g. an `onerror` handler) does not run at any of the three sites.
+- [ ] 3.3 Escape `item.name` at all three interpolation sites in `app/index.html`, reusing the existing `escapeHtml` helper.
+
+## REQ-ORD-9 — keyboard focus survives placing an order
+
+- [ ] 4.1 Write a test asserting that once an accepted order's re-render completes, focus is on an operable control belonging to the item just ordered rather than the document body. Watch it fail against today's `innerHTML` replacement, which drops focus to `<body>`.
+- [ ] 4.2 Write a test asserting the same holds when the order is rejected.
+- [ ] 4.3 Change `order()`/`loadItems()` in `app/index.html` so the item just ordered keeps or regains focus on one of its own controls after the list re-renders.
+
+## Verification
+
+- [ ] 5.1 Run `npm run verify` and confirm every new test passes and requirement coverage is green for REQ-CAT-7, REQ-CAT-8, REQ-CAT-9, and REQ-ORD-9.
