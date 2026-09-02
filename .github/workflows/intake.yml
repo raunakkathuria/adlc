@@ -214,7 +214,20 @@ jobs:
         if: steps.runner.outputs.on == 'true' && steps.depth.outputs.parked == 'false' && steps.verdict.outputs.route == 'park'
         run: |
           node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
-          gh issue comment "$ISSUE" --body "$(printf 'Triage could not produce a valid verdict for this issue, so the line fails closed and parks it. A person should look, then re-run intake with `gh workflow run intake.yml -f issue_number=%s`.\n\nWhat it emitted, first 400 characters:\n\n```\n%s\n```' "$ISSUE" "$(head -c 400 work/triage.txt 2>/dev/null)")"
+            # The verdict is model output, so it travels as a file and is indented rather than
+            # fenced — a ``` inside it would otherwise break out of the block.
+            node -e '
+              const fs = require("fs");
+              let raw = "";
+              try { raw = fs.readFileSync("work/triage.txt", "utf8"); } catch {}
+              const excerpt = raw.slice(0, 400).split("\n").map((l) => "    " + l).join("\n");
+              fs.writeFileSync("work/park.md",
+                "Triage could not produce a valid verdict for this issue, so the line fails closed and parks it. "
+                + "A person should look, then re-run intake with `gh workflow run intake.yml -f issue_number="
+                + process.env.ISSUE + "`.\n\n"
+                + (excerpt.trim() ? "What it emitted, first 400 characters:\n\n" + excerpt + "\n" : "It emitted nothing.\n"));
+            '
+            gh issue comment "$ISSUE" --body-file work/park.md
 
       - name: Recurrence — reopen the original, it carries the history
         if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.route == 'recurrence'
