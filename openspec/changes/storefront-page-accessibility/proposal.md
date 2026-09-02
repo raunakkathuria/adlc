@@ -13,7 +13,7 @@ This is one change, not four, because splitting it means four gate decisions and
 
 ## What changes for the user
 
-Someone using a screen reader hears the catalogue announce itself: an empty search result, a stock count that changed after an order, and the size of the list itself, all read automatically instead of silently. They can navigate the catalogue as a list, the way a sighted user sees it as one. A keyboard user who places an order keeps their place afterward instead of landing back at the top of the page. And no item's name — however it's spelled — can break out of the page's markup or run as script.
+Someone using a screen reader hears the catalogue announce itself: an empty search result, a stock count that changed after an order, and the size of the list itself, all read automatically instead of silently — concisely, as a count of what changed rather than a recitation of every item, and once a search settles rather than once per keystroke. They can navigate the catalogue as a list, the way a sighted user sees it as one, and that structure holds regardless of how the page styles the list. A keyboard user who places an order keeps their place afterward instead of landing back at the top of the page. And no item's name — however it's spelled — can break out of the page's markup or run as script.
 
 Nothing changes for a sighted mouse user: the page looks the same, and the ordering rules (`REQ-ORD-1` through `REQ-ORD-6`) are untouched.
 
@@ -23,6 +23,8 @@ Nothing changes for a sighted mouse user: the page looks the same, and the order
 - A general HTML-escaping policy for every field the product might ever render — only the item name, the site named in #49.
 - Any change to search (`REQ-CAT-3`), the price filter (`REQ-CAT-4`), or the ordering rules (`REQ-ORD-1`–`REQ-ORD-6`) themselves — only how the page presents them.
 - The search field's accessible name (`REQ-CAT-5`), the empty-state query escaping (`REQ-CAT-6`), the order-outcome live region (`REQ-ORD-7`), and the Order button's accessible name (`REQ-ORD-8`) already shipped and need no change here.
+- The unescaped `item.sku` interpolated into the `id`/`data-sku` attributes — a separate site from the three `REQ-CAT-9` covers, filed as #57.
+- The missing debounce on the search fetch itself — `REQ-CAT-7` requires the *announcement* to coalesce around a settled query, but the underlying per-keystroke fetch is a correctness concern of search (`REQ-CAT-3`), filed separately as #58.
 
 ## Open question
 

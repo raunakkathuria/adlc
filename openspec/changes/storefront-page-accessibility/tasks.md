@@ -1,17 +1,20 @@
 # Tasks
 
-## REQ-CAT-7 — catalogue items region announces changes
+## REQ-CAT-7 — catalogue items region announces changes, proportionately
 
 - [ ] 1.1 Write a test asserting `#items` is served with `role="status"` (or an equivalent `aria-live` attribute) on first page load. Watch it fail against today's plain `<div id="items">`.
 - [ ] 1.2 Write a test asserting that a search transitioning the list to and from the empty state (`REQ-CAT-6`) writes its content inside that same live region.
 - [ ] 1.3 Write a test asserting that an order which changes a displayed item's stock also updates content inside that live region, independently of the `#note` outcome announcement (`REQ-ORD-7`).
-- [ ] 1.4 Add the live-region attribute to `#items` in `app/index.html`.
+- [ ] 1.4 Write a test asserting that a list-change announcement (from a search or an order) states that the list changed and how many items now match, without reciting every displayed item's name, SKU, price, or stock. Watch it fail against an announcement that re-renders the full item markup into the live region.
+- [ ] 1.5 Write a test asserting that typing several characters into the search field in quick succession produces a single announcement once the query settles, not one announcement per keystroke. Watch it fail against today's per-keystroke `loadItems()` call re-announcing on every character.
+- [ ] 1.6 Add the live-region attribute to `#items` in `app/index.html`, make its announcement a concise summary (that the list changed and its new count) rather than the full re-rendered list, and coalesce rapid successive changes so only one announcement fires once results settle.
 
-## REQ-CAT-8 — catalogue items are exposed as a list
+## REQ-CAT-8 — catalogue items are exposed as a list, as the page is actually presented
 
 - [ ] 2.1 Write a test asserting the catalogue exposes its items as a semantic list (native `<ul>`/`<li>` or `role="list"`/`role="listitem"`) when it holds more than one item. Watch it fail against today's bare `div.card` siblings.
 - [ ] 2.2 Write a test asserting the list structure survives a search that narrows the results to fewer items.
-- [ ] 2.3 Wrap the rendered item cards in list/listitem markup in `app/index.html`, keeping the existing visual layout.
+- [ ] 2.3 Write a test asserting the list's item semantics are declared explicitly rather than relying solely on the default role a browser computes for the underlying elements, so that a presentation choice the page makes on that list (for example `list-style: none`) cannot cause assistive technology to lose the item count or navigation. Watch it fail against markup that depends only on native `<ul>`/`<li>` default roles.
+- [ ] 2.4 Wrap the rendered item cards in list/listitem markup in `app/index.html`, keeping the existing visual layout, choosing semantics that hold under the page's own styling rather than relying solely on the browser's default role for the underlying elements.
 
 ## REQ-CAT-9 — item names render as inert text everywhere they appear
 
