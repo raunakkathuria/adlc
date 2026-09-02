@@ -117,3 +117,15 @@ test('req-ids: the same slug from tree and branch is one delta, never a self-col
   assert.deepEqual([...deltas[0].added], SPLIT.catalogOnly);
   assert.deepEqual(auditIds({ living: new Set(), deltas }).collisions, []);
 });
+
+// --- A claim is a heading, not a mention ---------------------------------------------------------
+// prompts/spec.md puts the id in the requirement heading. Every other REQ id in a delta is a
+// cross-reference — "as in REQ-CAT-1", "composes with (q, REQ-CAT-3)" — and reading those as claims
+// makes the guard fail honest deltas. It did exactly that to issue #18 before this was fixed.
+
+test('req-ids: only the requirement heading is a claim, never a cross-reference', () => {
+  const text = readFileSync(join(HERE, 'fixtures/delta-crossref.md'), 'utf8');
+  const expected = JSON.parse(readFileSync(join(HERE, 'fixtures/crossref.expected.json'), 'utf8'));
+  const { added } = parseSections(text);
+  assert.deepEqual([...added], expected.added);
+});
