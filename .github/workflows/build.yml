@@ -232,7 +232,11 @@ jobs:
       - name: Red gate — report to the issue, no PR
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true' && steps.verify.outputs.green == 'false'
         run: |
-          gh issue comment "$ISSUE" --body "$(printf 'The build finished but the deterministic gate is red — no pull request was opened. The build report:\n\n%s' "$(tail -c 60000 work/build.md)")"
+          # The build report is model output, so it travels as a file — see this file's header.
+          { printf 'The build finished but the deterministic gate is red — no pull request was opened. The build report:\n\n'
+            tail -c 60000 work/build.md
+          } > work/red-gate.md
+          gh issue comment "$ISSUE" --body-file work/red-gate.md
           node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
           exit 1
 

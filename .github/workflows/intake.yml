@@ -245,13 +245,25 @@ jobs:
           DUP: ${{ steps.verdict.outputs.ref }}
         run: |
           node "$ADLC/scripts/labels.mjs" add "$ISSUE" resolution:not-actionable
-          gh issue close "$ISSUE" --reason "not planned" --comment "$(printf 'Duplicate of #%s — the line continues there.\n\n> %s' "$DUP" "$(cat work/reason.md)")"
+          # The reason is model output. gh issue close takes no --comment-file, so comment then close.
+          { printf 'Duplicate of #%s — the line continues there.\n\n> ' "$DUP"
+            cat work/reason.md
+            printf '\n'
+          } > work/dup-comment.md
+          gh issue comment "$ISSUE" --body-file work/dup-comment.md
+          gh issue close "$ISSUE" --reason "not planned"
 
       - name: Not actionable — close with the reason
         if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.route == 'close'
         run: |
           node "$ADLC/scripts/labels.mjs" add "$ISSUE" resolution:not-actionable
-          gh issue close "$ISSUE" --reason "not planned" --comment "$(printf 'The line triaged this as not actionable and closed it.\n\n> %s\n\nIf that is wrong, add the missing detail and reopen — reopening re-enters the line.' "$(cat work/reason.md)")"
+          # Same shape: the reason is model output, so it is a file and the close carries no comment.
+          { printf 'The line triaged this as not actionable and closed it.\n\n> '
+            cat work/reason.md
+            printf '\n\nIf that is wrong, add the missing detail and reopen — reopening re-enters the line.\n'
+          } > work/close-comment.md
+          gh issue comment "$ISSUE" --body-file work/close-comment.md
+          gh issue close "$ISSUE" --reason "not planned"
 
       - name: Label the type
         if: steps.runner.outputs.on == 'true' && (steps.verdict.outputs.route == 'spec' || steps.verdict.outputs.route == 'reproduce')
