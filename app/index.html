@@ -109,7 +109,7 @@ async function loadItems() {
         <div class="meta">${item.sku} · ${money(item.price)} · ${item.stock} in stock</div>
       </div>
       <input type="number" min="1" value="1" id="qty-${item.sku}" aria-label="Quantity of ${item.name}">
-      <button data-sku="${item.sku}">Order</button>
+      <button data-sku="${item.sku}" aria-label="Order ${item.name}">Order</button>
     </div>
   `).join('');
 
