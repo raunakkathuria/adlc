@@ -25,17 +25,22 @@ If the existing-issues listing shows an **open** issue describing the same probl
 
 ## Output
 
-**One JSON object, on one line, and nothing else.** A machine parses this; anything around it is a bug. No code fence, no preamble, no explanation after. The shape is:
+**A JSON object on the first line, then your reasoning as prose.** Two parts, in that order, because they are read by different readers.
 
-    {"actionable":true,"type":"bug","slug":"kebab-case-name","duplicate_of":null,"recurrence_of":null,"requirements":["REQ-ORD-4"],"reason":"one sentence"}
+    {"actionable":true,"type":"bug","slug":"kebab-case-name","duplicate_of":null,"recurrence_of":null,"requirements":["REQ-ORD-4"]}
 
-That is indented as an illustration; emit the object flush left with nothing before or after it, so `jq` can read it directly.
+    Why: the report names REQ-ORD-4 and the observed total contradicts it, so this is
+    a broken promise rather than new behaviour.
+
+Both are indented above as illustration; emit them flush left, the object first with no code fence and no preamble.
+
+**The object carries no free text, deliberately.** It used to hold a `reason`, and a long one truncated the object mid-string — the closing brace never arrived, the parse failed, and the line parked issues on verdicts it had reached correctly. Machine fields only keeps the object short by construction rather than by your restraint. Everything after the first line is your reasoning: a human reads it, and it can be as long as it needs to be.
 
 - `actionable` — `false` for questions, duplicates, already-done, spam, or too-thin reports.
 - `type` — one of the four above; `null` when not actionable.
 - `slug` — short kebab-case name for the change; the spec delta will live at `openspec/changes/<slug>/`. Empty when not actionable.
 - `duplicate_of` / `recurrence_of` — issue number, or `null`.
 - `requirements` — the REQ ids the issue bears on; empty if none apply.
-- `reason` — why you decided this, in one sentence. This is what a human reads when they disagree with you, and what gets posted on a closed issue as the explanation.
+- **the prose after the object** — why you decided this. It is what a human reads when they disagree with you, and it is posted on a closed issue as the explanation. No length limit; it is not parsed.
 
-If you cannot decide, say so in `reason` and set `actionable` to `false` — the line fails closed, and a human can always relabel.
+If you cannot decide, say so in the prose and set `actionable` to `false` — the line fails closed, and a human can always relabel.
