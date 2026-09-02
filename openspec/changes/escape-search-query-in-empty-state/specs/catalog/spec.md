@@ -7,7 +7,7 @@ When a search (`REQ-CAT-3`) matches no items, the catalogue page's "no results" 
 #### Scenario: an ordinary query still displays correctly
 
 - **WHEN** the search query is `mug` and it matches no items
-- **THEN** the empty-state message reads `Nothing matches "mug".`, unaffected by this requirement
+- **THEN** the empty-state message reads `Nothing matches “mug”.`, unaffected by this requirement
 
 #### Scenario: markup in the query is shown as text, not parsed
 
