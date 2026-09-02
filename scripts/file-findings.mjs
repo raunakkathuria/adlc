@@ -30,59 +30,74 @@ function gh(...args) {
   return execFileSync('gh', args, { encoding: 'utf8' });
 }
 
-const [reportFile, parentIssue] = process.argv.slice(2);
-if (!reportFile || !parentIssue) throw new Error('usage: file-findings.mjs <report-file> <parent-issue|->');
-
-const report = readFileSync(reportFile, 'utf8');
-const line = report.split('\n').find((l) => l.startsWith('OUT-OF-SCOPE-FINDINGS:'));
-if (!line) {
-  console.log('No OUT-OF-SCOPE-FINDINGS line in the report; nothing to file.');
-  process.exit(0);
+/**
+ * The findings line, wherever it sits. Leading whitespace is tolerated because prompts/verify.md
+ * illustrates this line indented — and an indented line matched nothing, so the station said
+ * "nothing to file" and dropped every finding it had just made, without a word.
+ */
+export function findingsLine(report) {
+  return report.split('\n').find((l) => l.trimStart().startsWith('OUT-OF-SCOPE-FINDINGS:'));
 }
 
-let findings;
-try {
-  findings = JSON.parse(line.slice('OUT-OF-SCOPE-FINDINGS:'.length).trim());
-  if (!Array.isArray(findings)) throw new Error('not an array');
-} catch (err) {
-  console.warn(`OUT-OF-SCOPE-FINDINGS line did not parse (${err.message}); filing nothing — fail closed.`);
-  process.exit(0);
-}
+// The CLI sits behind isMain so the parser above can be imported and tested, the same shape as
+// links.mjs, req-coverage.mjs and req-ids.mjs.
+const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
 
-let parentUrl = '';
-let depth = 1;
-if (parentIssue !== '-') {
-  const parent = JSON.parse(gh('issue', 'view', parentIssue, '--json', 'body,url'));
-  parentUrl = parent.url;
-  const links = parseLinks([parent.body ?? '', ...issueCommentBodies(parentIssue)].join('\n'));
-  depth = Number(links.depth ?? 0) + 1;
-}
-const foundBy = parentUrl ? `while working ${parentUrl}` : 'on a scheduled exploration of the default branch';
+if (isMain) {
+  const [reportFile, parentIssue] = process.argv.slice(2);
+  if (!reportFile || !parentIssue) throw new Error('usage: file-findings.mjs <report-file> <parent-issue|->');
 
-const sameTitle = (list, title) => list.find((i) => i.title.trim().toLowerCase() === title.trim().toLowerCase());
+  const report = readFileSync(reportFile, 'utf8');
+  const line = findingsLine(report);
+  if (!line) {
+    console.log('No OUT-OF-SCOPE-FINDINGS line in the report; nothing to file.');
+    process.exit(0);
+  }
 
-for (const { title, body } of findings) {
-  if (!title || !body) continue;
+  let findings;
   try {
-    const open = JSON.parse(gh('issue', 'list', '--state', 'open', '--search', JSON.stringify(title), '--json', 'number,title'));
-    const dupe = sameTitle(open, title);
-    if (dupe) {
-      gh('issue', 'comment', String(dupe.number), '--body', `Seen again ${foundBy}:\n\n${body}`);
-      console.log(`#${dupe.number} already tracks "${title}" — commented instead of duplicating.`);
-      continue;
-    }
-    const closed = JSON.parse(gh('issue', 'list', '--state', 'closed', '--label', 'resolution:not-reproducible', '--search', JSON.stringify(title), '--json', 'number,title,url'));
-    const recurrence = sameTitle(closed, title);
-    if (recurrence) {
-      gh('issue', 'reopen', String(recurrence.number), '--comment', `Reopened: seen again ${foundBy} after being closed as not reproducible — a recurrence is evidence.\n\n${body}`);
-      console.log(`Filed ${recurrence.url}`);
-      continue;
-    }
-    const trailer = renderLinks(parentUrl ? { origin_issue: parentUrl, depth: String(depth) } : { depth: String(depth) });
-    const issueBody = `${body}\n\nFound by the line ${foundBy}.\n\n${trailer}`;
-    const url = gh('issue', 'create', '--title', title, '--body', issueBody, '--label', 'origin:adlc').trim();
-    console.log(`Filed ${url}`);
+    findings = JSON.parse(line.slice(line.indexOf(':') + 1).trim());
+    if (!Array.isArray(findings)) throw new Error('not an array');
   } catch (err) {
-    console.warn(`Could not file "${title}": ${err.message} — continuing.`);
+    console.warn(`OUT-OF-SCOPE-FINDINGS line did not parse (${err.message}); filing nothing — fail closed.`);
+    process.exit(0);
+  }
+
+  let parentUrl = '';
+  let depth = 1;
+  if (parentIssue !== '-') {
+    const parent = JSON.parse(gh('issue', 'view', parentIssue, '--json', 'body,url'));
+    parentUrl = parent.url;
+    const links = parseLinks([parent.body ?? '', ...issueCommentBodies(parentIssue)].join('\n'));
+    depth = Number(links.depth ?? 0) + 1;
+  }
+  const foundBy = parentUrl ? `while working ${parentUrl}` : 'on a scheduled exploration of the default branch';
+
+  const sameTitle = (list, title) => list.find((i) => i.title.trim().toLowerCase() === title.trim().toLowerCase());
+
+  for (const { title, body } of findings) {
+    if (!title || !body) continue;
+    try {
+      const open = JSON.parse(gh('issue', 'list', '--state', 'open', '--search', JSON.stringify(title), '--json', 'number,title'));
+      const dupe = sameTitle(open, title);
+      if (dupe) {
+        gh('issue', 'comment', String(dupe.number), '--body', `Seen again ${foundBy}:\n\n${body}`);
+        console.log(`#${dupe.number} already tracks "${title}" — commented instead of duplicating.`);
+        continue;
+      }
+      const closed = JSON.parse(gh('issue', 'list', '--state', 'closed', '--label', 'resolution:not-reproducible', '--search', JSON.stringify(title), '--json', 'number,title,url'));
+      const recurrence = sameTitle(closed, title);
+      if (recurrence) {
+        gh('issue', 'reopen', String(recurrence.number), '--comment', `Reopened: seen again ${foundBy} after being closed as not reproducible — a recurrence is evidence.\n\n${body}`);
+        console.log(`Filed ${recurrence.url}`);
+        continue;
+      }
+      const trailer = renderLinks(parentUrl ? { origin_issue: parentUrl, depth: String(depth) } : { depth: String(depth) });
+      const issueBody = `${body}\n\nFound by the line ${foundBy}.\n\n${trailer}`;
+      const url = gh('issue', 'create', '--title', title, '--body', issueBody, '--label', 'origin:adlc').trim();
+      console.log(`Filed ${url}`);
+    } catch (err) {
+      console.warn(`Could not file "${title}": ${err.message} — continuing.`);
+    }
   }
 }

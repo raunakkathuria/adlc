@@ -163,8 +163,13 @@ jobs:
           node -e '
             const fs = require("fs");
             const text = fs.readFileSync("work/verifier.md", "utf8");
-            const match = (text.match(/^SPEC-MATCH:\s*(COMPLETE|MISMATCH)\s*$/m) ?? [])[1];
-            const impl = (text.match(/^FEATURE-IMPLEMENTED:\s*(YES|NO|N\/A)\s*$/m) ?? [])[1];
+            // Leading whitespace is tolerated: the prompt illustrates these trailers indented,
+            // and an indented COMPLETE was once read as no verdict at all — which appended a
+            // MISMATCH, burnt a loop-cap attempt, and sent a sound implementation back to the
+            // Planner. Tolerating the indent accepts a differently formatted verdict, never a
+            // different one.
+            const match = (text.match(/^[ \t]*SPEC-MATCH:\s*(COMPLETE|MISMATCH)\s*$/m) ?? [])[1];
+            const impl = (text.match(/^[ \t]*FEATURE-IMPLEMENTED:\s*(YES|NO|N\/A)\s*$/m) ?? [])[1];
             if (!match) fs.appendFileSync("work/verifier.md",
               "\n\n> The report above did not end with the required trailers; the line treats that as a MISMATCH — fail closed.\n\nSPEC-MATCH: MISMATCH\nFEATURE-IMPLEMENTED: N/A\n");
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `match=${match ?? "MISMATCH"}\nimplemented=${impl ?? "N/A"}\n`);
