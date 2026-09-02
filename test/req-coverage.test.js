@@ -6,7 +6,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audit, tasksComplete, summarise } from '../scripts/req-coverage.mjs';
+import { audit, tasksComplete, summarise, collect } from '../scripts/req-coverage.mjs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 const sets = ({ specified = [], known = [], tested = [] }) => ({
   specified: new Set(specified),
@@ -92,4 +95,31 @@ test('coverage: a requirement owing nothing yet is reported as in flight, not co
 test('coverage: owed and in-flight are reported together when both exist', () => {
   const line = summarise({ owed: new Set(['LIVING-1', 'DELTA-1']), inFlight: new Set(['DELTA-2']) });
   assert.match(line, /2 requirements, all covered; 1 in flight/);
+});
+
+// --- collect() reads the tree it is pointed at -------------------------------------------------
+// The `root` option exists so a consumer repo can run these scripts from its .adlc/ checkout and
+// still audit its OWN spec. It was added and hand-verified once; this is the automated version,
+// because a hand-verified option is an untested one.
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const TREE = join(HERE, 'fixtures/tree');
+// Expected ids live in fixtures, not here: this file is scanned by the gate, so an id written
+// in it reads as an id a test claims. The gate caught exactly that mistake while this was drafted.
+const T = JSON.parse(readFileSync(join(HERE, 'fixtures/tree.expected.json'), 'utf8'));
+
+test('coverage: collect reads the root it is given, not the one the script lives in', async () => {
+  const found = await collect('openspec/specs', /^spec\.md$/, { recursive: true, root: TREE });
+  assert.deepEqual([...found.keys()].sort(), T.ids);
+});
+
+test('coverage: collect obeys its filename pattern', async () => {
+  // notes.md in the same directory names an id and must be ignored.
+  const found = await collect('openspec/specs', /^spec\.md$/, { recursive: true, root: TREE });
+  assert.ok(!found.has(T.notInSpecMd), 'only spec.md files are specification');
+});
+
+test('coverage: collect records where each id was found, relative to that root', async () => {
+  const found = await collect('openspec/specs', /^spec\.md$/, { recursive: true, root: TREE });
+  assert.deepEqual([...found.get(T.ordersId)], [T.ordersPath]);
 });
