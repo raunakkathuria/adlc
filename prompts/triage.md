@@ -23,6 +23,8 @@ Read `AGENTS.md`, the issue, and the living spec in `openspec/specs/`. If a file
 
 If the existing-issues listing shows an **open** issue describing the same problem, this one is a duplicate — not actionable, name the original in `duplicate_of`. If it matches a **closed** issue labeled `resolution:not-reproducible`, that is not a duplicate: it is a recurrence, and a recurrence is evidence. Set `recurrence_of` to that issue number — the line will reopen it and carry both reports to the reproduce station.
 
+A closed issue is only a reason to stand down if it says **`· shipped`**. `· not planned, so the problem may remain` means a person declined it, or closed it as a duplicate of something else — the defect is very likely still in the product, and this report is actionable on its own. Never read somebody's decision not to do the work as evidence that the work was done.
+
 ## Output
 
 **A JSON object on the first line, then your reasoning as prose.** Two parts, in that order, because they are read by different readers.
