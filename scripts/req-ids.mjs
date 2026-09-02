@@ -32,8 +32,11 @@ import { collect } from './req-coverage.mjs';
 // from its .adlc/ checkout, so a script-relative root would audit the hub's spec instead of theirs.
 // npm and the workflows both invoke this from the repository root.
 const ROOT = resolve(process.cwd());
-const REQ_ID = /\bREQ-[A-Z]+-\d+\b/g;
 const SECTION = /^##\s+(ADDED|MODIFIED|REMOVED)\s+Requirements\s*$/i;
+// A delta CLAIMS an id in a requirement heading, and only there — prompts/spec.md puts it in
+// `### Requirement: REQ-CAT-4 — …`. Every other mention is a cross-reference ("as in REQ-CAT-1",
+// "composes with `q`, REQ-CAT-3"), and reading those as claims fails honest deltas.
+const CLAIM = /^###\s+Requirement:\s*(REQ-[A-Z]+-\d+)\b/;
 
 /**
  * Split one delta spec.md into the ids it adds, modifies and removes. Section headers decide
@@ -47,7 +50,8 @@ export function parseSections(text) {
     const header = line.match(SECTION);
     if (header) { bucket = header[1].toLowerCase(); continue; }
     if (!bucket) continue;
-    for (const id of line.match(REQ_ID) ?? []) out[bucket].add(id);
+    const claim = line.match(CLAIM);
+    if (claim) out[bucket].add(claim[1]);
   }
   return out;
 }
