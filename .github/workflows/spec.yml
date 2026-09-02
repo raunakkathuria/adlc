@@ -198,7 +198,10 @@ jobs:
           fi
           openspec validate "$SLUG"
           # Ids are allocated by a model that cannot see the other deltas in flight, so the
-          # allocation is checked deterministically here — before the spec PR exists.
+          # allocation is checked deterministically here — before the spec PR exists. The other
+          # deltas are on their own spec branches and nowhere in this tree, so fetch them first:
+          # without this the guard only ever compares against the living spec.
+          git fetch -q origin '+refs/heads/spec/*:refs/remotes/origin/spec/*' || true
           node "$ADLC/scripts/req-ids.mjs"
           # -uall matters: without it git collapses a wholly-untracked directory into one entry
           # ("?? openspec/changes/"), which never matches the filter below — so the change's own
