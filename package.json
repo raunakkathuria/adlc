@@ -12,6 +12,7 @@
     "test": "node --test 'test/*.test.js'",
     "req-coverage": "node scripts/req-coverage.mjs",
     "verify": "npm test --silent && npm run req-coverage --silent",
-    "req-ids": "node scripts/req-ids.mjs"
+    "req-ids": "node scripts/req-ids.mjs",
+    "lint-workflows": "node scripts/lint-workflows.mjs"
   }
 }

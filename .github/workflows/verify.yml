@@ -21,3 +21,8 @@ jobs:
 
       # No `npm ci` — there are no dependencies. That is deliberate.
       - run: npm run verify
+
+      # A run: block is shell, and nothing was checking it. actionlint hands shell linting to
+      # shellcheck and skips it silently when shellcheck is missing, so an `if` with no `fi` sat
+      # in intake.yml from the start and the reproduce station never once ran.
+      - run: npm run lint-workflows

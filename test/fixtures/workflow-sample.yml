@@ -1,0 +1,17 @@
+name: sample
+jobs:
+  one:
+    steps:
+      - name: fine
+        run: |
+          if true; then
+            echo ok
+          fi
+      - name: broken
+        run: |
+          if true; then
+            echo missing-fi
+      - uses: actions/checkout@v7
+      - name: uses an expression
+        run: |
+          echo "${{ github.event.issue.number }}"
