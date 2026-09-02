@@ -1,6 +1,43 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import { withServer } from './helpers.mjs';
+
+/**
+ * Load the real page served for `/` and run its actual inline script against a minimal
+ * DOM stub, then drive a search through it — so REQ-CAT-6 is exercised the way a browser
+ * would render the empty-state message, not by pattern-matching the script's source.
+ */
+async function emptyStateHtml(base, query) {
+  const html = await (await fetch(base + '/')).text();
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+
+  const elements = new Map();
+  function element(id) {
+    if (!elements.has(id)) {
+      elements.set(id, {
+        value: '',
+        innerHTML: '',
+        addEventListener() {},
+        querySelectorAll() { return []; },
+      });
+    }
+    return elements.get(id);
+  }
+
+  const sandbox = {
+    document: { getElementById: element },
+    fetch: (path, options) => fetch(base + path, options),
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(script, sandbox);
+  await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+
+  element('q').value = query;
+  await sandbox.loadItems();
+
+  return element('items').innerHTML;
+}
 
 test('REQ-CAT-1: lists every item with sku, name, price and stock', () =>
   withServer(async ({ get }) => {
@@ -123,6 +160,26 @@ test('REQ-CAT-4: a repeated max_price is refused with 400', () =>
     const { status, body } = await get('/api/items?max_price=100&max_price=200');
     assert.equal(status, 400);
     assert.equal(body.reason, 'invalid_max_price');
+  }));
+
+test('REQ-CAT-6: an ordinary query still displays correctly in the empty-state message', () =>
+  withServer(async ({ base }) => {
+    const html = await emptyStateHtml(base, 'no-such-item');
+    assert.match(html, /Nothing matches “no-such-item”\./);
+  }));
+
+test('REQ-CAT-6: markup in the query is shown as text, not parsed', () =>
+  withServer(async ({ base }) => {
+    const html = await emptyStateHtml(base, '<b>bold</b> & "quoted"');
+    assert.doesNotMatch(html, /<b>bold<\/b>/);
+    assert.match(html, /&lt;b&gt;bold&lt;\/b&gt; &amp; &quot;quoted&quot;/);
+  }));
+
+test('REQ-CAT-6: a script-injection query does not run and is shown as inert text', () =>
+  withServer(async ({ base }) => {
+    const html = await emptyStateHtml(base, '<img src=x onerror=alert(1)>');
+    assert.doesNotMatch(html, /<img[^>]*onerror/);
+    assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
   }));
 
 test('REQ-CAT-5: the search field has an accessible name independent of its placeholder', () =>
