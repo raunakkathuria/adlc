@@ -15,13 +15,23 @@
 //
 // Archived deltas are history: their ids are already in the living spec, so counting them would
 // report every shipped change as a collision.
+//
+// The deltas being checked come from two places, because one is not enough. The spec station
+// checks out main and its own spec branch, so a delta someone else is drafting right now is
+// nowhere in the working tree — it lives on origin/spec/<theirs>. Reading only the tree is what
+// let REQ-CAT-4 be claimed twice: at the time, the other claim was on a branch and not yet in the
+// living spec. So the branches are read too, and both sources are grouped by slug, which is also
+// what stops the remote copy of your own delta reading as a rival claimant.
 
 import { readdir, readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { join, resolve } from 'node:path';
 import { collect } from './req-coverage.mjs';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// The tree under review, not the one this file lives in: a consumer repo runs the line's scripts
+// from its .adlc/ checkout, so a script-relative root would audit the hub's spec instead of theirs.
+// npm and the workflows both invoke this from the repository root.
+const ROOT = resolve(process.cwd());
 const REQ_ID = /\bREQ-[A-Z]+-\d+\b/g;
 const SECTION = /^##\s+(ADDED|MODIFIED|REMOVED)\s+Requirements\s*$/i;
 
@@ -40,6 +50,26 @@ export function parseSections(text) {
     for (const id of line.match(REQ_ID) ?? []) out[bucket].add(id);
   }
   return out;
+}
+
+/**
+ * Merge many delta spec files into one claim per change directory. A delta that touches two
+ * capabilities has two files and is still one claim; the same slug arriving from both the working
+ * tree and a remote branch is the same delta seen twice, not two claimants.
+ */
+export function groupBySlug(entries) {
+  const bySlug = new Map();
+  for (const { slug, text } of entries) {
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, { slug, added: new Set(), modified: new Set(), removed: new Set() });
+    }
+    const into = bySlug.get(slug);
+    const parsed = parseSections(text);
+    for (const bucket of ['added', 'modified', 'removed']) {
+      for (const id of parsed[bucket]) into[bucket].add(id);
+    }
+  }
+  return [...bySlug.values()];
 }
 
 /**
@@ -77,13 +107,15 @@ export function auditIds({ living, deltas }) {
 const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
 
 if (isMain) {
-  const living = new Set((await collect('openspec/specs', /^spec\.md$/, { recursive: true })).keys());
+  const living = new Set((await collect('openspec/specs', /^spec\.md$/, { recursive: true, root: ROOT })).keys());
 
-  const deltas = [];
+  const SLUG_OF = /^openspec\/changes\/([^/]+)\/.*\/spec\.md$/;
+  const entries = [];
+
+  // 1. The working tree — the delta being drafted right now.
   try {
     for (const entry of await readdir(join(ROOT, 'openspec/changes'), { withFileTypes: true })) {
       if (!entry.isDirectory() || entry.name === 'archive') continue;
-      const merged = { slug: entry.name, added: new Set(), modified: new Set(), removed: new Set() };
       const specs = join(ROOT, 'openspec/changes', entry.name, 'specs');
       let files = [];
       try {
@@ -91,14 +123,27 @@ if (isMain) {
           .filter((f) => f.isFile() && f.name === 'spec.md');
       } catch {} // a delta with no specs/ yet is not this guard's business
       for (const f of files) {
-        const parsed = parseSections(await readFile(join(f.parentPath, f.name), 'utf8'));
-        for (const bucket of ['added', 'modified', 'removed']) {
-          for (const id of parsed[bucket]) merged[bucket].add(id);
-        }
+        entries.push({ slug: entry.name, text: await readFile(join(f.parentPath, f.name), 'utf8') });
       }
-      deltas.push(merged);
     }
   } catch {} // no changes/ directory is a fine state
+
+  // 2. Every other spec branch — the deltas in flight that the tree cannot see. Best effort: no
+  //    git, no refs, or a shallow clone simply means nothing extra is known, never a false alarm.
+  const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+  try {
+    const refs = git('for-each-ref', '--format=%(refname)', 'refs/remotes/origin/spec/')
+      .split('\n').filter(Boolean);
+    for (const ref of refs) {
+      for (const path of git('ls-tree', '-r', '--name-only', ref, '--', 'openspec/changes').split('\n')) {
+        const slug = (path.match(SLUG_OF) ?? [])[1];
+        if (!slug || slug === 'archive') continue;
+        entries.push({ slug, text: git('show', `${ref}:${path}`) });
+      }
+    }
+  } catch {} // best effort by design
+
+  const deltas = groupBySlug(entries);
 
   const { collisions, unknown } = auditIds({ living, deltas });
 

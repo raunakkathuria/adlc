@@ -27,16 +27,16 @@ import { dirname, join, resolve } from 'node:path';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REQ_ID = /\bREQ-[A-Z]+-\d+\b/g;
 
-export async function collect(dir, filePattern, { recursive = false } = {}) {
+export async function collect(dir, filePattern, { recursive = false, root = ROOT } = {}) {
   const byId = new Map();
-  const entries = await readdir(join(ROOT, dir), { recursive, withFileTypes: true });
+  const entries = await readdir(join(root, dir), { recursive, withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile() || !filePattern.test(entry.name)) continue;
     const path = join(entry.parentPath, entry.name);
     const text = await readFile(path, 'utf8');
     for (const id of text.match(REQ_ID) ?? []) {
       if (!byId.has(id)) byId.set(id, new Set());
-      byId.get(id).add(path.slice(ROOT.length + 1));
+      byId.get(id).add(path.slice(root.length + 1));
     }
   }
   return byId;
