@@ -1,6 +1,53 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import { withServer } from './helpers.mjs';
+
+const LIVE_REGION = /role="status"|aria-live="(polite|assertive)"/;
+
+/**
+ * Load the real page served for `/`, and run its actual inline script against a minimal
+ * DOM stub wired to the live server, so REQ-ORD-7 is exercised the way a browser would run
+ * it rather than by pattern-matching the script's source.
+ */
+async function loadClientPage(base) {
+  const html = await (await fetch(base + '/')).text();
+  const noteMarkup = html.match(/<div id="note"[^>]*>/)?.[0] ?? '';
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+
+  const elements = new Map();
+  function element(id) {
+    if (!elements.has(id)) {
+      elements.set(id, {
+        value: '',
+        innerHTML: '',
+        dataset: {},
+        addEventListener() {},
+        querySelectorAll() { return []; },
+      });
+    }
+    return elements.get(id);
+  }
+
+  const sandbox = {
+    document: { getElementById: element },
+    fetch: (path, options) => fetch(base + path, options),
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(script, sandbox);
+  // the script's own bottom-of-file calls to these are fire-and-forget; wait for a full
+  // round trip so no request is still in flight once the test's server shuts down.
+  await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+
+  return {
+    noteMarkup,
+    order: async (sku, qty) => {
+      element(`qty-${sku}`).value = String(qty);
+      await sandbox.order(sku);
+    },
+    noteHtml: () => element('note').innerHTML,
+  };
+}
 
 test('REQ-ORD-1: an accepted order is created and takes units out of stock', () =>
   withServer(async ({ post, get, stock }) => {
@@ -77,4 +124,45 @@ test('REQ-ORD-6: a non-positive or fractional qty is a 400', () =>
       assert.equal(status, 400, `qty=${qty}`);
       assert.equal(body.reason, 'invalid_qty');
     }
+  }));
+
+test('REQ-ORD-7: the order-outcome region is an ARIA live region from the first page load', () =>
+  withServer(async ({ base }) => {
+    const html = await (await fetch(base + '/')).text();
+    const note = html.match(/<div id="note"[^>]*>/);
+    assert.ok(note, 'expected a #note element in the markup served for /');
+    assert.match(note[0], LIVE_REGION);
+  }));
+
+test("REQ-ORD-7: a successful order's confirmation is written into the live region", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    assert.match(page.noteMarkup, LIVE_REGION);
+
+    await page.order('MUG-1', 2);
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+  }));
+
+test("REQ-ORD-7: a rejected order's reason is written into the live region", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    assert.match(page.noteMarkup, LIVE_REGION);
+
+    await page.order('MUG-1', 21);
+    assert.match(page.noteHtml(), /Rejected/);
+  }));
+
+test("REQ-ORD-7: a second order's outcome replaces the live region's content rather than appending to it", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    assert.match(page.noteMarkup, LIVE_REGION);
+
+    await page.order('MUG-1', 21);
+    assert.match(page.noteHtml(), /Rejected/);
+
+    await page.order('MUG-1', 2);
+    const html = page.noteHtml();
+    assert.match(html, /Order #\d+ placed/);
+    assert.doesNotMatch(html, /Rejected/);
+    assert.equal((html.match(/<p/g) ?? []).length, 1);
   }));
