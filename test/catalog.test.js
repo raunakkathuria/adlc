@@ -124,3 +124,19 @@ test('REQ-CAT-4: a repeated max_price is refused with 400', () =>
     assert.equal(status, 400);
     assert.equal(body.reason, 'invalid_max_price');
   }));
+
+test('REQ-CAT-5: the search field has an accessible name independent of its placeholder', () =>
+  withServer(async ({ base }) => {
+    const res = await fetch(base + '/');
+    const html = await res.text();
+
+    const input = html.match(/<input[^>]*\bid="q"[^>]*>/)[0];
+    assert.match(input, /placeholder="/, 'the placeholder hint is still present');
+
+    const hasAriaLabel = /\baria-label="[^"]+"/.test(input);
+    const hasLabel = new RegExp('<label[^>]*\\bfor="q"[^>]*>\\s*\\S').test(html);
+    assert.ok(
+      hasAriaLabel || hasLabel,
+      'search field needs an aria-label or an associated <label for="q"> for its accessible name'
+    );
+  }));
