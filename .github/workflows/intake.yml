@@ -180,9 +180,12 @@ jobs:
           node -e '
             const fs = require("fs");
             const text = fs.readFileSync("work/triage.txt", "utf8");
-            const line = text.split("\n").find((l) => l.trim().startsWith("{"));
+            const lines = text.split("\n");
+            // The object holds machine fields only and the reasoning follows as prose, so a
+            // truncated tail costs the explanation and never the verdict.
+            const at = lines.findIndex((l) => l.trim().startsWith("{"));
             let v = null;
-            try { v = JSON.parse(line); } catch {}
+            try { v = JSON.parse(lines[at]); } catch {}
             const TYPES = ["bug", "feature", "chore", "docs"];
             const SLUG = /^[a-z0-9][a-z0-9-]{0,60}$/;
             const NUM = /^\d+$/;
@@ -198,7 +201,8 @@ jobs:
               else if (!TYPES.includes(v.type) || !SLUG.test(String(v.slug ?? ""))) out = { route: "park", slug: "", ref: "" };
               else out = { route: v.type === "bug" ? "reproduce" : "spec", slug: v.slug, ref: "", type: v.type };
             }
-            const reason = String(v?.reason ?? "").replace(/\s+/g, " ").slice(0, 600);
+            const prose = at < 0 ? "" : lines.slice(at + 1).join(" ").replace(/^\s*Why:\s*/i, "");
+            const reason = (prose || String(v?.reason ?? "")).replace(/\s+/g, " ").trim().slice(0, 600);
             fs.writeFileSync("work/reason.md", reason);
             fs.writeFileSync("work/type.txt", out.type ?? "");
             fs.appendFileSync(process.env.GITHUB_OUTPUT,
@@ -210,7 +214,20 @@ jobs:
         if: steps.runner.outputs.on == 'true' && steps.depth.outputs.parked == 'false' && steps.verdict.outputs.route == 'park'
         run: |
           node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
-          gh issue comment "$ISSUE" --body "Triage could not produce a valid verdict for this issue, so the line fails closed and parks it. A person should look, then re-run intake with \`gh workflow run intake.yml -f issue_number=$ISSUE\`."
+            # The verdict is model output, so it travels as a file and is indented rather than
+            # fenced — a ``` inside it would otherwise break out of the block.
+            node -e '
+              const fs = require("fs");
+              let raw = "";
+              try { raw = fs.readFileSync("work/triage.txt", "utf8"); } catch {}
+              const excerpt = raw.slice(0, 400).split("\n").map((l) => "    " + l).join("\n");
+              fs.writeFileSync("work/park.md",
+                "Triage could not produce a valid verdict for this issue, so the line fails closed and parks it. "
+                + "A person should look, then re-run intake with `gh workflow run intake.yml -f issue_number="
+                + process.env.ISSUE + "`.\n\n"
+                + (excerpt.trim() ? "What it emitted, first 400 characters:\n\n" + excerpt + "\n" : "It emitted nothing.\n"));
+            '
+            gh issue comment "$ISSUE" --body-file work/park.md
 
       - name: Recurrence — reopen the original, it carries the history
         if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.route == 'recurrence'
