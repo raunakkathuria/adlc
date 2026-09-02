@@ -25,17 +25,19 @@ If the existing-issues listing shows an **open** issue describing the same probl
 
 ## Output
 
-**One JSON object, on one line, and nothing else.** A machine parses this; anything around it is a bug. No code fence, no preamble, no explanation after. The shape is:
+**One JSON object, first, on one line.** A machine parses this: it reads the first line that starts with `{` and ignores everything after it. So the object must come first, must be on one line, and must be **complete**. No code fence, no preamble. The shape is:
 
     {"actionable":true,"type":"bug","slug":"kebab-case-name","duplicate_of":null,"recurrence_of":null,"requirements":["REQ-ORD-4"],"reason":"one sentence"}
 
-That is indented as an illustration; emit the object flush left with nothing before or after it, so `jq` can read it directly.
+That is indented as an illustration; emit the object flush left, so `jq` can read it directly.
+
+**Keep the object short.** A long `reason` has truncated it mid-string more than once — the closing brace never arrived, the parse failed, and the line parked an issue on a verdict you had actually reached correctly. If you have more to say than a sentence, write it as prose on the lines *after* the object: people read that, and the parser ignores it.
 
 - `actionable` — `false` for questions, duplicates, already-done, spam, or too-thin reports.
 - `type` — one of the four above; `null` when not actionable.
 - `slug` — short kebab-case name for the change; the spec delta will live at `openspec/changes/<slug>/`. Empty when not actionable.
 - `duplicate_of` / `recurrence_of` — issue number, or `null`.
 - `requirements` — the REQ ids the issue bears on; empty if none apply.
-- `reason` — why you decided this, in one sentence. This is what a human reads when they disagree with you, and what gets posted on a closed issue as the explanation.
+- `reason` — why you decided this, in one sentence and **under 200 characters**. This is what a human reads when they disagree with you, and what gets posted on a closed issue as the explanation. Anything longer goes after the object, never inside it.
 
 If you cannot decide, say so in `reason` and set `actionable` to `false` — the line fails closed, and a human can always relabel.

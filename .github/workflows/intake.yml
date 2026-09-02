@@ -210,7 +210,7 @@ jobs:
         if: steps.runner.outputs.on == 'true' && steps.depth.outputs.parked == 'false' && steps.verdict.outputs.route == 'park'
         run: |
           node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
-          gh issue comment "$ISSUE" --body "Triage could not produce a valid verdict for this issue, so the line fails closed and parks it. A person should look, then re-run intake with \`gh workflow run intake.yml -f issue_number=$ISSUE\`."
+          gh issue comment "$ISSUE" --body "$(printf 'Triage could not produce a valid verdict for this issue, so the line fails closed and parks it. A person should look, then re-run intake with `gh workflow run intake.yml -f issue_number=%s`.\n\nWhat it emitted, first 400 characters:\n\n```\n%s\n```' "$ISSUE" "$(head -c 400 work/triage.txt 2>/dev/null)")"
 
       - name: Recurrence — reopen the original, it carries the history
         if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.route == 'recurrence'
