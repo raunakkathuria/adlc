@@ -37,7 +37,12 @@ reset();
 
 export function listItems(query, maxPrice) {
   let result = [...items.values()];
-  if (query) result = result.filter((item) => item.name.includes(query));
+  if (query) {
+    const needle = query.toLowerCase();
+    result = result.filter(
+      (item) => item.name.toLowerCase().includes(needle) || item.sku.toLowerCase().includes(needle)
+    );
+  }
   if (maxPrice !== undefined) result = result.filter((item) => item.price <= maxPrice);
   return result;
 }

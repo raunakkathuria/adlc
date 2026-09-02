@@ -76,6 +76,29 @@ test('REQ-CAT-3: an empty query returns everything', () =>
     assert.equal(body.length, 3);
   }));
 
+test('REQ-CAT-3: a lowercase query matches a name in a different case', () =>
+  withServer(async ({ get }) => {
+    const { status, body } = await get('/api/items?q=mug');
+    assert.equal(status, 200);
+    assert.equal(body.length, 1);
+    assert.equal(body[0].sku, 'MUG-1');
+  }));
+
+test('REQ-CAT-3: a lowercase query matches a SKU in a different case', () =>
+  withServer(async ({ get }) => {
+    const { status, body } = await get('/api/items?q=book-1');
+    assert.equal(status, 200);
+    assert.equal(body.length, 1);
+    assert.equal(body[0].sku, 'BOOK-1');
+  }));
+
+test('REQ-CAT-3: a query that matches neither sku nor name returns 200 with an empty array', () =>
+  withServer(async ({ get }) => {
+    const { status, body } = await get('/api/items?q=no-such-thing');
+    assert.equal(status, 200);
+    assert.deepEqual(body, []);
+  }));
+
 test('REQ-CAT-4: only items at or under the ceiling are returned', () =>
   withServer(async ({ get }) => {
     const { status, body } = await get('/api/items?max_price=1000');
