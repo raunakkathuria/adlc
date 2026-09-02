@@ -1,0 +1,6 @@
+{
+  "ids": ["REQ-CAT-1", "REQ-CAT-2", "REQ-ORD-1"],
+  "notInSpecMd": "REQ-CAT-9",
+  "ordersId": "REQ-ORD-1",
+  "ordersPath": "openspec/specs/orders/spec.md"
+}
