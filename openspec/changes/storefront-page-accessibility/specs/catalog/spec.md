@@ -6,6 +6,8 @@ The catalogue page's items region SHALL be exposed as an ARIA live region (for e
 
 The announcement SHALL be proportionate to what changed: it SHALL convey that the list changed and how many items now match, without reciting every displayed item's individual details (name, SKU, price, stock). When a search query is still being typed, the live region SHALL NOT announce once per keystroke; it SHALL announce once the query has settled, reflecting the outcome the user is left looking at rather than every intermediate one.
 
+This restriction is on what is automatically announced, not on what is present. The full list of items, with each item's own details, SHALL still be reachable by a user who navigates into the list directly (`REQ-CAT-8`) at the same time the concise announcement fires. Placing the concise summary and the full list inside the same announced boundary — so that assistive technology reads the full list's details the moment the summary is announced — does not satisfy this requirement; the two SHALL be exposed so that only the concise summary is delivered as the automatic announcement.
+
 #### Scenario: the region announces from the first page load
 
 - **WHEN** the catalogue page has just loaded, before any search has narrowed it
@@ -34,6 +36,12 @@ The announcement SHALL be proportionate to what changed: it SHALL convey that th
 - **WHEN** the catalogue list changes for any reason — a search, an order, or otherwise
 - **THEN** the live region's announcement conveys that the list changed and how many items now match
 - **AND** it does not recite the name, SKU, price, or stock of every item in the list
+
+#### Scenario: the full list's details remain reachable without being included in the automatic announcement
+
+- **WHEN** the catalogue list changes and the page updates both its concise summary and the full list of items (`REQ-CAT-8`) in response
+- **THEN** the content automatically announced to assistive technology is limited to the concise summary
+- **AND** a user who navigates directly into the list can still reach every item's name, SKU, price, and stock — those details are not removed, only excluded from the automatic announcement
 
 #### Scenario: typing a multi-character search produces one announcement, not one per keystroke
 
