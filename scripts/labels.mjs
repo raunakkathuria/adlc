@@ -5,7 +5,13 @@
 //
 //   node scripts/labels.mjs ensure                     -> create the label set (idempotent)
 //   node scripts/labels.mjs state <issue> <state>      -> swap state:* to state:<state>
-//   node scripts/labels.mjs add <issue> <label>...     -> add labels (type:*, needs-human, ...)
+//   node scripts/labels.mjs type  <issue> <type>       -> swap type:*  to type:<type>
+//   node scripts/labels.mjs add <issue> <label>...     -> add labels (needs-human, origin:adlc)
+//
+// state and type are families: an issue carries exactly one of each, so setting one withdraws
+// the last. `add` is for labels that stand alone. Setting a state also clears needs-human,
+// because a station announcing where the work is means the line has resumed — every park either
+// exits immediately or is mutually exclusive with the state call that follows it.
 //
 // Needs `gh` and GH_TOKEN. Unknown labels are refused — a typo must fail loudly, not create
 // a new lane on the board.
@@ -42,7 +48,28 @@ function ensure(names) {
   }
 }
 
-const [cmd, ...rest] = process.argv.slice(2);
+/**
+ * Which label to add and which to withdraw so an issue carries exactly one of a family.
+ * `alsoRemove` is for labels outside the family that this transition invalidates.
+ */
+export function exclusive(current, next, prefix, alsoRemove = []) {
+  return {
+    add: next,
+    remove: current.filter((n) => (n.startsWith(prefix) && n !== next) || alsoRemove.includes(n)),
+  };
+}
+
+function setExclusive(issue, next, prefix, alsoRemove = []) {
+  ensure([next]);
+  const current = JSON.parse(gh('issue', 'view', issue, '--json', 'labels')).labels.map((l) => l.name);
+  const { add, remove } = exclusive(current, next, prefix, alsoRemove);
+  const args = ['issue', 'edit', issue, '--add-label', add];
+  if (remove.length) args.push('--remove-label', remove.join(','));
+  gh(...args);
+}
+
+const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const [cmd, ...rest] = isMain ? process.argv.slice(2) : [];
 
 if (cmd === 'ensure') {
   ensure(Object.keys(LABELS));
@@ -50,13 +77,12 @@ if (cmd === 'ensure') {
   const [issue, state] = rest;
   const name = `state:${state}`;
   if (!LABELS[name]) throw new Error(`unknown state: ${state}`);
-  ensure([name]);
-  const current = JSON.parse(gh('issue', 'view', issue, '--json', 'labels')).labels
-    .map((l) => l.name)
-    .filter((n) => n.startsWith('state:') && n !== name);
-  const args = ['issue', 'edit', issue, '--add-label', name];
-  if (current.length) args.push('--remove-label', current.join(','));
-  gh(...args);
+  setExclusive(issue, name, 'state:', ['needs-human']);
+} else if (cmd === 'type') {
+  const [issue, type] = rest;
+  const name = `type:${type}`;
+  if (!LABELS[name]) throw new Error(`unknown type: ${type}`);
+  setExclusive(issue, name, 'type:');
 } else if (cmd === 'add') {
   const [issue, ...names] = rest;
   for (const name of names) if (!LABELS[name]) throw new Error(`unknown label: ${name}`);

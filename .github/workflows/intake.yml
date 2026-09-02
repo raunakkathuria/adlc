@@ -238,7 +238,7 @@ jobs:
 
       - name: Label the type
         if: steps.runner.outputs.on == 'true' && (steps.verdict.outputs.route == 'spec' || steps.verdict.outputs.route == 'reproduce')
-        run: node "$ADLC/scripts/labels.mjs" add "$ISSUE" "type:$(cat work/type.txt)"
+        run: node "$ADLC/scripts/labels.mjs" type "$ISSUE" "$(cat work/type.txt)"
 
       - name: Not a bug — straight to the spec station
         if: steps.runner.outputs.on == 'true' && steps.verdict.outputs.route == 'spec'
