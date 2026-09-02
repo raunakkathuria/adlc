@@ -78,6 +78,10 @@ async function api(path, options) {
   return { status: res.status, body: await res.json() };
 }
 
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[c]));
+
 function note(message, kind) {
   el('note').innerHTML = message ? `<p class="note ${kind}">${message}</p>` : '';
 }
@@ -94,7 +98,7 @@ async function loadItems() {
   const { body: items } = await api('/items' + (q ? '?q=' + encodeURIComponent(q) : ''));
 
   if (items.length === 0) {
-    el('items').innerHTML = `<p class="empty">Nothing matches “${q}”.</p>`;
+    el('items').innerHTML = `<p class="empty">Nothing matches “${escapeHtml(q)}”.</p>`;
     return;
   }
 
