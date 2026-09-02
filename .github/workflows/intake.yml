@@ -288,6 +288,7 @@ jobs:
             echo "green=false" >> "$GITHUB_OUTPUT"
             node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
             gh issue comment "$ISSUE" --body "The test suite is already red on the default branch, so a reproduction cannot be attributed to this report. The line is parked — fix the suite, then re-run intake with \`gh workflow run intake.yml -f issue_number=$ISSUE\`."
+          fi
 
       - name: Take the issue in, as data
         if: steps.baseline.outputs.green == 'true'
@@ -371,7 +372,7 @@ jobs:
           gh issue close "$ISSUE" --reason "not planned" --comment "The reproduce station could not surface this as a failing test — the full report is above. Closed as not reproducible, deliberately: open issues are only things actually moving down the line. Reopen it (or report the problem again) and intake re-runs with all the accumulated reports."
 
       - name: Keep the evidence
-        if: always() && steps.baseline.outputs.green == 'true'
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: reproduce-${{ env.ISSUE }}-${{ github.run_id }}
