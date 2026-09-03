@@ -2,42 +2,43 @@
 
 ### Requirement: REQ-CAT-7 — search results are announced to assistive technology
 
-The catalogue page's results area SHALL be exposed as an ARIA live region (for example, `role="status"` or an equivalent `aria-live` announcement), so that whenever a search (`REQ-CAT-3`) changes what the page shows, assistive technology announces the outcome automatically — how many items matched, or that none did — without the user needing to move focus into the results to find out.
+The catalogue page SHALL expose a short, visually-hidden summary of the current search outcome as its own ARIA live region (for example, `role="status"` or an equivalent `aria-live` announcement) — a distinct element from where the matching items themselves are displayed, following the same pattern already used for order outcomes (`REQ-ORD-7`). The area where matching items are displayed SHALL NOT itself be marked as a live region: doing so would make assistive technology re-announce every remaining item's full detail on every keystroke, in place of the single short summary this requirement calls for. Whenever a search (`REQ-CAT-3`) changes what the page shows — including the automatic search the page performs on load — the summary is updated so assistive technology announces the outcome automatically, without the user needing to move focus into the results to find out. This is new page content: no summary or count exists anywhere on the page today.
 
 #### Scenario: a match count is announced
 
 - **WHEN** a search narrows the catalogue to one or more items
-- **THEN** the live region's content is updated to state how many items matched
+- **THEN** the summary's content reads exactly `1 item matches "{q}".` if exactly one item matches, or `{n} items match "{q}".` if `{n}` items match and `{n}` is more than one, where `{q}` is the literal query text
 - **AND** assistive technology announces it automatically
 
 #### Scenario: no match is announced
 
 - **WHEN** a search matches nothing
-- **THEN** the live region's content is the empty-state message (`REQ-CAT-6`)
+- **THEN** the summary's content is the empty-state message (`REQ-CAT-6`)
 - **AND** assistive technology announces it automatically
+
+#### Scenario: the automatic search on page load is announced, not silent
+
+- **WHEN** the catalogue page has just loaded and performs its automatic search with an empty query (`REQ-CAT-3`), before the user has typed anything
+- **THEN** the summary's content reads exactly `Showing 1 item.` if the catalogue holds exactly one item, or `Showing {n} items.` if it holds `{n}` items and `{n}` is more than one
+- **AND** assistive technology announces it automatically — this first search is announced exactly like every one after it
 
 #### Scenario: clearing the query is announced like any other search
 
-- **WHEN** the query is cleared back to empty and the full catalogue returns
-- **THEN** the live region's content is updated to state the total number of items shown
+- **WHEN** the query is cleared back to empty and the full catalogue returns (`REQ-CAT-3`)
+- **THEN** the summary's content is updated with the same wording as the automatic search on page load
 - **AND** assistive technology announces it automatically
-
-#### Scenario: silent until the first search
-
-- **WHEN** the catalogue page has just loaded and the query is still empty, before anything has been typed
-- **THEN** the live region is already present in the page's markup
-- **AND** it holds no announcement yet, since no search has been performed
 
 #### Scenario: a later outcome replaces an earlier one
 
 - **WHEN** a second search's outcome is announced after the first, whether the two outcomes read the same or differently
-- **THEN** the live region's content is replaced with the new outcome
+- **THEN** the summary's content is replaced with the new outcome
 - **AND** the new outcome is announced on its own, not appended to or stacked with the previous one
 
-#### Scenario: composes with narrowing by price
+#### Scenario: every settled outcome is announced as it renders, with no calming delay
 
-- **WHEN** a search query and a `max_price` ceiling (`REQ-CAT-4`) are both active
-- **THEN** the announced count reflects only the items that satisfy both
+- **WHEN** several searches are issued in quick succession while typing, with no pause between keystrokes
+- **THEN** each one's outcome, once it settles without being superseded by a newer query (`REQ-CAT-8`), is announced as soon as it renders
+- **AND** none is withheld waiting for typing to pause first — there is no separate calming delay before an outcome is announced
 
 ### Requirement: REQ-CAT-8 — a stale search response never overwrites a newer one
 

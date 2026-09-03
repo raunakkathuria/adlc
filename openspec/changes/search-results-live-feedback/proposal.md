@@ -8,16 +8,14 @@ The same report surfaces a second defect: typing fast ("mug") can leave the page
 
 ## What changes for the user
 
-- As the result list changes in response to typing, a screen reader announces the outcome right away — how many items matched, or that none did — without the user needing to move focus into the list to find out. The same phrasing already used for "no results" (`REQ-CAT-6`) is what gets announced when nothing matches.
+- As the result list changes in response to typing, a screen reader announces the outcome right away — how many items matched, or that none did — without the user needing to move focus into the list to find out. This announcement is **new page content**: no match count or summary exists anywhere on the page today, so this is not an exposure of text that was already there. It lives in a short, visually-hidden summary of its own, separate from the item cards — the same pattern already used for order outcomes — so a screen reader is never made to re-read every remaining item's full detail on a keystroke; the empty-state phrasing already used for "no results" (`REQ-CAT-6`) is what the summary holds when nothing matches.
+- The page's very first search — the automatic one that runs on load, before anyone has typed anything — is announced the same way as every search after it. It is not a silent exception: an absent or empty query is already a search under `REQ-CAT-3` (it returns everything), so it gets the same treatment.
+- Every settled outcome is announced as soon as it renders, not just the last one after typing pauses. This is a decision, not an open question: once a stale response can no longer overwrite a newer one (see below), holding an outcome back until typing pauses would need its own timing mechanism — and any such mechanism is explicitly out of scope below.
 - Whatever appears after typing settles is *correct* for what was actually typed. If an earlier keystroke's response arrives late, it no longer overwrites a newer, already-rendered result — so nobody, sighted or not, ends up looking at results for "mu" after finishing typing "mug".
 
 ## Out of scope
 
 - Any change to what counts as a match (`REQ-CAT-3`) or how price narrows the list (`REQ-CAT-4`) — this change is about how results already computed by the API are surfaced and sequenced on the page, not what matches.
-- The exact wording of the match-count announcement, beyond stating the count — only the empty-state wording is fixed, because it already exists (`REQ-CAT-6`).
-- Any debounce interval or other request-throttling mechanism — an implementation choice for the build, not a behaviour a user can observe or a test can assert on.
+- The announcement composing with a `max_price` ceiling (`REQ-CAT-4`) — the page has no control that can set `max_price` at all, and `loadItems()` only ever sends `q`. A shopper cannot reach that state from the page, so it stays the API-level concern `REQ-CAT-4` already covers, with no page-side scenario here.
+- Any debounce interval or other request-throttling mechanism — an implementation choice for the build, not a behaviour a user can observe or a test can assert on. This is also why every settled outcome is announced as it renders rather than only once typing pauses: a pause-based "calm" mode would itself be a throttling mechanism.
 - The order-outcome live region (`REQ-ORD-7`) — already announces correctly and is untouched here.
-
-## Open question
-
-Today the page fires a new request on every keystroke. Once stale responses can no longer win (see below), should the live region announce **every** settled keystroke's outcome as it renders (chattier, but nothing ever hidden), or only once typing pauses briefly (calmer, closer to how the order region announces one discrete outcome per action)? The issue's own account is ambivalent about whether the churn and the silence are one problem or two — Gate 1 should pick one.
