@@ -42,7 +42,7 @@ your product code never hosts the line's logic.
 ## If your policy forbids calling external workflows
 
 The stations already handle this, so there is nothing to fork. Copy the six station workflows
-from [`.github/workflows/`](..) — the real ones, not these callers — into your repository
+from [`.github/workflows/`](..) (the real ones, not these callers) into your repository
 along with `prompts/` and `scripts/`, then delete each station's "Bring the prompts and
 scripts" checkout step. Every station picks its own tree when no `.adlc` directory is there:
 
