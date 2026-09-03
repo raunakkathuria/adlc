@@ -97,7 +97,7 @@ ANTHROPIC_API_KEY="$GATEWAY_KEY" \
   bash scripts/run-station.sh prompts/triage.md "Read" issues/001-rejected-order-eats-stock.md
 ```
 
-## Validated against a real non-Anthropic model (Gemini)
+## Validated against two real non-Anthropic models
 
 Gemini, through LiteLLM, on the real `scripts/run-station.sh`. The proxy returned an
 Anthropic-shaped reply from a Gemini backend:
@@ -125,11 +125,21 @@ gets routed wrong rather than erroring — `design.md`'s known-gaps list has fiv
 that. Run one station and put its output through the station's parser before you trust a new model
 with the whole line.
 
-OpenAI is **not** validated to the same depth here. The transport works and the failure above is
-understood, but no station has been driven end to end through an OpenAI backend, so treat the
-`additional_drop_params` line as the fix for a diagnosed error rather than as a proven recipe. If you
-run it, the check that matters is the same one: a station's real output, through that station's
-parser.
+OpenAI (gpt-5) was checked the same way, once `additional_drop_params` was in place, and routes
+identically:
+
+| Provider | route | slug | type | reason length |
+|---|---|---|---|---|
+| Gemini 2.5 Flash | `reproduce` | `rejected-order-eats-stock` | `bug` | 423 chars |
+| gpt-5 | `reproduce` | `rejected-order-eats-stock` | `bug` | 577 chars |
+
+Both named `REQ-ORD-4` as the violated requirement, from the spec alone.
+
+One thing that table shows and a single run would not: the reason is capped at 600 characters, and
+gpt-5 came within 23 of it. Nothing breaks when it truncates — the object holding the machine fields
+is parsed from its own line, so a lost tail costs the explanation and never the verdict, which is
+why it is built that way. But a more verbose model will lose the end of its reasoning in the issue
+comment, and that is worth knowing before you wonder where it went.
 
 ## How the seam works
 
