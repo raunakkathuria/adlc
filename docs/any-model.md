@@ -35,13 +35,29 @@ model_list:
     litellm_params:
       model: openai/gpt-5             # what actually runs
       api_key: os.environ/OPENAI_API_KEY
+      # Only needed for OpenAI — see the note below.
+      additional_drop_params: ["context_management", "output_config", "thinking", "metadata"]
   - model_name: economy
     litellm_params:
       model: gemini/gemini-2.5-flash
       api_key: os.environ/GEMINI_API_KEY
+litellm_settings:
+  drop_params: true
 ```
 
 Naming the entries by role rather than by model is worth the small indirection: retuning which model the line uses becomes a one-line edit here, and the repository variable never changes.
+
+### OpenAI needs one extra line, and the error does not say so
+
+Claude Code sends top-level request fields the Anthropic API defines and OpenAI's does not. Measured from a real run: `context_management`, `output_config`, `thinking`, `metadata`. Route those to OpenAI unchanged and every call fails with
+
+```
+litellm.BadRequestError: OpenAIException - Unknown parameter: 'context_management'
+```
+
+`drop_params: true` does **not** fix this, which is the trap: it strips params LiteLLM knows a provider does not support, and these are fields it does not know about at all. They have to be named, per route, in `additional_drop_params`.
+
+Gemini needs none of this — Anthropic-shaped requests map onto it cleanly. So "point it at LiteLLM and it works" is true of some backends and one config line short for others. Expect to do this once per provider, and expect the error to arrive as a 500 from your own proxy rather than as anything mentioning the parameter you need to drop.
 
 Run it:
 
@@ -66,10 +82,14 @@ curl -s -X POST "$ADLC_BASE_URL/v1/messages" \
   -H "x-api-key: $GATEWAY_KEY" \
   -H 'anthropic-version: 2023-06-01' \
   -H 'content-type: application/json' \
-  -d '{"model":"frontier","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"frontier","max_tokens":512,"messages":[{"role":"user","content":"hi"}]}'
 ```
 
-A reply whose `model` field is your *backend* id means the route works. Then run one station by hand, which is the same path CI takes:
+Check the `content` array, not just the envelope: a reply can carry `"type":"message"` with
+`content: []` and `stop_reason: "max_tokens"`, which means the generation was truncated rather than
+that the route works. Reasoning models spend the budget on hidden reasoning before any visible text,
+so give this probe a few hundred tokens — 64 is enough to look broken. A reply whose `model` field is
+your *backend* id, with text in `content`, means the route works. Then run one station by hand, which is the same path CI takes:
 
 ```bash
 ADLC_BASE_URL=http://localhost:4000 ADLC_MODEL=frontier \
@@ -77,7 +97,7 @@ ANTHROPIC_API_KEY="$GATEWAY_KEY" \
   bash scripts/run-station.sh prompts/triage.md "Read" issues/001-rejected-order-eats-stock.md
 ```
 
-## Validated against a real non-Anthropic model
+## Validated against a real non-Anthropic model (Gemini)
 
 Gemini, through LiteLLM, on the real `scripts/run-station.sh`. The proxy returned an
 Anthropic-shaped reply from a Gemini backend:
@@ -104,6 +124,12 @@ The stations parse model output strictly, and a model that formats a verdict sli
 gets routed wrong rather than erroring — `design.md`'s known-gaps list has five instances of exactly
 that. Run one station and put its output through the station's parser before you trust a new model
 with the whole line.
+
+OpenAI is **not** validated to the same depth here. The transport works and the failure above is
+understood, but no station has been driven end to end through an OpenAI backend, so treat the
+`additional_drop_params` line as the fix for a diagnosed error rather than as a proven recipe. If you
+run it, the check that matters is the same one: a station's real output, through that station's
+parser.
 
 ## How the seam works
 
