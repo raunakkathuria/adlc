@@ -13,7 +13,7 @@ Set these as **repository variables** (Settings → Secrets and variables → Ac
 | `ADLC_BASE_URL` | any endpoint that speaks the Anthropic messages API | `http://litellm.internal:4000` |
 | `ADLC_MODEL` | the model id **that endpoint** knows | `gpt-5`, `gemini-2.5-pro`, `frontier` |
 
-Your existing credential secret (`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`) then authenticates against *the gateway* instead of against Anthropic. Put the gateway's key in it. The off-switch does not change: with neither secret set, every workflow still runs, explains itself, and stops.
+Your existing credential secret (`ADLC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`) then authenticates against *the gateway* instead of against Anthropic. Put the gateway's key in it. The off-switch does not change: with neither secret set, every workflow still runs, explains itself, and stops.
 
 Leave both variables unset and nothing moves. That is the demo's configuration, and it is why this costs nothing to carry.
 
@@ -93,7 +93,7 @@ your *backend* id, with text in `content`, means the route works. Then run one s
 
 ```bash
 ADLC_BASE_URL=http://localhost:4000 ADLC_MODEL=frontier \
-ANTHROPIC_API_KEY="$GATEWAY_KEY" \
+ADLC_API_KEY="$GATEWAY_KEY" \
   bash scripts/run-station.sh prompts/triage.md "Read" issues/001-rejected-order-eats-stock.md
 ```
 
@@ -152,7 +152,7 @@ if [ -n "${ADLC_MODEL:-}" ]; then export ANTHROPIC_MODEL="$ADLC_MODEL"; fi
 
 `ANTHROPIC_*` here is the CLI's wire protocol, not a claim about who serves the model. Every agent step passes `ADLC_*` and nothing else, so swapping the runner is still one file — and `test/callers.test.js` fails if a station names a runner variable directly, or if any agent step forgets to pass the seam. Miss one station and it would quietly keep talking to Anthropic while the rest of the line used the gateway, which is worse than not supporting this at all.
 
-On credentials: with a base URL set, `ANTHROPIC_API_KEY` is sent as an `x-api-key` header and `CLAUDE_CODE_OAUTH_TOKEN` as `authorization: Bearer`. LiteLLM accepts either, so whichever secret you already have works.
+On credentials: `ADLC_API_KEY` reaches the gateway as an `x-api-key` header, and `CLAUDE_CODE_OAUTH_TOKEN` as `authorization: Bearer` — measured, not assumed. LiteLLM accepts either, so whichever secret you already have works. They are two different auth mechanisms rather than two names for one, which is why the line keeps both: the API key is its own, and the OAuth token is a Claude-subscription convenience kept under the name `claude setup-token` actually produces.
 
 ## What this does not change
 
