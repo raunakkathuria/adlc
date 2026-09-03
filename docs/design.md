@@ -103,7 +103,7 @@ Verdict trailers `SPEC-MATCH: COMPLETE|MISMATCH` + `FEATURE-IMPLEMENTED: YES|NO|
 Trigger: dispatched by the verifier once the drift check passes, so Gate 2 sees the numbers · nightly against the default branch · on demand.
 
 - **Deterministic:** Lighthouse accessibility and performance scores against thresholds set in the workflow — a breach fails the check.
-- **Agentic — "don't make me think":** an agent fetches the running build's page, reads the served DOM, and drives the endpoints behind it, judging Krug-style heuristics: first-click clarity, labels that say what they do, feedback after actions, navigation that never strands. No browser drives it — that is one of the known gaps below. In-scope findings → PR review; out-of-scope confirmed problems → deduped `origin:adlc` issues.
+- **Agentic — "don't make me think":** an agent fetches the running build's page, reads the served DOM, and drives the endpoints behind it, judging Krug-style heuristics: first-click clarity, labels that say what they do, feedback after actions, navigation that never strands. No browser drives it. That is one of the known gaps below. In-scope findings → PR review; out-of-scope confirmed problems → deduped `origin:adlc` issues.
 
 ### Gate 2 — ship it
 
