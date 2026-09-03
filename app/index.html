@@ -51,7 +51,12 @@
   .note.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
   .empty { color: var(--muted); font-size: .875rem; padding: .5rem 0; }
   ol { padding-left: 1.25rem; margin: 0; color: var(--muted); font-size: .875rem; }
+  #item-list { list-style: none; margin: 0; padding: 0; }
   code { font-size: .85em; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
 </style>
 </head>
 <body>
@@ -62,7 +67,8 @@
   <input type="search" id="q" aria-label="Search the catalogue" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
 
   <h2>Catalogue</h2>
-  <div id="items"></div>
+  <div id="items" role="status"></div>
+  <ul id="item-list" role="list"></ul>
   <div id="note" role="status"></div>
 
   <h2>Orders</h2>
@@ -93,27 +99,43 @@ const REJECTIONS = {
   invalid_qty: 'Rejected — quantity must be a whole number, at least 1.',
 };
 
+const summarizeMatches = (items) => {
+  const n = items.length;
+  return `${n} item${n === 1 ? '' : 's'} ${n === 1 ? 'matches' : 'match'}.`;
+};
+
+// Guards against a burst of rapid searches: only the render whose fetch resolves while it is
+// still the newest one in flight gets to update the DOM, so a fast typist's keystrokes settle
+// on one announcement instead of one per keystroke, regardless of the order responses land in.
+let itemsRenderToken = 0;
+
 async function loadItems() {
+  const token = ++itemsRenderToken;
   const q = el('q').value.trim();
   const { body: items } = await api('/items' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  if (token !== itemsRenderToken) return;
 
   if (items.length === 0) {
     el('items').innerHTML = `<p class="empty">Nothing matches “${escapeHtml(q)}”.</p>`;
+    el('item-list').innerHTML = '';
     return;
   }
 
-  el('items').innerHTML = items.map((item) => `
-    <div class="card">
+  // The concise summary is what's automatically announced; the full list sits in a separate,
+  // non-live element so a screen reader isn't also read every item's details on each change.
+  el('items').innerHTML = `<p class="sr-only">${summarizeMatches(items)}</p>`;
+  el('item-list').innerHTML = items.map((item) => `
+    <li class="card" role="listitem">
       <div class="grow">
-        <div class="name">${item.name}</div>
+        <div class="name">${escapeHtml(item.name)}</div>
         <div class="meta">${item.sku} · ${money(item.price)} · ${item.stock} in stock</div>
       </div>
-      <input type="number" min="1" value="1" id="qty-${item.sku}" aria-label="Quantity of ${item.name}">
-      <button data-sku="${item.sku}" aria-label="Order ${item.name}">Order</button>
-    </div>
+      <input type="number" min="1" value="1" id="qty-${item.sku}" aria-label="Quantity of ${escapeHtml(item.name)}">
+      <button data-sku="${item.sku}" id="order-${item.sku}" aria-label="Order ${escapeHtml(item.name)}">Order</button>
+    </li>
   `).join('');
 
-  for (const button of el('items').querySelectorAll('button')) {
+  for (const button of el('item-list').querySelectorAll('button')) {
     button.addEventListener('click', () => order(button.dataset.sku));
   }
 }
@@ -141,6 +163,7 @@ async function order(sku) {
 
   await loadItems();
   await loadOrders();
+  el('order-' + sku)?.focus();
 }
 
 el('q').addEventListener('input', loadItems);

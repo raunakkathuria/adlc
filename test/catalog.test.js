@@ -3,23 +3,35 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { withServer } from './helpers.mjs';
 
+const LIVE_REGION = /role="status"|aria-live="(polite|assertive)"/;
+
 /**
  * Load the real page served for `/` and run its actual inline script against a minimal
- * DOM stub, then drive a search through it — so REQ-CAT-6 is exercised the way a browser
- * would render the empty-state message, not by pattern-matching the script's source.
+ * DOM stub, then drive it through search and orders — so the catalogue requirements are
+ * exercised the way a browser would render them, not by pattern-matching the script's source.
+ *
+ * `items`, when given, makes the stubbed `fetch` answer `/api/items` with fabricated data
+ * instead of the seeded catalog — the only way to get a malicious item name in front of the
+ * renderer, since the real API has no way to create or rename an item.
  */
-async function emptyStateHtml(base, query) {
+async function loadClientPage(base, { items } = {}) {
   const html = await (await fetch(base + '/')).text();
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
   const elements = new Map();
   function element(id) {
     if (!elements.has(id)) {
+      let html = '';
+      let writes = 0;
       elements.set(id, {
         value: '',
-        innerHTML: '',
+        dataset: {},
+        get innerHTML() { return html; },
+        set innerHTML(v) { html = v; writes += 1; },
+        get writeCount() { return writes; },
         addEventListener() {},
         querySelectorAll() { return []; },
+        focus() {},
       });
     }
     return elements.get(id);
@@ -27,16 +39,41 @@ async function emptyStateHtml(base, query) {
 
   const sandbox = {
     document: { getElementById: element },
-    fetch: (path, options) => fetch(base + path, options),
+    fetch: (path, options) => {
+      if (items && /^\/api\/items(\?|$)/.test(path)) {
+        return Promise.resolve({ status: 200, json: async () => items });
+      }
+      return fetch(base + path, options);
+    },
   };
   vm.createContext(sandbox);
   vm.runInContext(script, sandbox);
   await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
 
-  element('q').value = query;
-  await sandbox.loadItems();
+  return {
+    itemsHtml: () => element('items').innerHTML,
+    itemListHtml: () => element('item-list').innerHTML,
+    itemsWriteCount: () => element('items').writeCount,
+    search: async (query) => {
+      element('q').value = query;
+      await sandbox.loadItems();
+    },
+    typeRapidly: (queries) => Promise.all(queries.map((query) => {
+      element('q').value = query;
+      return sandbox.loadItems();
+    })),
+    order: async (sku, qty) => {
+      element(`qty-${sku}`).value = String(qty);
+      await sandbox.order(sku);
+    },
+    noteHtml: () => element('note').innerHTML,
+  };
+}
 
-  return element('items').innerHTML;
+async function emptyStateHtml(base, query) {
+  const page = await loadClientPage(base);
+  await page.search(query);
+  return page.itemsHtml();
 }
 
 test('REQ-CAT-1: lists every item with sku, name, price and stock', () =>
@@ -219,4 +256,140 @@ test('REQ-CAT-5: the search field has an accessible name independent of its plac
       hasAriaLabel || hasLabel,
       'search field needs an aria-label or an associated <label for="q"> for its accessible name'
     );
+  }));
+
+test('REQ-CAT-7: the items region is an ARIA live region from the first page load', () =>
+  withServer(async ({ base }) => {
+    const html = await (await fetch(base + '/')).text();
+    const items = html.match(/<div id="items"[^>]*>/);
+    assert.ok(items, 'expected a #items element in the markup served for /');
+    assert.match(items[0], LIVE_REGION);
+  }));
+
+test('REQ-CAT-7: a search that matches nothing writes the empty-state message into the live region', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.search('no-such-item');
+    assert.match(page.itemsHtml(), /Nothing matches/);
+  }));
+
+test('REQ-CAT-7: a search that returns to matching results announces the new count', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.search('no-such-item');
+    assert.match(page.itemsHtml(), /Nothing matches/);
+
+    await page.search('mug');
+    assert.match(page.itemsHtml(), /1 item matches/);
+  }));
+
+test("REQ-CAT-7: an order that changes a displayed item's stock updates the live region independently of the #note outcome announcement", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 2);
+
+    assert.match(page.itemsHtml(), /3 items match/, 'the items live region should still report the (unchanged) match count');
+    assert.match(page.noteHtml(), /Order #\d+ placed/, 'the order-outcome live region announces separately');
+  }));
+
+test("REQ-CAT-7: the live region states how many items match, not each item's name, sku, price, or stock", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    const html = page.itemsHtml();
+
+    assert.match(html, /3 items match/);
+    for (const detail of ['Enamel Mug', 'MUG-1', '12.50', '47 in stock', 'Pocket Notebook', 'Fineliner Pen']) {
+      assert.ok(!html.includes(detail), `items live region should not recite "${detail}"`);
+    }
+  }));
+
+test('REQ-CAT-7: the full item list remains reachable even though its details are excluded from the live region', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+
+    assert.ok(!page.itemsHtml().includes('Enamel Mug'), 'the live region should not carry item details');
+    assert.match(page.itemListHtml(), /Enamel Mug/);
+    assert.match(page.itemListHtml(), /MUG-1/);
+  }));
+
+test('REQ-CAT-7: typing several characters in quick succession produces one announcement, not one per keystroke', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    const before = page.itemsWriteCount();
+
+    await page.typeRapidly(['m', 'mu', 'mug']);
+
+    assert.equal(page.itemsWriteCount(), before + 1, 'expected exactly one announcement for the whole burst');
+    assert.match(page.itemsHtml(), /1 item matches/);
+  }));
+
+test('REQ-CAT-8: multiple items are exposed as a semantic list', () =>
+  withServer(async ({ base }) => {
+    const html = await (await fetch(base + '/')).text();
+    const listTag = html.match(/<ul id="item-list"[^>]*>/);
+    assert.ok(listTag, 'expected a list container for catalogue items');
+    assert.match(listTag[0], /role="list"/);
+
+    const page = await loadClientPage(base);
+    const items = page.itemListHtml().match(/role="listitem"/g) ?? [];
+    assert.equal(items.length, 3, 'expected assistive technology to see 3 list items');
+  }));
+
+test('REQ-CAT-8: the list structure survives a narrowing search', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.search('mug');
+    const items = page.itemListHtml().match(/role="listitem"/g) ?? [];
+    assert.equal(items.length, 1);
+  }));
+
+test('REQ-CAT-8: the empty state renders no list items', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.search('no-such-item');
+    assert.doesNotMatch(page.itemListHtml(), /role="listitem"/);
+  }));
+
+test("REQ-CAT-8: list semantics are declared explicitly, so they survive the page's own list-style styling", () =>
+  withServer(async ({ base }) => {
+    const html = await (await fetch(base + '/')).text();
+    const listTag = html.match(/<ul id="item-list"[^>]*>/)[0];
+    assert.match(listTag, /role="list"/, 'role="list" must be explicit, since list-style: none can strip the native list role');
+    assert.match(html, /#item-list\s*\{[^}]*list-style:\s*none/, 'expected the page to actually apply list-style: none to this list');
+
+    const page = await loadClientPage(base);
+    const items = page.itemListHtml().match(/role="listitem"/g) ?? [];
+    assert.equal(items.length, 3);
+  }));
+
+test('REQ-CAT-9: an ordinary item name still displays correctly at all three sites', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    const html = page.itemListHtml();
+    assert.match(html, /Enamel Mug/);
+    assert.match(html, /aria-label="Quantity of Enamel Mug"/);
+    assert.match(html, /aria-label="Order Enamel Mug"/);
+  }));
+
+test('REQ-CAT-9: markup in an item name is shown as text, not parsed, at all three interpolation sites', () =>
+  withServer(async ({ base }) => {
+    const items = [{ sku: 'X-1', name: '<b>bold</b> & "quoted"', price: 100, stock: 5 }];
+    const page = await loadClientPage(base, { items });
+    const html = page.itemListHtml();
+
+    assert.doesNotMatch(html, /<b>bold<\/b>/, 'name should not be parsed as markup');
+    const escaped = '&lt;b&gt;bold&lt;/b&gt; &amp; &quot;quoted&quot;';
+    const occurrences = html.split(escaped).length - 1;
+    assert.equal(occurrences, 3, 'expected the escaped name at the visible name, quantity label, and Order button label');
+  }));
+
+test('REQ-CAT-9: a script-injection-shaped item name does not run at any of the three sites', () =>
+  withServer(async ({ base }) => {
+    const items = [{ sku: 'X-1', name: '<img src=x onerror=alert(1)>', price: 100, stock: 5 }];
+    const page = await loadClientPage(base, { items });
+    const html = page.itemListHtml();
+
+    assert.doesNotMatch(html, /<img[^>]*onerror/);
+    const occurrences = (html.match(/&lt;img src=x onerror=alert\(1\)&gt;/g) ?? []).length;
+    assert.equal(occurrences, 3);
   }));
