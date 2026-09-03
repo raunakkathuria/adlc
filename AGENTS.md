@@ -40,7 +40,7 @@ Fully automated from the moment an issue lands (when a credential secret is set 
 npm run verify     # node --test  +  requirement coverage
 ```
 
-Deterministic. No model in it. It must be green before you say you are done, and it runs in about a tenth of a second, so run it often.
+Deterministic. No model in it. It must be green before you say you are done, and it runs in well under a second, so run it often.
 
 `npm run req-coverage` checks that every requirement in `openspec/specs/` is named by at least one test. It cannot check whether that test asserts the *right* thing — only that somebody wrote one. A requirement in an `openspec/changes/` delta is **known but not owed**: a test may name it — that is what makes an implementation PR's new tests legal — but it only starts owing one when that delta's `tasks.md` is **fully ticked**. A spec PR is therefore never red for describing work nobody has built, while a build that ticks every box and forgets the test is — and because the gate runs before the implementation PR opens, that costs no PR and no attempt. Archiving into the living spec makes the requirement owe a test permanently, like every other.
 

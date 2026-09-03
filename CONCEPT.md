@@ -99,7 +99,7 @@ This is not ceremony. It is the same reason a factory's quality inspector does n
 npm run verify     # node --test  +  requirement coverage
 ```
 
-No model in it. It runs in about a tenth of a second, and it is the only thing in the loop that gets a vote on whether the work is done.
+No model in it. It runs in well under a second, and it is the only thing in the loop that gets a vote on whether the work is done.
 
 It is also not enough on its own. `npm run req-coverage` checks that every requirement in the living spec is named by at least one test. A requirement still in flight in a delta may be named by a test but does not owe one until that delta's `tasks.md` is fully ticked — so a spec PR is not red merely for describing work nobody has built, and a build that claims to be finished without a test is. It cannot check whether that test asserts the right thing. A test written from the implementation agrees with the implementation, passes forever, and reports nothing.
 
