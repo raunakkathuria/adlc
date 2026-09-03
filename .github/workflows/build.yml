@@ -197,6 +197,12 @@ jobs:
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
         run: npm install -g @anthropic-ai/claude-code
 
+      # Before the Executor, not after: it works red-green, so it runs the suite itself. With no
+      # node_modules every one of its test runs fails with "Cannot find module" and it cannot work.
+      - name: The adopter's dependencies — the Executor runs their tests
+        if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
+        run: bash "$ADLC/scripts/install-deps.sh"
+
       - name: Build it (the Executor)
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
         shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
@@ -218,9 +224,15 @@ jobs:
             exit 1
           fi
 
-      - name: The adopter's dependencies — the line runs their code, so it installs it
+      # If the Executor added a dependency, node_modules is now behind the manifest.
+      - name: Reinstall, if the Executor touched the manifest
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
-        run: bash "$ADLC/scripts/install-deps.sh"
+        run: |
+          if git diff --quiet HEAD -- package.json package-lock.json npm-shrinkwrap.json; then
+            echo "The manifest is unchanged — nothing to reinstall."
+          else
+            bash "$ADLC/scripts/install-deps.sh"
+          fi
 
       # The deterministic gate. Red gate, no PR — the run stops and reports what it tried.
       - name: The gate
