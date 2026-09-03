@@ -63,3 +63,51 @@ for (const file of callers) {
     }
   });
 }
+
+// The stations that run the adopter's code, and what they must not assume about it.
+//
+// verifier.yml and quality.yml used to run `node app/server.mjs` and poll
+// `http://localhost:3000/api/items` — this repo's entrypoint, port and route. On any other repo
+// the app never came up and the line stalled at state:verifying. And no station installed the
+// adopter's dependencies, so their gate died on "Cannot find module" before a PR could open.
+// Both were invisible here, because this repo is the app and has no dependencies.
+
+const stationDir = join(root, '.github/workflows');
+const APP_STATIONS = ['verifier.yml', 'quality.yml'];
+// Every station that runs the adopter's npm scripts or starts their app.
+const NEEDS_DEPS = ['intake.yml', 'build.yml', 'verifier.yml', 'quality.yml', 'finalize.yml'];
+
+for (const file of APP_STATIONS) {
+  const text = readFileSync(join(stationDir, file), 'utf8');
+
+  test(`stations: ${file} takes start_command and health_url`, () => {
+    for (const input of ['start_command', 'health_url']) {
+      assert.match(text, new RegExp(`^ {6}${input}:`, 'm'), `${input} must be a workflow_call input`);
+    }
+  });
+
+  test(`stations: ${file} starts the app through those inputs, not a hardcoded path`, () => {
+    assert.match(text, /sh -c "\$START_COMMAND"/, 'the start command must come from the input');
+    assert.match(text, /curl -sf "\$HEALTH_URL"/, 'the readiness poll must use the input');
+  });
+
+  test(`stations: ${file} hardcodes this repo's app only as a default`, () => {
+    const offenders = text
+      .split('\n')
+      .map((line, i) => [i + 1, line])
+      .filter(([, line]) => /app\/server\.mjs|localhost:3000/.test(line))
+      .filter(([, line]) => !/^\s*(default:|[A-Z_]+: \$\{\{)/.test(line));
+    assert.deepEqual(offenders, [], 'this repo may only be the default, never the assumption');
+  });
+}
+
+for (const file of NEEDS_DEPS) {
+  test(`stations: ${file} installs the adopter's dependencies before running their code`, () => {
+    const text = readFileSync(join(stationDir, file), 'utf8');
+    assert.match(
+      text,
+      /scripts\/install-deps\.sh/,
+      'this station runs the adopter\'s npm scripts or starts their app, so it must install first',
+    );
+  });
+}

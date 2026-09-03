@@ -218,6 +218,10 @@ jobs:
             exit 1
           fi
 
+      - name: The adopter's dependencies — the line runs their code, so it installs it
+        if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
+        run: bash "$ADLC/scripts/install-deps.sh"
+
       # The deterministic gate. Red gate, no PR — the run stops and reports what it tried.
       - name: The gate
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
@@ -260,7 +264,7 @@ jobs:
           # Stage everything the gate just verified — except the run's own scratch. (The
           # working tree IS what npm run verify passed; under-staging would ship a PR that
           # differs from what was verified.)
-          git add -A -- . ':!work' ':!.adlc'
+          git add -A -- . ':!work' ':!.adlc' ':!node_modules'
           git commit -m "impl: $SLUG
 
           Built from the spec delta approved at Gate 1 (spec PR stays open until this merges).
