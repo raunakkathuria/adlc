@@ -166,14 +166,14 @@ adlc/
 
 ## 7. How it was built
 
-Each phase landed working and demoable, and later phases never broke earlier ones. All five are done; the order is recorded because the sequencing is the part worth copying.
+Each phase landed working and demoable, and later phases never broke earlier ones. All five are done; the order is kept here because it is the part worth copying.
 
 - **Phase 0 — foundation.** `openspec init` (specs and the gate moved into `openspec/specs/`), `buildwright init`, `verify.yml` carried over. Ended with a green gate reading OpenSpec and the loop runnable by hand.
-- **Phase 1 — intake and spec.** `intake.yml`, `spec.yml`, the links contract, the label bootstrap. Ended with an issue — bug or feature — opening unattended into a validated, classified spec PR with advisory reviews on it.
+- **Phase 1 — intake and spec.** `intake.yml`, `spec.yml`, the links contract, the label bootstrap. Ended with an issue (bug or feature) opening unattended into a validated, classified spec PR with advisory reviews on it.
 - **Phase 2 — build.** The Gate 1 approval trigger, then `build.yml`. Ended with an approved spec PR producing an implementation PR, its review in the body, links complete.
 - **Phase 3 — verifier.** Ended with a deliberately drifted implementation earning `SPEC-MATCH: MISMATCH` that named the requirement, a correct one earning `YES` from the running app, and an out-of-scope find filing an issue that re-entered the line.
 - **Phase 4 — quality.** Ended with an implementation PR showing the drift verdict, the Lighthouse numbers, and usability findings before a human looked at it, and a threshold breach failing the check.
-- **Phase 5 — finalize and adoption.** `finalize.yml`, the caller templates, the `v1` tag, the README rewritten around the line, the adoption guide. Ended with a stranger able to wire in their own repo.
+- **Phase 5 — finalize and adoption.** `finalize.yml`, the caller templates, the `v1` tag, the README rewritten around the line, the adoption guide. Ended with a stranger able to wire the line into their own repo.
 
 ## 8. Defaults
 
