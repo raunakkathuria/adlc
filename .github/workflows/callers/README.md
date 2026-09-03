@@ -18,6 +18,11 @@ try `node app/server.mjs` on `http://localhost:3000/api/items`, which is this re
 on yours the station fails with `The app did not come up.` and the line stops at
 `state:verifying`.
 
+Another model, if you want one: set the `ADLC_BASE_URL` and `ADLC_MODEL` repository variables to
+any Anthropic-compatible gateway (LiteLLM fronting OpenAI, Gemini, Bedrock, or a local model), and
+put that gateway's key in the credential secret. No caller changes. See docs/any-model.md in this
+repository.
+
 Your dependencies are installed for you. The line runs `npm ci` where you have a lockfile and
 `npm install` where you do not, before it runs your gate or starts your app — so a repo with
 dependencies is not a special case.

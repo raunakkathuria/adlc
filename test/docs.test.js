@@ -61,3 +61,15 @@ test('docs: every diagram in docs/img is actually referenced', () => {
   const orphans = readdirSync(join(root, 'docs/img')).filter((f) => !readme.includes(f));
   assert.deepEqual(orphans, [], 'an unreferenced asset is the kind of leftover this repo just cleaned out');
 });
+
+test("docs: any-model.md's seam snippet is the code that actually ships", () => {
+  const doc = readFileSync(join(root, 'docs/any-model.md'), 'utf8');
+  const runner = readFileSync(join(root, 'scripts/run-station.sh'), 'utf8');
+  const snippet = doc.match(/```bash\n(if \[ -n "\$\{ADLC_BASE_URL[\s\S]*?)```/);
+  assert.ok(snippet, 'the doc explains the seam by quoting it; keep the snippet');
+  assert.ok(
+    runner.includes(snippet[1].trim()),
+    'the quoted seam has drifted from scripts/run-station.sh — a doc that quotes stale code is worse ' +
+      'than one that only describes it',
+  );
+});

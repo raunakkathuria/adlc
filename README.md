@@ -20,7 +20,7 @@ Everything between the two gates is automated. Every check is run by something t
 
 ## See it run
 
-The line is **off** unless the repo has a credential: either an `ANTHROPIC_API_KEY` Actions secret, or a `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` if you are on a Claude subscription. Without one, every workflow runs, explains itself, and stops. That is the whole switch: a repo that can open PRs on its own should require a human to turn it on.
+The line is **off** unless the repo has a credential: either an `ANTHROPIC_API_KEY` Actions secret, or a `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` if you are on a Claude subscription. The demo runs on Claude keys because CI pins one CLI, but the line is not tied to one model: point it at any Anthropic-compatible gateway, such as LiteLLM fronting OpenAI, Gemini or Bedrock, and the prompts and workflows do not change ([docs/any-model.md](docs/any-model.md)). Without one, every workflow runs, explains itself, and stops. That is the whole switch: a repo that can open PRs on its own should require a human to turn it on.
 
 With a credential set, open an issue and watch the labels move: `state:triaging → state:spec-draft → state:gate-1` — then approve the spec PR (Gate 1) and follow it through `state:building → state:verifying → state:quality → state:gate-2`. Merge the implementation PR (Gate 2) and the spec archives itself, the issue closes, and the label reads `state:shipped`. The issue list *is* the factory floor.
 
@@ -68,7 +68,7 @@ scripts/            links.mjs · labels.mjs · attempts.mjs · file-findings.mjs
 app/  test/         the storefront and its tests — the product that ships through the line
 issues/             the three seed reports as files — how a station runs with no GitHub token
 AGENTS.md           the standards; CLAUDE.md, GEMINI.md, cursor/copilot files point here
-docs/               the design, and the map from this repo to an org-scale deployment
+docs/               the design · running the line on another model · the org-scale map
 ```
 
 For the full reasoning — why the spec merges last, why the Verifier reports drift in both directions, what was deliberately left out — read [CONCEPT.md](CONCEPT.md) and [docs/design.md](docs/design.md).

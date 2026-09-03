@@ -157,6 +157,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ADLC_BASE_URL: ${{ vars.ADLC_BASE_URL }}
+          ADLC_MODEL: ${{ vars.ADLC_MODEL }}
           CHANGE: ${{ steps.links.outputs.change }}
         run: |
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/verify.md" \
