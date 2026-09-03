@@ -12,6 +12,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -136,6 +137,9 @@ test('stations: build.yml installs before the Executor, not after it', () => {
 // not supporting it at all.
 
 const AGENT_ENV = ['ADLC_BASE_URL', 'ADLC_MODEL'];
+// The runner's own variable names, which belong in scripts/run-station.sh and nowhere else.
+const RUNNER_VARS =
+  /ANTHROPIC_BASE_URL|ANTHROPIC_MODEL|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN/;
 
 test('stations: every agent step passes the provider seam', () => {
   const missing = [];
@@ -157,11 +161,63 @@ test('run-station.sh maps the seam to the runner, and nothing else does', () => 
   const runner = readFileSync(join(root, 'scripts/run-station.sh'), 'utf8');
   assert.match(runner, /ANTHROPIC_BASE_URL="\$ADLC_BASE_URL"/, 'the base URL must reach the CLI');
   assert.match(runner, /ANTHROPIC_MODEL="\$ADLC_MODEL"/, 'the model must reach the CLI');
+  assert.match(runner, /ANTHROPIC_API_KEY="\$ADLC_API_KEY"/, 'the API key must reach the CLI');
+  assert.match(runner, /CLAUDE_CODE_OAUTH_TOKEN="\$ADLC_OAUTH_TOKEN"/,
+    'the subscription token must reach the CLI');
   // The runner's own names belong here and nowhere else — that is what "swapping the runner is one
-  // file" means. Workflows may name the CREDENTIAL secrets, but never the base URL or model.
+  // file" means. A workflow naming ANTHROPIC_* would quietly re-couple the line to one vendor.
   for (const file of STATIONS) {
     const text = readFileSync(join(stationDir, file), 'utf8');
-    assert.doesNotMatch(text, /ANTHROPIC_BASE_URL|ANTHROPIC_MODEL/,
+    assert.doesNotMatch(text, RUNNER_VARS,
       `${file} names a runner-specific variable; that belongs in scripts/run-station.sh`);
   }
+  // …and the callers an adopter copies must ask for the line's own secret, not a vendor's.
+  for (const file of readdirSync(callerDir).filter((f) => f.endsWith('.yml'))) {
+    assert.doesNotMatch(readFileSync(join(callerDir, file), 'utf8'), RUNNER_VARS,
+      `${file} names a runner-specific variable in the adoption kit`);
+  }
+});
+
+test('stations: the credential secret is declared under the line\'s own name', () => {
+  for (const file of STATIONS) {
+    const text = readFileSync(join(stationDir, file), 'utf8');
+    if (!text.includes('run-station.sh')) continue;
+    for (const name of ['ADLC_API_KEY', 'ADLC_OAUTH_TOKEN']) {
+      assert.match(text, new RegExp(`^ {6}${name}:$`, 'm'),
+        `${file} must declare ${name} in workflow_call.secrets so a caller can inherit it`);
+    }
+    assert.match(text, /KEY: \$\{\{ secrets\.ADLC_API_KEY \}\}/,
+      `${file}'s off-switch must read the same API-key secret the agent steps use`);
+    assert.match(text, /OAUTH: \$\{\{ secrets\.ADLC_OAUTH_TOKEN \}\}/,
+      `${file}'s off-switch must read the same token secret the agent steps use`);
+  }
+});
+
+// Repo-wide: the runner's own variable names live in three files, and the reason differs each time.
+//
+// The workflow-level guard above stops a station or caller naming them. This one is the wider claim
+// — "swapping the runner is one file" — and it is the claim a reader is most likely to check. A
+// fourth file picking up one is how that stops being true: run.sh, check.sh, a doc example, a new
+// script. None of those would fail any other assertion here.
+//
+// The pattern covers CLAUDE_CODE_* as well as ANTHROPIC_*. Scoped to ANTHROPIC alone it passed while
+// CLAUDE_CODE_OAUTH_TOKEN sat in all five stations — the guard read wider than it was.
+
+test('the runner\'s variable names appear only in the seam, its guard, and the doc quoting it', () => {
+  const allowed = {
+    'scripts/run-station.sh': 'the seam — the one place ADLC_* is mapped to the CLI',
+    'test/callers.test.js': 'this file, which asserts the mapping',
+    'docs/any-model.md': 'quotes the seam, and docs.test.js proves the quote has not drifted',
+  };
+  const tracked = execFileSync('git', ['grep', '-lE', 'ANTHROPIC|CLAUDE_CODE_', '--', '.'], {
+    cwd: root, encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean);
+  const unexpected = tracked.filter((f) => !(f in allowed));
+  assert.deepEqual(
+    unexpected,
+    [],
+    'these name a runner-specific variable outside the seam; map it in scripts/run-station.sh instead',
+  );
 });

@@ -20,7 +20,7 @@ The first tagged line: six reusable stations, two human gates, and the kit for w
 ### Adopting
 
 - Six thin callers in `.github/workflows/callers/`, pinned at `@v1` — you own no station logic
-- Either `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` turns the line on; with neither, every workflow runs, explains itself, and stops
+- Either `ADLC_API_KEY` or `ADLC_OAUTH_TOKEN` turns the line on; with neither, every workflow runs, explains itself, and stops. `ADLC_OAUTH_TOKEN` holds the output of `claude setup-token`; both are named for the line rather than for a vendor, and `scripts/run-station.sh` maps them to whatever the pinned CLI reads
 - A copy-in path for repos whose policy forbids calling external workflows
 
 ### Known gaps

@@ -12,7 +12,7 @@
 # the living spec after the last implementation merges. main's spec only ever describes what
 # shipped.
 #
-# OFF unless the ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret is set.
+# OFF unless the ADLC_API_KEY or ADLC_OAUTH_TOKEN secret is set.
 
 name: spec
 
@@ -46,9 +46,9 @@ on:
         type: string
         default: main
     secrets:
-      ANTHROPIC_API_KEY:
+      ADLC_API_KEY:
         required: false
-      CLAUDE_CODE_OAUTH_TOKEN:
+      ADLC_OAUTH_TOKEN:
         required: false
 
 permissions:
@@ -90,11 +90,11 @@ jobs:
       - name: Is the line switched on?
         id: runner
         env:
-          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          KEY: ${{ secrets.ADLC_API_KEY }}
+          OAUTH: ${{ secrets.ADLC_OAUTH_TOKEN }}
         run: |
           if [ -z "${KEY:-}" ] && [ -z "${OAUTH:-}" ]; then
-            echo "No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret. The line stays off — this workflow is documentation."
+            echo "No ADLC_API_KEY or ADLC_OAUTH_TOKEN secret. The line stays off — this workflow is documentation."
             echo "on=false" >> "$GITHUB_OUTPUT"
           else
             echo "on=true" >> "$GITHUB_OUTPUT"
@@ -177,8 +177,8 @@ jobs:
         if: steps.runner.outputs.on == 'true'
         shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ADLC_API_KEY: ${{ secrets.ADLC_API_KEY }}
+          ADLC_OAUTH_TOKEN: ${{ secrets.ADLC_OAUTH_TOKEN }}
           ADLC_BASE_URL: ${{ vars.ADLC_BASE_URL }}
           ADLC_MODEL: ${{ vars.ADLC_MODEL }}
         run: |
@@ -255,8 +255,8 @@ jobs:
         if: steps.runner.outputs.on == 'true'
         shell: bash # pipefail
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ADLC_API_KEY: ${{ secrets.ADLC_API_KEY }}
+          ADLC_OAUTH_TOKEN: ${{ secrets.ADLC_OAUTH_TOKEN }}
           ADLC_BASE_URL: ${{ vars.ADLC_BASE_URL }}
           ADLC_MODEL: ${{ vars.ADLC_MODEL }}
           PR_URL: ${{ steps.pr.outputs.url }}
