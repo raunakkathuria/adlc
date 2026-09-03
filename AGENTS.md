@@ -71,7 +71,7 @@ Each station is one prompt file with a fresh context, because a check that share
 | **Verifier** | Drift | [`prompts/verify.md`](prompts/verify.md) | drift both directions — missing *and* extra — plus `SPEC-MATCH` / `FEATURE-IMPLEMENTED` verdicts |
 | — | Quality | [`prompts/quality.md`](prompts/quality.md) | usability ("don't make me think") and accessibility findings on the running app |
 
-Run any station locally with `./run.sh prompts/<name>.md [target]` — the workflows in `.github/workflows/` append the identical target sentence, so a station sees the same text whether a person or CI invoked it.
+Run any station locally with `./run.sh prompts/<name>.md [target]` — the workflows in `.github/workflows/` append the identical target sentence, so a station sees the same text whether a person or CI invoked it. CI pins Claude Code in [`scripts/run-station.sh`](scripts/run-station.sh), which is also the provider seam: `ADLC_BASE_URL` and `ADLC_MODEL` point the line at any Anthropic-compatible gateway ([docs/any-model.md](docs/any-model.md)).
 
 **Isolation is the design principle.** Planner and Executor share the same business context but never a session, so a plan cannot leak its assumptions into the build. The Verifier shares neither: it re-derives expected behaviour from the spec alone before it reads any code. Same reason a factory's quality inspector does not report to the line supervisor.
 
