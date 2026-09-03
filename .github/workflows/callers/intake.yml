@@ -6,11 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       issue_number: { description: "Issue to (re-)run intake for", required: true, type: string }
-# Reusable workflows do not inherit their own concurrency when called — the caller owns it.
-concurrency:
-  group: adlc-issue-${{ github.event.issue.number || inputs.issue_number }}
-  cancel-in-progress: false
-
+# No concurrency block here on purpose. The station this calls declares its own, and a
+# called workflow DOES apply it — so naming the same group in both makes the station wait
+# for a group its own caller is holding, and the run dies as a workflow file issue before
+# any job starts. The station owns serialisation; the caller must not restate it.
 jobs:
   intake:
     permissions:

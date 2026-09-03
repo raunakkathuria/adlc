@@ -10,6 +10,18 @@ line invents. Delete the secret and it is off — every workflow then explains i
 Each caller is a thin trigger that runs the real station from this repository at a pinned
 tag. Upgrading the line is bumping `@v1` — you own no station logic.
 
+Two of the stations run your app rather than reading it, and your app is not this repo's app.
+Set `start_command` and `health_url` on the **verifier** and **quality** callers to whatever
+starts yours and whatever answers 200 once it is up; the station derives the base URL it hands
+the agent from `health_url`, so there is no third value to set. Leave them out and the stations
+try `node app/server.mjs` on `http://localhost:3000/api/items`, which is this repo's own app —
+on yours the station fails with `The app did not come up.` and the line stops at
+`state:verifying`.
+
+Your dependencies are installed for you. The line runs `npm ci` where you have a lockfile and
+`npm install` where you do not, before it runs your gate or starts your app — so a repo with
+dependencies is not a special case.
+
 Recommended repo settings (production hardening):
 
 - Branch protection on your default branch. On GitHub Free this covers public repos only —

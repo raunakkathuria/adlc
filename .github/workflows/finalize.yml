@@ -124,6 +124,7 @@ jobs:
           git config user.name "adlc-line"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           openspec archive "$SLUG" --yes
+          bash "$ADLC/scripts/install-deps.sh"
           npm run verify
           git add openspec
           git commit -m "spec: archive $SLUG — the living spec now describes what shipped"
