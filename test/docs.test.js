@@ -67,9 +67,20 @@ test("docs: any-model.md's seam snippet is the code that actually ships", () => 
   const runner = readFileSync(join(root, 'scripts/run-station.sh'), 'utf8');
   const snippet = doc.match(/```bash\n(if \[ -n "\$\{ADLC_BASE_URL[\s\S]*?)```/);
   assert.ok(snippet, 'the doc explains the seam by quoting it; keep the snippet');
+  const quoted = snippet[1].trim();
   assert.ok(
-    runner.includes(snippet[1].trim()),
+    runner.includes(quoted),
     'the quoted seam has drifted from scripts/run-station.sh — a doc that quotes stale code is worse ' +
       'than one that only describes it',
+  );
+  // A substring check alone passes on a PARTIAL quote, which is how the doc came to show two of the
+  // four mappings and read as though the seam were half its size. Require every one of them.
+  const mappings = runner.match(/^if \[ -n "\$\{ADLC_[A-Z_]+:-\}" \]; then export .*; fi$/gm) ?? [];
+  assert.ok(mappings.length >= 4, 'the seam should map the base URL, model, and both credentials');
+  const absent = mappings.filter((line) => !quoted.includes(line));
+  assert.deepEqual(
+    absent,
+    [],
+    'the doc quotes the seam as its explanation, so it must quote all of it — these mappings are missing',
   );
 });
