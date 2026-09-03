@@ -44,4 +44,3 @@ Recommended repo settings (production hardening):
 Your repo also needs: `openspec init` run once (the living spec in `openspec/specs/`), a
 deterministic `npm run verify`, and prompts appended per station are read from this repo —
 your product code never hosts the line's logic.
-
