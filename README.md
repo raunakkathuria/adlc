@@ -4,15 +4,13 @@ An **assembly line for software development**, built from GitHub issues, GitHub 
 
 This repo is both the line itself — six reusable workflows any repository can adopt — and its own first consumer: a small storefront (catalog and orders, in memory, zero dependencies) that ships through the line it demonstrates. Its issues, PRs, and Actions history are the living proof.
 
-```
-issue opened ──► triage ──► [bug? reproduce] ──► spec PR ──► GATE 1 ──► build ──► impl PR(s)
-                  │              │                       human approves              │
-                  ▼              ▼                                     verify · review · drift · quality
-            closed: not     closed: not                                              │
-            actionable      reproducible                                 GATE 2 — human merges each
-                            (reopenable)                                             │
-                                                          all merged ──► spec archived · issue closed
-```
+**Anything in, one shape out.** Work arrives as a GitHub issue and triage decides what it is. A bug is accepted only once the reproduce station turns it into a failing test — a reproduction, not a model's opinion, is what makes a bug real. A feature or chore has nothing to reproduce. Either way, what leaves is a spec delta.
+
+![Intake: an issue is opened and triaged; a bug becomes a failing test at the reproduce station while a feature or chore goes straight on, and either way the work leaves as a spec PR. Triage can close an issue as not actionable, and reproduce can close it as not reproducible, reopenable.](docs/img/line-intake.svg)
+
+**Approved intent in, verified code out.** Gate 1 is an approving review on that spec PR, and the approval — not a merge — is what starts the build.
+
+![Build and ship: an approval at Gate 1 starts the build, which opens implementation PRs that verify, review, drift and quality checks run against; a human merges each one at Gate 2, and then the spec is archived and the issue closes.](docs/img/line-build.svg)
 
 Everything between the two gates is automated. Every check is run by something that did not do the work. And the line never merges an implementation PR — **Gate 2 is a person, always.**
 
