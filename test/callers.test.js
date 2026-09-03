@@ -12,6 +12,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -183,4 +184,30 @@ test('stations: the credential secret is declared under the line\'s own name', (
     assert.match(text, /KEY: \$\{\{ secrets\.ADLC_API_KEY \}\}/,
       `${file}'s off-switch must read the same secret the agent steps use`);
   }
+});
+
+// Repo-wide: the runner's own variable names live in three files, and the reason differs each time.
+//
+// The workflow-level guard above stops a station or caller naming them. This one is the wider claim
+// — "swapping the runner is one file" — and it is the claim a reader is most likely to check. A
+// fourth file picking up ANTHROPIC_* is how that stops being true: run.sh, check.sh, a doc example,
+// a new script. None of those would fail any other assertion here.
+
+test('the runner\'s variable names appear only in the seam, its guard, and the doc quoting it', () => {
+  const allowed = {
+    'scripts/run-station.sh': 'the seam — the one place ADLC_* is mapped to the CLI',
+    'test/callers.test.js': 'this file, which asserts the mapping',
+    'docs/any-model.md': 'quotes the seam, and docs.test.js proves the quote has not drifted',
+  };
+  const tracked = execFileSync('git', ['grep', '-l', 'ANTHROPIC', '--', '.'], {
+    cwd: root, encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean);
+  const unexpected = tracked.filter((f) => !(f in allowed));
+  assert.deepEqual(
+    unexpected,
+    [],
+    'these name a runner-specific variable outside the seam; map it in scripts/run-station.sh instead',
+  );
 });
