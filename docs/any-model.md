@@ -77,6 +77,34 @@ ANTHROPIC_API_KEY="$GATEWAY_KEY" \
   bash scripts/run-station.sh prompts/triage.md "Read" issues/001-rejected-order-eats-stock.md
 ```
 
+## Validated against a real non-Anthropic model
+
+Gemini, through LiteLLM, on the real `scripts/run-station.sh`. The proxy returned an
+Anthropic-shaped reply from a Gemini backend:
+
+```json
+{"id":"dCCZ…","type":"message","role":"assistant","model":"gemini-2.5-flash",
+ "content":[{"type":"text","text":"PROVIDER OK"}],"stop_reason":"end_turn",
+ "usage":{"input_tokens":8,"output_tokens":24}}
+```
+
+More usefully, the **triage station** ran against a real issue file and its verdict parsed cleanly
+through `intake.yml`'s own parser — the same route, slug and type Claude produces:
+
+```
+{"actionable":true,"type":"bug","slug":"rejected-order-eats-stock",
+ "duplicate_of":null,"recurrence_of":null,"requirements":["REQ-ORD-4"]}
+Why: … stock decreases even when an order is rejected, which directly contradicts REQ-ORD-4 …
+
+route: reproduce   slug: rejected-order-eats-stock   type: bug
+```
+
+That is the check worth doing on your own provider, because it is the one that can fail quietly.
+The stations parse model output strictly, and a model that formats a verdict slightly differently
+gets routed wrong rather than erroring — `design.md`'s known-gaps list has five instances of exactly
+that. Run one station and put its output through the station's parser before you trust a new model
+with the whole line.
+
 ## How the seam works
 
 `run-station.sh` maps the line's own names onto the runner's:
