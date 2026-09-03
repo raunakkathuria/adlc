@@ -269,8 +269,19 @@ jobs:
           { cat work/review.md
             printf '\n\n---\n\nThe independent drift verdict lands below as a comment when the verifier finishes.\n\nCloses #%s\nRelates to #%s\n' "$ISSUE" "$ISSUE"
           } > work/pr-body.md
-          URL=$(gh pr create --base "${{ github.event.repository.default_branch || 'main' }}" --head "impl/$SLUG" \
-            --title "impl: $SLUG" --body-file work/pr-body.md)
+          # A rebuild after a spec revision pushes to a branch that already has a PR, and
+          # gh pr create fails on that — which abandoned the run one step from the end,
+          # skipping the verifier handoff while finished work sat on the branch. The spec
+          # station has always reused its PR this way; this one now does too.
+          EXISTING=$(gh pr list --head "impl/$SLUG" --state open --json url --jq '.[0].url // empty')
+          if [ -n "$EXISTING" ]; then
+            URL="$EXISTING"
+            gh pr comment "$URL" --body-file work/pr-body.md
+            echo "Implementation PR already open: $URL (rebuilt after a spec revision)."
+          else
+            URL=$(gh pr create --base "${{ github.event.repository.default_branch || 'main' }}" --head "impl/$SLUG" \
+              --title "impl: $SLUG" --body-file work/pr-body.md)
+          fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           # Bot-opened PRs start no pull_request workflows, so the gate's verdict becomes a
           # commit status the branch protection can require.
