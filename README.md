@@ -26,7 +26,7 @@ The line is **off** unless the repo has a credential: either an `ANTHROPIC_API_K
 
 With a credential set, open an issue and watch the labels move: `state:triaging → state:spec-draft → state:gate-1` — then approve the spec PR (Gate 1) and follow it through `state:building → state:verifying → state:quality → state:gate-2`. Merge the implementation PR (Gate 2) and the spec archives itself, the issue closes, and the label reads `state:shipped`. The issue list *is* the factory floor.
 
-Want the product first? `npm start`, then http://localhost:3000. The gate is `npm run verify` — tests plus requirement coverage, deterministic, about a tenth of a second, no model in it.
+Want the product first? `npm start`, then http://localhost:3000. The gate is `npm run verify` — tests plus requirement coverage, deterministic, under a second, no model in it.
 
 ## The stations
 
