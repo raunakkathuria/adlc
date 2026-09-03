@@ -18,7 +18,13 @@ if [ ! -f package.json ]; then
 fi
 
 if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
-  npm ci --no-audit --no-fund
+  # `npm ci` refuses a lockfile that no longer matches package.json, which is exactly what an
+  # Executor that adds a dependency without regenerating the lock produces. Falling back is the
+  # recovery, and `npm install` updates the lock so the change ships with it rather than without.
+  npm ci --no-audit --no-fund || {
+    echo "::warning::npm ci refused the lockfile — it is out of sync with package.json. Falling back to npm install, which updates it."
+    npm install --no-audit --no-fund
+  }
 else
   npm install --no-audit --no-fund --no-package-lock
 fi

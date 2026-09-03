@@ -74,8 +74,11 @@ for (const file of callers) {
 
 const stationDir = join(root, '.github/workflows');
 const APP_STATIONS = ['verifier.yml', 'quality.yml'];
-// Every station that runs the adopter's npm scripts or starts their app.
-const NEEDS_DEPS = ['intake.yml', 'build.yml', 'verifier.yml', 'quality.yml', 'finalize.yml'];
+const STATIONS = ['intake.yml', 'spec.yml', 'build.yml', 'verifier.yml', 'quality.yml', 'finalize.yml'];
+// Derived, never listed: a hand-kept list of which stations need an install is the same shape as
+// the bug above — something the code does not check. Ask instead which stations run the adopter's
+// code, and require exactly those to install it.
+const RUNS_ADOPTER_CODE = /npm test|npm run verify|sh -c "\$START_COMMAND"/;
 
 for (const file of APP_STATIONS) {
   const text = readFileSync(join(stationDir, file), 'utf8');
@@ -101,13 +104,25 @@ for (const file of APP_STATIONS) {
   });
 }
 
-for (const file of NEEDS_DEPS) {
-  test(`stations: ${file} installs the adopter's dependencies before running their code`, () => {
+test("stations: every station that runs the adopter's code installs it first", () => {
+  const missing = STATIONS.filter((file) => {
     const text = readFileSync(join(stationDir, file), 'utf8');
-    assert.match(
-      text,
-      /scripts\/install-deps\.sh/,
-      'this station runs the adopter\'s npm scripts or starts their app, so it must install first',
-    );
+    return RUNS_ADOPTER_CODE.test(text) && !/scripts\/install-deps\.sh/.test(text);
   });
-}
+  assert.deepEqual(missing, [], 'these run the adopter\'s npm scripts or app without installing');
+});
+
+test("stations: spec.yml is the one that needs no install, and that is not an oversight", () => {
+  const text = readFileSync(join(stationDir, 'spec.yml'), 'utf8');
+  assert.equal(RUNS_ADOPTER_CODE.test(text), false, 'the Planner writes the delta and nothing else');
+  assert.doesNotMatch(text, /Bash\(npm:/, 'the Planner is not allowed npm, so it cannot run their code');
+});
+
+test('stations: build.yml installs before the Executor, not after it', () => {
+  const text = readFileSync(join(stationDir, 'build.yml'), 'utf8');
+  assert.ok(
+    text.indexOf('install-deps.sh') < text.indexOf('prompts/build.md'),
+    'the Executor works red-green, so it runs the suite itself — with no node_modules every one ' +
+      'of its runs fails with "Cannot find module" and it cannot work at all',
+  );
+});
