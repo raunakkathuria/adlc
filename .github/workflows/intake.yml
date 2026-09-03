@@ -171,6 +171,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ADLC_BASE_URL: ${{ vars.ADLC_BASE_URL }}
+          ADLC_MODEL: ${{ vars.ADLC_MODEL }}
         run: |
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/triage.md" "Read,Grep,Glob" \
             'The issue to triage is `work/issue.md`.' \
@@ -353,6 +355,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ADLC_BASE_URL: ${{ vars.ADLC_BASE_URL }}
+          ADLC_MODEL: ${{ vars.ADLC_MODEL }}
         run: |
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/reproduce.md" \
             "Read,Grep,Glob,Edit,Write,Bash(node:*),Bash(npm:*)" \

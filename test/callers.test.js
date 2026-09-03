@@ -126,3 +126,42 @@ test('stations: build.yml installs before the Executor, not after it', () => {
       'of its runs fails with "Cannot find module" and it cannot work at all',
   );
 });
+
+// The provider seam: every agent step must be able to reach a gateway.
+//
+// The demo runs on Claude keys, but nothing in the line is Anthropic-specific: the prompts name no
+// vendor, and `scripts/run-station.sh` is the one place the runner's own variable names appear. That
+// only holds if every agent step actually passes the seam through — miss one and that single station
+// silently talks to Anthropic while the rest of the line talks to the gateway, which is worse than
+// not supporting it at all.
+
+const AGENT_ENV = ['ADLC_BASE_URL', 'ADLC_MODEL'];
+
+test('stations: every agent step passes the provider seam', () => {
+  const missing = [];
+  for (const file of STATIONS) {
+    const text = readFileSync(join(stationDir, file), 'utf8');
+    // A step is an agent step if it invokes the station runner.
+    for (const step of text.split(/^      - name: /m).slice(1)) {
+      if (!step.includes('run-station.sh')) continue;
+      const name = step.split('\n')[0].trim();
+      for (const key of AGENT_ENV) {
+        if (!step.includes(`${key}: \${{ vars.${key} }}`)) missing.push(`${file} → ${name} → ${key}`);
+      }
+    }
+  }
+  assert.deepEqual(missing, [], 'these agent steps cannot reach a gateway');
+});
+
+test('run-station.sh maps the seam to the runner, and nothing else does', () => {
+  const runner = readFileSync(join(root, 'scripts/run-station.sh'), 'utf8');
+  assert.match(runner, /ANTHROPIC_BASE_URL="\$ADLC_BASE_URL"/, 'the base URL must reach the CLI');
+  assert.match(runner, /ANTHROPIC_MODEL="\$ADLC_MODEL"/, 'the model must reach the CLI');
+  // The runner's own names belong here and nowhere else — that is what "swapping the runner is one
+  // file" means. Workflows may name the CREDENTIAL secrets, but never the base URL or model.
+  for (const file of STATIONS) {
+    const text = readFileSync(join(stationDir, file), 'utf8');
+    assert.doesNotMatch(text, /ANTHROPIC_BASE_URL|ANTHROPIC_MODEL/,
+      `${file} names a runner-specific variable; that belongs in scripts/run-station.sh`);
+  }
+});
