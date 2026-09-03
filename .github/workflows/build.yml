@@ -197,6 +197,12 @@ jobs:
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
         run: npm install -g @anthropic-ai/claude-code
 
+      # Before the Executor, not after: it works red-green, so it runs the suite itself. With no
+      # node_modules every one of its test runs fails with "Cannot find module" and it cannot work.
+      - name: The adopter's dependencies — the Executor runs their tests
+        if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
+        run: bash "$ADLC/scripts/install-deps.sh"
+
       - name: Build it (the Executor)
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
         shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
@@ -216,6 +222,16 @@ jobs:
           if [ -n "$(git -C .adlc status --porcelain)" ]; then
             echo "::error::The agent modified the line's own prompts or scripts (.adlc/) — refusing to continue."
             exit 1
+          fi
+
+      # If the Executor added a dependency, node_modules is now behind the manifest.
+      - name: Reinstall, if the Executor touched the manifest
+        if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
+        run: |
+          if git diff --quiet HEAD -- package.json package-lock.json npm-shrinkwrap.json; then
+            echo "The manifest is unchanged — nothing to reinstall."
+          else
+            bash "$ADLC/scripts/install-deps.sh"
           fi
 
       # The deterministic gate. Red gate, no PR — the run stops and reports what it tried.
@@ -260,7 +276,7 @@ jobs:
           # Stage everything the gate just verified — except the run's own scratch. (The
           # working tree IS what npm run verify passed; under-staging would ship a PR that
           # differs from what was verified.)
-          git add -A -- . ':!work' ':!.adlc'
+          git add -A -- . ':!work' ':!.adlc' ':!node_modules'
           git commit -m "impl: $SLUG
 
           Built from the spec delta approved at Gate 1 (spec PR stays open until this merges).

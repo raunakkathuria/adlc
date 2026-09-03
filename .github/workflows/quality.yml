@@ -40,6 +40,16 @@ on:
       query:
         required: false
         type: string
+      start_command:
+        description: "How to start the app under test — an adopter's app is not this one"
+        required: false
+        type: string
+        default: "node app/server.mjs"
+      health_url:
+        description: "A URL that answers 200 once the app is up"
+        required: false
+        type: string
+        default: "http://localhost:3000/api/items"
       adlc_repo:
         required: false
         type: string
@@ -67,6 +77,8 @@ concurrency:
 env:
   PR: ${{ inputs.pr_number }}
   ISSUE: ${{ inputs.issue_number }}
+  START_COMMAND: ${{ inputs.start_command || 'node app/server.mjs' }}
+  HEALTH_URL: ${{ inputs.health_url || 'http://localhost:3000/api/items' }}
   ADLC_REPO: ${{ inputs.adlc_repo || 'raunakkathuria/adlc' }}
   ADLC_REF: ${{ inputs.adlc_ref || 'main' }}
   GH_TOKEN: ${{ github.token }}
@@ -114,15 +126,22 @@ jobs:
         if: steps.runner.outputs.on == 'true' && env.PR != ''
         run: gh pr checkout "$PR"
 
+      - name: The adopter's dependencies — the line runs their code, so it installs it
+        if: steps.runner.outputs.on == 'true'
+        run: bash "$ADLC/scripts/install-deps.sh"
+
       - name: Start the app
         if: steps.runner.outputs.on == 'true'
         run: |
           # env -u: the app is model-written code; it gets no token.
-          (env -u GH_TOKEN node app/server.mjs &) && for i in $(seq 1 30); do
-            curl -sf http://localhost:3000/api/items > /dev/null && break
+          (env -u GH_TOKEN sh -c "$START_COMMAND" &) && for i in $(seq 1 30); do
+            curl -sf "$HEALTH_URL" > /dev/null && break
             sleep 1
           done
-          curl -sf http://localhost:3000/api/items > /dev/null || { echo "::error::The app did not come up."; exit 1; }
+          curl -sf "$HEALTH_URL" > /dev/null \
+            || { echo "::error::The app did not come up. start_command=$START_COMMAND health_url=$HEALTH_URL"; exit 1; }
+          # The agent and Lighthouse need the origin. Derive it rather than ask for a third input.
+          node -e 'console.log("APP_URL=" + new URL(process.argv[1]).origin)' "$HEALTH_URL" >> "$GITHUB_ENV"
 
       # The deterministic half. Numbers first, opinions second.
       - name: Lighthouse — accessibility and performance, against the thresholds
@@ -130,7 +149,7 @@ jobs:
         id: lighthouse
         run: |
           mkdir -p work
-          npx --yes lighthouse http://localhost:3000 \
+          npx --yes lighthouse "$APP_URL" \
             --only-categories=accessibility,performance \
             --output=json --output-path=work/lighthouse.json \
             --quiet --chrome-flags="--headless --no-sandbox"
@@ -173,7 +192,7 @@ jobs:
           fi
           bash "$ADLC/scripts/run-station.sh" "$ADLC/prompts/quality.md" \
             "Read,Grep,Glob,Bash(curl:*),Bash(node:*)" \
-            'The app is running at `http://localhost:3000`.' \
+            "The app is running at \`$APP_URL\`." \
             "${CHANGE:+The change under test is \`$CHANGE/\`.}" \
             "${QUERY:+Focus: $QUERY}" \
             | tee work/quality.md
