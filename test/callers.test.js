@@ -136,6 +136,8 @@ test('stations: build.yml installs before the Executor, not after it', () => {
 // not supporting it at all.
 
 const AGENT_ENV = ['ADLC_BASE_URL', 'ADLC_MODEL'];
+// The runner's own variable names, which belong in scripts/run-station.sh and nowhere else.
+const RUNNER_VARS = /ANTHROPIC_BASE_URL|ANTHROPIC_MODEL|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN/;
 
 test('stations: every agent step passes the provider seam', () => {
   const missing = [];
@@ -157,11 +159,28 @@ test('run-station.sh maps the seam to the runner, and nothing else does', () => 
   const runner = readFileSync(join(root, 'scripts/run-station.sh'), 'utf8');
   assert.match(runner, /ANTHROPIC_BASE_URL="\$ADLC_BASE_URL"/, 'the base URL must reach the CLI');
   assert.match(runner, /ANTHROPIC_MODEL="\$ADLC_MODEL"/, 'the model must reach the CLI');
+  assert.match(runner, /ANTHROPIC_API_KEY="\$ADLC_API_KEY"/, 'the credential must reach the CLI');
   // The runner's own names belong here and nowhere else — that is what "swapping the runner is one
-  // file" means. Workflows may name the CREDENTIAL secrets, but never the base URL or model.
+  // file" means. A workflow naming ANTHROPIC_* would quietly re-couple the line to one vendor.
   for (const file of STATIONS) {
     const text = readFileSync(join(stationDir, file), 'utf8');
-    assert.doesNotMatch(text, /ANTHROPIC_BASE_URL|ANTHROPIC_MODEL/,
+    assert.doesNotMatch(text, RUNNER_VARS,
       `${file} names a runner-specific variable; that belongs in scripts/run-station.sh`);
+  }
+  // …and the callers an adopter copies must ask for the line's own secret, not a vendor's.
+  for (const file of readdirSync(callerDir).filter((f) => f.endsWith('.yml'))) {
+    assert.doesNotMatch(readFileSync(join(callerDir, file), 'utf8'), RUNNER_VARS,
+      `${file} names a runner-specific variable in the adoption kit`);
+  }
+});
+
+test('stations: the credential secret is declared under the line\'s own name', () => {
+  for (const file of STATIONS) {
+    const text = readFileSync(join(stationDir, file), 'utf8');
+    if (!text.includes('run-station.sh')) continue;
+    assert.match(text, /^ {6}ADLC_API_KEY:$/m,
+      `${file} must declare ADLC_API_KEY in workflow_call.secrets so a caller can inherit it`);
+    assert.match(text, /KEY: \$\{\{ secrets\.ADLC_API_KEY \}\}/,
+      `${file}'s off-switch must read the same secret the agent steps use`);
   }
 });
