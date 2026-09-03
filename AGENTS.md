@@ -1,6 +1,6 @@
 # AGENTS.md — how to work in this repo
 
-This is the **only** instruction file here. `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/agents.mdc`, and `.github/copilot-instructions.md` are three-line pointers to this file, so every agent reads the same thing and there is nothing to keep in sync.
+This is the **only** instruction file here. `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/agents.mdc`, and `.github/copilot-instructions.md` are short pointers to this file, so every agent reads the same thing and there is nothing to keep in sync.
 
 ## What this is
 
