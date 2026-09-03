@@ -1,8 +1,8 @@
-# ADLC — production-grade open-source pipeline · design v2
+# ADLC — the design
 
-**Repo:** `github.com/raunakkathuria/adlc` · **Status:** v2, decisions locked, awaiting go-ahead · **Date:** 2026-08-30
+**Repo:** `github.com/raunakkathuria/adlc` · **Status:** built and running — the line ships its own changes · **Last updated:** 3 September 2026
 
-Not a demo, not a POC: a production-grade assembly line for software development that any team can adopt with minimal setup, and a repo that is itself the first consumer — its own issues run the line, its Actions history is the public proof. The internal Deriv system (core-automation + quality-automation) is the reference; this is the same line with the org-scale plumbing removed and nothing proprietary left in.
+Not a demo, not a POC: a production-grade assembly line for software development that any team can adopt with minimal setup, and a repo that is itself the first consumer — its own issues run the line, its Actions history is the public proof. The reference is an internal system running this shape at company scale; this is the same line with the org-scale plumbing removed and nothing proprietary left in.
 
 **Engineering philosophy: KISS, YAGNI, DRY — always.** Every decision below was made by those three rules. No configuration file. No knobs nobody asked to turn. One definition of every station.
 
@@ -55,7 +55,7 @@ All stations read prompts from `prompts/` — one plain-markdown file per statio
 
 ### `intake.yml` — triage + validation
 
-Trigger: `issues: [opened, reopened]`.
+Trigger: `issues: [opened, reopened]`, or dispatched with an `issue_number` to re-run intake on an issue that is already open.
 
 1. Label `state:triaging`. Classify (structured JSON, fail-closed): actionable? `type:bug|feature|chore|docs`?
 2. **Not actionable** (question, duplicate, missing info, spam) → comment the reason, label `resolution:not-actionable`, close as *not planned*. Dedupe pass first: a match against an existing open issue links it instead; a match against a closed `resolution:not-reproducible` bug **reopens that issue** — recurrence is evidence, and the accumulated reports travel to the re-run.
@@ -63,6 +63,8 @@ Trigger: `issues: [opened, reopened]`.
 4. **Actionable** → dispatch the spec station. Label `state:spec-draft`.
 
 ### `spec.yml` — the Planner
+
+Trigger: dispatched by intake, dispatched by the verifier for a revision, or `/revise <what to change>` as an issue comment from someone with write access — the comment is both the trigger and the instruction, because the Planner reads the whole thread.
 
 Writes `openspec/changes/<slug>/` (proposal, spec delta, design if needed, tasks) — **only** the change directory, never product code. Opens the **spec PR**, writes the `Relates to #N` trailer and the links block deterministically (workflow, not model). Two advisory review lenses (product, architect) post findings on the PR. Label `state:gate-1`.
 
@@ -98,10 +100,10 @@ Verdict trailers `SPEC-MATCH: COMPLETE|MISMATCH` + `FEATURE-IMPLEMENTED: YES|NO|
 
 ### `quality.yml` — usability + accessibility
 
-Trigger: on the implementation PR (so Gate 2 sees the numbers) + nightly + on demand.
+Trigger: dispatched by the verifier once the drift check passes, so Gate 2 sees the numbers · nightly against the default branch · on demand.
 
-- **Deterministic:** axe-core + Lighthouse (accessibility and performance categories) against thresholds in the workflow — a breach fails the check.
-- **Agentic — "don't make me think":** an agent drives the running PR build with Playwright and judges Krug-style heuristics: first-click clarity, labels that say what they do, feedback after actions, navigation that never strands. In-scope findings → PR review; out-of-scope confirmed problems → deduped `origin:adlc` issues.
+- **Deterministic:** Lighthouse accessibility and performance scores against thresholds set in the workflow — a breach fails the check.
+- **Agentic — "don't make me think":** an agent fetches the running build's page, reads the served DOM, and drives the endpoints behind it, judging Krug-style heuristics: first-click clarity, labels that say what they do, feedback after actions, navigation that never strands. No browser drives it — that is one of the known gaps below. In-scope findings → PR review; out-of-scope confirmed problems → deduped `origin:adlc` issues.
 
 ### Gate 2 — ship it
 
@@ -117,18 +119,18 @@ Written only by the line, never by hand. Exactly one `state:*` at a time on the 
 
 `state:triaging → state:spec-draft → state:gate-1 → state:building → state:verifying → state:quality → state:gate-2 → state:shipped`
 
-Plus: `type:bug|feature|chore|docs` (from triage), `needs-human` (loop cap tripped — the parking comment is the handoff document), `resolution:not-actionable|not-reproducible` (closed verdicts), `origin:adlc` (machine-filed). The issue list *is* the dashboard; no other observability layer (YAGNI — Deriv's Supabase dashboard is what this becomes at org scale).
+Plus: `type:bug|feature|chore|docs` (from triage), `needs-human` (loop cap tripped — the parking comment is the handoff document), `resolution:not-actionable|not-reproducible` (closed verdicts), `origin:adlc` (machine-filed). The issue list *is* the dashboard; no other observability layer (YAGNI — a pipeline dashboard is what this becomes at org scale).
 
-## 5. What was simplified from Deriv production, and why it holds
+## 5. What was simplified from the internal system, and why it holds
 
-| Production (deriv-core) | Here | Why it holds |
+| The internal system | Here | Why it holds |
 |---|---|---|
 | GitHub App + installation tokens + org rulesets | `GITHUB_TOKEN` + reusable workflows @tag | reusable workflows are GitHub's native cross-repo reuse; no App to install |
 | Hub repos holding agents, queues, ADK runners | prompt files + agent CLI steps | fresh-context independence is the property; infrastructure isn't |
 | Spec PR merges first (merge = Gate 1), impl follows | spec PR approved at Gate 1, merges **last** | one spec fans out to N impl PRs; `main` never carries an unshipped spec |
-| LiteLLM proxy + model routing | one API key secret | prompts stay CLI-agnostic; the swap is one line |
+| LiteLLM proxy + model routing | one credential secret | prompts stay CLI-agnostic; the swap is one line |
 | Vercel preview deploys | app runs in the runner | same property: verify/quality against the running PR head |
-| Supabase pipeline dashboard | labels + links block + run summaries | the issue thread is the dashboard |
+| A pipeline dashboard | labels + links block + run summaries | the issue thread is the dashboard |
 | Figma visual-acceptance gate | out (YAGNI) | needs a design source; add when one exists |
 
 ### Known gaps, found by running it
@@ -158,21 +160,21 @@ adlc/
 │   ├── verify.yml                 # deterministic gate, every push/PR — no model
 │   ├── intake.yml  spec.yml  build.yml  verifier.yml  quality.yml  finalize.yml
 │   └── callers/                   # the ~15-line files an adopting team copies
-├── AGENTS.md                      # the standards; CLAUDE.md etc. are 3-line pointers
+├── AGENTS.md                      # the standards; CLAUDE.md etc. are short pointers
 └── README.md  CONCEPT.md  docs/   # adoption guide · architecture · this design
 ```
 
-## 7. Build order
+## 7. How it was built
 
-Each phase lands working and demoable; later phases never break earlier ones.
+Each phase landed working and demoable, and later phases never broke earlier ones. All five are done; the order is recorded because the sequencing is the part worth copying.
 
-- **Phase 0 — Foundation.** `openspec init` (migrate specs + gate to `openspec/specs/`), `buildwright init`, verify.yml carried over. Exit: green gate reading OpenSpec; loop runnable by hand.
-- **Phase 1 — Intake + Spec.** `intake.yml` + `spec.yml` + links contract + label bootstrap. Exit: open an issue (bug or feature), get a validated, classified, spec PR with advisory reviews — unattended.
-- **Phase 2 — Build.** Gate 1 approval trigger + `build.yml`. Exit: approve a spec PR, get an implementation PR with review in the body, links complete.
-- **Phase 3 — Verifier.** Exit: a deliberately drifted implementation gets `SPEC-MATCH: MISMATCH` naming the requirement; a correct one earns `YES` from the running app; an out-of-scope find files an issue that re-enters the line.
-- **Phase 4 — Quality.** Exit: impl PR shows drift verdict + axe/Lighthouse numbers + usability findings before a human looks; a threshold breach fails the check.
-- **Phase 5 — Finalize + adoption.** `finalize.yml`, caller templates, v1 tag, README rewritten around the line with a committed reference run, docs/ adoption guide. Exit: a stranger can wire their repo in under ten minutes.
+- **Phase 0 — foundation.** `openspec init` (specs and the gate moved into `openspec/specs/`), `buildwright init`, `verify.yml` carried over. Ended with a green gate reading OpenSpec and the loop runnable by hand.
+- **Phase 1 — intake and spec.** `intake.yml`, `spec.yml`, the links contract, the label bootstrap. Ended with an issue — bug or feature — opening unattended into a validated, classified spec PR with advisory reviews on it.
+- **Phase 2 — build.** The Gate 1 approval trigger, then `build.yml`. Ended with an approved spec PR producing an implementation PR, its review in the body, links complete.
+- **Phase 3 — verifier.** Ended with a deliberately drifted implementation earning `SPEC-MATCH: MISMATCH` that named the requirement, a correct one earning `YES` from the running app, and an out-of-scope find filing an issue that re-entered the line.
+- **Phase 4 — quality.** Ended with an implementation PR showing the drift verdict, the Lighthouse numbers, and usability findings before a human looked at it, and a threshold breach failing the check.
+- **Phase 5 — finalize and adoption.** `finalize.yml`, the caller templates, the `v1` tag, the README rewritten around the line, the adoption guide. Ended with a stranger able to wire in their own repo.
 
-## 8. Defaults chosen (veto anytime)
+## 8. Defaults
 
-Loop cap **2** then park · machine-issue depth **1** · labels named as in §4 · marker `adlc-links v1` · agent CLI in CI: Claude Code via `claude -p` (plain CLI over the official action — keeps the any-agent story honest) · Node 22 · spec PR branch `spec/<slug>`, impl branch `impl/<slug>` (single repo).
+Loop cap **2** then park · machine-issue depth **1** · labels named as in §4 · marker `adlc-links v1` · agent CLI in CI: Claude Code via `claude -p`, pinned in `scripts/run-station.sh` and nowhere else (the plain CLI rather than the official action, which keeps the any-agent story honest) · Node 22 · spec branch `spec/<slug>`, implementation branch `impl/<slug>`.
