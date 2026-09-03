@@ -25,4 +25,9 @@ jobs:
       issue_number: ${{ inputs.issue_number }}
       query: ${{ inputs.query }}
       adlc_ref: v1
+      # Your app is not this repo's app. Uncomment and set these two to whatever starts
+      # yours and whatever answers 200 once it is up; the station derives the base URL it
+      # gives the agent from health_url, so there is no third thing to set.
+      # start_command: npm start
+      # health_url: http://localhost:8080/health
     secrets: inherit

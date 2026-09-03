@@ -315,6 +315,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: The adopter's dependencies — the line runs their code, so it installs it
+        run: bash "$ADLC/scripts/install-deps.sh"
+
       # If the suite is already red, a failing test proves nothing about THIS report.
       - name: Baseline — the suite must be green before reproduction means anything
         id: baseline
