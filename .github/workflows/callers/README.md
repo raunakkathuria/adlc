@@ -18,6 +18,15 @@ Recommended repo settings (production hardening):
 - "Dismiss stale approvals" ON: a spec revision after verifier findings then re-requires
   Gate 1, which is exactly right. Reviewing at Gate 1 and want the delta changed first?
   Comment `/revise <what to change>` on the issue — that revises the open spec PR in place.
+- Making a verify check *required* needs care, because neither signal appears on every PR.
+  A PR a person opens gets the `verify` check run. A PR the line opens gets none, because
+  bot-opened PRs start no `pull_request` workflows — `build.yml` posts an `adlc/verify` commit
+  status on the implementation branch instead, and that status is absent from a person's PRs.
+  Require either one and you block the other kind. Gate 2 is a human merge regardless, so the
+  simple setting is to require neither and read the checks that are there.
+- The spec PR shows no checks at all, for that same reason, and that is fine: it holds only
+  `openspec/changes/**`, so the product's test gate has nothing to say about it. Its gates are
+  the two review lenses and Gate 1.
 - CODEOWNERS on `openspec/**` if you want Gate 1 role-aware.
 - Allow GitHub Actions to create pull requests (Settings → Actions → General).
 - **Merge commits only** — turn off "Allow squash merging" and "Allow rebase merging"
@@ -32,3 +41,18 @@ Recommended repo settings (production hardening):
 Your repo also needs: `openspec init` run once (the living spec in `openspec/specs/`), a
 deterministic `npm run verify`, and prompts appended per station are read from this repo —
 your product code never hosts the line's logic.
+
+
+## If your policy forbids calling external workflows
+
+The stations already handle this, so there is nothing to fork. Copy the six station workflows
+from [`.github/workflows/`](..) (the real ones, not these callers) into your repository
+along with `prompts/` and `scripts/`, then delete each station's "Get the line's prompts
+and scripts" checkout step. Every station picks its own tree when no `.adlc` directory is there:
+
+```bash
+ADLC=$([ -d .adlc ] && echo .adlc || echo .)
+```
+
+The trade is that you then own the station logic and upgrade by copying again. Use the callers
+if you are allowed to.

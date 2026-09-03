@@ -99,7 +99,7 @@ This is not ceremony. It is the same reason a factory's quality inspector does n
 npm run verify     # node --test  +  requirement coverage
 ```
 
-No model in it. It runs in about a tenth of a second, and it is the only thing in the loop that gets a vote on whether the work is done.
+No model in it. It runs in under a second, and it is the only thing in the loop that gets a vote on whether the work is done.
 
 It is also not enough on its own. `npm run req-coverage` checks that every requirement in the living spec is named by at least one test. A requirement still in flight in a delta may be named by a test but does not owe one until that delta's `tasks.md` is fully ticked — so a spec PR is not red merely for describing work nobody has built, and a build that claims to be finished without a test is. It cannot check whether that test asserts the right thing. A test written from the implementation agrees with the implementation, passes forever, and reports nothing.
 
@@ -119,7 +119,7 @@ The stations are plain-markdown prompts in `prompts/`. CI pins one CLI for repro
 
 Real in this repo: the spec as source of truth, the deterministic gate, one prompt per station with fresh context, both human gates, the full unattended line in `.github/workflows/`, and the adoption kit (`.github/workflows/callers/`) that runs the same stations in any repo from a pinned tag.
 
-What an org-scale deployment adds on top — and what Deriv's internal system does add: a GitHub App instead of the repo token, so stations work across an organization; a central hub repo holding secrets and model routing; real preview deploys instead of an app started in the runner; a pipeline dashboard instead of labels; browser-fleet e2e and security review as additional hard gates; a `design.md` contract check for changes that span services. Every one of those is the same station, scaled — none of them changes the shape of the line.
+What an org-scale deployment adds on top — and what the internal system this is modelled on does add: a GitHub App instead of the repo token, so stations work across an organization; a central hub repo holding secrets and model routing; real preview deploys instead of an app started in the runner; a pipeline dashboard instead of labels; browser-fleet e2e and security review as additional hard gates; a `design.md` contract check for changes that span services. Every one of those is the same station, scaled — none of them changes the shape of the line.
 
 Two stations from the wider model are **deliberately absent, not forgotten**: a security review (which belongs beside the deterministic gate as a hard gate in any real deployment) and the contract-binding `design.md` check (with one service and one surface, there is nothing for two components to disagree about). Both would be the first things to add on a real codebase. Neither is pretended at here.
 

@@ -1,1 +1,0 @@
-{"class":"feat","needs_spec":true,"needs_proposal":true,"slug":"filter-catalog-by-price","requirements":["REQ-CAT-1","REQ-CAT-3"],"reason":"The spec defines only list, fetch-by-SKU, and text search — it is silent on price filtering, so this is a net-new query capability whose units and boundary semantics need a human-approved proposal."}
