@@ -80,10 +80,7 @@ else
   cat >&2 <<'EOF'
 No agent CLI on PATH (looked for claude, codex, gemini, cursor-agent, opencode).
 
-That's fine — every exercise works without one:
-
-  • read the reference run for this step in artifacts/
-  • or print the prompt and paste it into whatever you use:
+That's fine — print the prompt and paste it into whatever you use:
 
       ./run.sh --print prompts/<name>.md
 EOF
