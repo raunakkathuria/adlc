@@ -6,7 +6,7 @@
 # closed with the report, reopenable. Actionable → dispatched to the spec station, because
 # every change here is spec-driven.
 #
-# OFF unless the ADLC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret is set: without either this
+# OFF unless the ADLC_API_KEY or ADLC_OAUTH_TOKEN secret is set: without either this
 # workflow explains itself and stops. A repo that can open PRs on its own should require a human to
 # switch it on.
 #
@@ -44,7 +44,7 @@ on:
     secrets:
       ADLC_API_KEY:
         required: false
-      CLAUDE_CODE_OAUTH_TOKEN:
+      ADLC_OAUTH_TOKEN:
         required: false
 
 permissions:
@@ -77,10 +77,10 @@ jobs:
         id: runner
         env:
           KEY: ${{ secrets.ADLC_API_KEY }}
-          OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OAUTH: ${{ secrets.ADLC_OAUTH_TOKEN }}
         run: |
           if [ -z "${KEY:-}" ] && [ -z "${OAUTH:-}" ]; then
-            echo "No ADLC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret. The line stays off — this workflow is documentation."
+            echo "No ADLC_API_KEY or ADLC_OAUTH_TOKEN secret. The line stays off — this workflow is documentation."
             echo "on=false" >> "$GITHUB_OUTPUT"
           else
             echo "on=true" >> "$GITHUB_OUTPUT"
@@ -170,7 +170,7 @@ jobs:
         shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
         env:
           ADLC_API_KEY: ${{ secrets.ADLC_API_KEY }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ADLC_OAUTH_TOKEN: ${{ secrets.ADLC_OAUTH_TOKEN }}
           ADLC_BASE_URL: ${{ vars.ADLC_BASE_URL }}
           ADLC_MODEL: ${{ vars.ADLC_MODEL }}
         run: |
@@ -354,7 +354,7 @@ jobs:
                     # crash must never read as "not reproducible"
         env:
           ADLC_API_KEY: ${{ secrets.ADLC_API_KEY }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ADLC_OAUTH_TOKEN: ${{ secrets.ADLC_OAUTH_TOKEN }}
           ADLC_BASE_URL: ${{ vars.ADLC_BASE_URL }}
           ADLC_MODEL: ${{ vars.ADLC_MODEL }}
         run: |
