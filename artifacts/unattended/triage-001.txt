@@ -1,1 +1,0 @@
-{"class":"bug","needs_spec":false,"needs_proposal":false,"slug":"","requirements":["REQ-ORD-4","REQ-ORD-3"],"reason":"REQ-ORD-4 promises a rejected order leaves stock unchanged for every rejection reason, and the over-limit rejection here decrements stock by qty."}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-flight for the workshop. Installs nothing, changes nothing.
+# Pre-flight for a fresh clone. Installs nothing, changes nothing.
 
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -43,14 +43,14 @@ if [ -n "$found" ]; then
   first="${found# }"; first="${first%% *}"
   echo "  ✓ agent CLI:$found  → run.sh will use $first"
 else
-  echo "  · no agent CLI found. That's fine, it's optional — every exercise"
-  echo "    works from the reference runs in artifacts/."
+  echo "  · no agent CLI found. Optional — you need one only to run a"
+  echo "    station locally with ./run.sh. CI brings its own."
 fi
 
 echo
 if [ "$fail" -eq 0 ]; then
   echo "Ready. Open README.md."
 else
-  echo "Come anyway — the exercises work from artifacts/ without a working setup."
+  echo "Fix what is marked ✗ above, then run this again."
 fi
 exit "$fail"
