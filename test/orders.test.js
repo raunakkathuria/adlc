@@ -15,6 +15,11 @@ async function loadClientPage(base) {
   const noteMarkup = html.match(/<div id="note"[^>]*>/)?.[0] ?? '';
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
+  // `body` stands in for the browser's real fallback: a container's innerHTML replacement
+  // drops focus to <body> unless something explicitly re-focuses a control (REQ-ORD-9).
+  const body = { name: 'body' };
+  const documentStub = { body, activeElement: body };
+
   const elements = new Map();
   function element(id) {
     if (!elements.has(id)) {
@@ -24,13 +29,15 @@ async function loadClientPage(base) {
         dataset: {},
         addEventListener() {},
         querySelectorAll() { return []; },
+        focus() { documentStub.activeElement = elements.get(id); },
       });
     }
     return elements.get(id);
   }
+  documentStub.getElementById = element;
 
   const sandbox = {
-    document: { getElementById: element },
+    document: documentStub,
     fetch: (path, options) => fetch(base + path, options),
   };
   vm.createContext(sandbox);
@@ -46,7 +53,9 @@ async function loadClientPage(base) {
       await sandbox.order(sku);
     },
     noteHtml: () => element('note').innerHTML,
-    itemsHtml: () => element('items').innerHTML,
+    itemsHtml: () => element('item-list').innerHTML,
+    isFocused: (id) => documentStub.activeElement === elements.get(id),
+    isBodyFocused: () => documentStub.activeElement === body,
     search: async (query) => {
       element('q').value = query;
       await sandbox.loadItems();
@@ -216,4 +225,41 @@ test('REQ-ORD-8: a remaining item keeps its accessible name after a search narro
     const button = orderButtonMarkup(page.itemsHtml(), 'MUG-1');
     assert.ok(button, 'expected MUG-1 to remain after searching "mug"');
     assert.match(button, /aria-label="[^"]*Enamel Mug[^"]*"/);
+  }));
+
+test('REQ-ORD-9: focus survives an accepted order, landing on an operable control for that item', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 2);
+    assert.ok(page.isFocused('order-MUG-1'), "expected focus on MUG-1's own Order button");
+    assert.ok(!page.isBodyFocused(), 'focus should not fall back to the document body');
+  }));
+
+test('REQ-ORD-9: focus survives a rejected order the same way as an accepted one', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 21); // over the 20-unit cap — rejected
+    assert.ok(page.isFocused('order-MUG-1'));
+    assert.ok(!page.isBodyFocused());
+  }));
+
+test("REQ-ORD-9: ordering two items in a row moves focus from the first item's control to the second, without returning to the top of the page", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 2);
+    assert.ok(page.isFocused('order-MUG-1'));
+
+    await page.order('PEN-1', 1);
+    assert.ok(page.isFocused('order-PEN-1'));
+    assert.ok(!page.isFocused('order-MUG-1'));
+    assert.ok(!page.isBodyFocused());
+  }));
+
+test("REQ-ORD-9: the focused control still exists within the re-rendered list, and receiving focus does not prevent the change from being announced", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 2);
+    assert.ok(page.isFocused('order-MUG-1'));
+    assert.match(page.itemsHtml(), /role="listitem"/);
+    assert.match(page.itemsHtml(), /MUG-1/);
   }));
