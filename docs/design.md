@@ -51,7 +51,7 @@ Team setup, in full: copy the caller files, add one credential org secret (`ANTH
 
 ## 3. The stations
 
-All stations read prompts from `prompts/` — one plain-markdown file per station, CLI-agnostic (Claude Code pinned in CI; swap is one line). Buildwright's discipline (`.buildwright/steering/philosophy.md` — which already codifies KISS, YAGNI, DRY, fail-fast, TDD) governs the build station. OpenSpec owns the spec layer.
+All stations read prompts from `prompts/` — one plain-markdown file per station, CLI-agnostic (Claude Code pinned in CI, in `scripts/run-station.sh`, which is also the provider seam: `ADLC_BASE_URL` and `ADLC_MODEL` point the line at any Anthropic-compatible gateway — see [any-model.md](any-model.md)). Buildwright's discipline (`.buildwright/steering/philosophy.md` — which already codifies KISS, YAGNI, DRY, fail-fast, TDD) governs the build station. OpenSpec owns the spec layer.
 
 ### `intake.yml` — triage + validation
 
@@ -128,7 +128,7 @@ Plus: `type:bug|feature|chore|docs` (from triage), `needs-human` (loop cap tripp
 | GitHub App + installation tokens + org rulesets | `GITHUB_TOKEN` + reusable workflows @tag | reusable workflows are GitHub's native cross-repo reuse; no App to install |
 | Hub repos holding agents, queues, ADK runners | prompt files + agent CLI steps | fresh-context independence is the property; infrastructure isn't |
 | Spec PR merges first (merge = Gate 1), impl follows | spec PR approved at Gate 1, merges **last** | one spec fans out to N impl PRs; `main` never carries an unshipped spec |
-| LiteLLM proxy + model routing | one credential secret | prompts stay CLI-agnostic; the swap is one line |
+| LiteLLM proxy + model routing | one credential secret, plus two optional variables for a gateway | prompts stay CLI-agnostic, and `scripts/run-station.sh` is the only file naming a runner's variables |
 | Vercel preview deploys | app runs in the runner | same property: verify/quality against the running PR head |
 | A pipeline dashboard | labels + links block + run summaries | the issue thread is the dashboard |
 | Figma visual-acceptance gate | out (YAGNI) | needs a design source; add when one exists |

@@ -17,6 +17,8 @@ Your existing credential secret (`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN
 
 Leave both variables unset and nothing moves. That is the demo's configuration, and it is why this costs nothing to carry.
 
+If you adopted the line with the callers in [`.github/workflows/callers/`](../.github/workflows/callers/), set the variables on **your** repository, not on this one. Inside a called workflow the `vars` context resolves to the calling repository's variables, so your values are what the stations see. Verified on a real adopting repo: a variable set only on the consumer arrived intact inside the hub's station.
+
 ## Why a gateway, and not a second CLI
 
 Claude Code is pinned in CI, and it talks one protocol. A gateway translates that protocol to whatever a provider speaks, which means one integration instead of one per vendor. [LiteLLM](https://github.com/BerriAI/litellm) is the usual choice; anything Anthropic-compatible works, including vLLM and a model on your own hardware.
