@@ -150,9 +150,11 @@ comment, and that is worth knowing before you wonder where it went.
 ```bash
 if [ -n "${ADLC_BASE_URL:-}" ]; then export ANTHROPIC_BASE_URL="$ADLC_BASE_URL"; fi
 if [ -n "${ADLC_MODEL:-}" ]; then export ANTHROPIC_MODEL="$ADLC_MODEL"; fi
+if [ -n "${ADLC_API_KEY:-}" ]; then export ANTHROPIC_API_KEY="$ADLC_API_KEY"; fi
+if [ -n "${ADLC_OAUTH_TOKEN:-}" ]; then export CLAUDE_CODE_OAUTH_TOKEN="$ADLC_OAUTH_TOKEN"; fi
 ```
 
-`ANTHROPIC_*` here is the CLI's wire protocol, not a claim about who serves the model. Every agent step passes `ADLC_*` and nothing else, so swapping the runner is still one file — and `test/callers.test.js` fails if a station names a runner variable directly, or if any agent step forgets to pass the seam. Miss one station and it would quietly keep talking to Anthropic while the rest of the line used the gateway, which is worse than not supporting this at all.
+`ANTHROPIC_*` and `CLAUDE_CODE_*` here are the CLI's wire protocol, not a claim about who serves the model. Every agent step passes `ADLC_*` and nothing else, so swapping the runner is still one file — and `test/callers.test.js` fails if a station names a runner variable directly, or if any agent step forgets to pass the seam. Miss one station and it would quietly keep talking to Anthropic while the rest of the line used the gateway, which is worse than not supporting this at all.
 
 On credentials, `ADLC_OAUTH_TOKEN` holds the output of `claude setup-token`. It reaches the gateway as `authorization: Bearer`, where `ADLC_API_KEY` reaches it as `x-api-key` — measured, not assumed. Real LiteLLM accepts the same value in either header, so on a gateway the two are interchangeable and whichever secret you already have works.
 
