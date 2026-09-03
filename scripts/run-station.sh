@@ -28,11 +28,12 @@ shift 2
 if [ -n "${ADLC_BASE_URL:-}" ]; then export ANTHROPIC_BASE_URL="$ADLC_BASE_URL"; fi
 if [ -n "${ADLC_MODEL:-}" ]; then export ANTHROPIC_MODEL="$ADLC_MODEL"; fi
 if [ -n "${ADLC_API_KEY:-}" ]; then export ANTHROPIC_API_KEY="$ADLC_API_KEY"; fi
+if [ -n "${ADLC_OAUTH_TOKEN:-}" ]; then export CLAUDE_CODE_OAUTH_TOKEN="$ADLC_OAUTH_TOKEN"; fi
 
 # A secret the repo does not have arrives as the empty string: present, but useless. The CLI tries
-# the API key before the OAuth token, so an empty key would shadow a valid token — unset is the only
-# way to say "not this credential". Nothing above exports an empty ADLC_API_KEY, so in CI this only
-# has to clear what the surrounding environment brought; locally it leaves a real ambient key alone,
+# ADLC_API_KEY before ADLC_OAUTH_TOKEN, so an empty key would shadow a valid token — unset is the only
+# way to say "not this credential". Nothing above exports an empty value, so in CI these only have to
+# clear what the surrounding environment brought; locally they leave a real ambient credential alone,
 # which is how a station runs by hand with no ADLC_* set at all.
 if [ -z "${ANTHROPIC_API_KEY:-}" ]; then unset ANTHROPIC_API_KEY; fi
 if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then unset CLAUDE_CODE_OAUTH_TOKEN; fi

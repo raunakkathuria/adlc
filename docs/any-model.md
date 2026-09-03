@@ -13,7 +13,7 @@ Set these as **repository variables** (Settings → Secrets and variables → Ac
 | `ADLC_BASE_URL` | any endpoint that speaks the Anthropic messages API | `http://litellm.internal:4000` |
 | `ADLC_MODEL` | the model id **that endpoint** knows | `gpt-5`, `gemini-2.5-pro`, `frontier` |
 
-Your existing credential secret (`ADLC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`) then authenticates against *the gateway* instead of against Anthropic. Put the gateway's key in it. The off-switch does not change: with neither secret set, every workflow still runs, explains itself, and stops.
+Your existing credential secret (`ADLC_API_KEY` or `ADLC_OAUTH_TOKEN`) then authenticates against *the gateway* instead of against Anthropic. Put the gateway's key in it. The off-switch does not change: with neither secret set, every workflow still runs, explains itself, and stops.
 
 Leave both variables unset and nothing moves. That is the demo's configuration, and it is why this costs nothing to carry.
 
@@ -46,6 +46,8 @@ litellm_settings:
 ```
 
 Naming the entries by role rather than by model is worth the small indirection: retuning which model the line uses becomes a one-line edit here, and the repository variable never changes.
+
+Note where the provider keys live. `OPENAI_API_KEY` and `GEMINI_API_KEY` are the **proxy's** configuration, read from the environment of the process you run — they are not part of this line's interface and the line never sees them. The line has exactly one credential, `ADLC_API_KEY`, and against a gateway it holds the gateway's own key. So adding a third provider adds an entry here and changes nothing about what the repository is configured with.
 
 ### OpenAI needs one extra line, and the error does not say so
 
@@ -152,7 +154,9 @@ if [ -n "${ADLC_MODEL:-}" ]; then export ANTHROPIC_MODEL="$ADLC_MODEL"; fi
 
 `ANTHROPIC_*` here is the CLI's wire protocol, not a claim about who serves the model. Every agent step passes `ADLC_*` and nothing else, so swapping the runner is still one file — and `test/callers.test.js` fails if a station names a runner variable directly, or if any agent step forgets to pass the seam. Miss one station and it would quietly keep talking to Anthropic while the rest of the line used the gateway, which is worse than not supporting this at all.
 
-On credentials: `ADLC_API_KEY` reaches the gateway as an `x-api-key` header, and `CLAUDE_CODE_OAUTH_TOKEN` as `authorization: Bearer` — measured, not assumed. LiteLLM accepts either, so whichever secret you already have works. They are two different auth mechanisms rather than two names for one, which is why the line keeps both: the API key is its own, and the OAuth token is a Claude-subscription convenience kept under the name `claude setup-token` actually produces.
+On credentials, `ADLC_OAUTH_TOKEN` holds the output of `claude setup-token`. It reaches the gateway as `authorization: Bearer`, where `ADLC_API_KEY` reaches it as `x-api-key` — measured, not assumed. Real LiteLLM accepts the same value in either header, so on a gateway the two are interchangeable and whichever secret you already have works.
+
+Against Anthropic directly they are **not** interchangeable, and this is the part worth knowing before it costs you an afternoon. They are two different credential classes, not two names for one: a subscription token is not an API key, and no choice of header makes it into one. If you set both, the API key wins and the token is silently ignored. A gateway cannot rescue a subscription token for another provider either — LiteLLM *forwards* it to Anthropic (with `forward_client_headers_to_llm_api`), it does not translate it, and nothing can mint an OpenAI or Gemini credential from a Claude identity.
 
 ## What this does not change
 
