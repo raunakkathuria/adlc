@@ -68,6 +68,7 @@ scripts/            links.mjs · labels.mjs · attempts.mjs · file-findings.mjs
 .github/workflows/  the six stations + verify.yml (the gate) · callers/ = the adoption kit
 .buildwright/       the engineering discipline the Executor works to (KISS · YAGNI · DRY · TDD)
 app/  test/         the storefront and its tests — the product that ships through the line
+issues/             the three seed reports as files — how a station runs with no GitHub token
 AGENTS.md           the standards; CLAUDE.md, GEMINI.md, cursor/copilot files point here
 docs/               the design, and the map from this repo to an org-scale deployment
 ```
