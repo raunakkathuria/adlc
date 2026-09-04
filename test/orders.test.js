@@ -10,7 +10,7 @@ const LIVE_REGION = /role="status"|aria-live="(polite|assertive)"/;
  * DOM stub wired to the live server, so REQ-ORD-7 is exercised the way a browser would run
  * it rather than by pattern-matching the script's source.
  */
-async function loadClientPage(base) {
+async function loadClientPage(base, { fetch: fetchImpl } = {}) {
   const html = await (await fetch(base + '/')).text();
   const noteMarkup = html.match(/<div id="note"[^>]*>/)?.[0] ?? '';
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
@@ -31,7 +31,7 @@ async function loadClientPage(base) {
 
   const sandbox = {
     document: { getElementById: element },
-    fetch: (path, options) => fetch(base + path, options),
+    fetch: fetchImpl ?? ((path, options) => fetch(base + path, options)),
   };
   vm.createContext(sandbox);
   vm.runInContext(script, sandbox);
@@ -217,3 +217,83 @@ test('REQ-ORD-8: a remaining item keeps its accessible name after a search narro
     assert.ok(button, 'expected MUG-1 to remain after searching "mug"');
     assert.match(button, /aria-label="[^"]*Enamel Mug[^"]*"/);
   }));
+
+// REQ-CAT-9 and REQ-ORD-9 — both found by the quality station while it was working on the search
+// announcement (issues #69 and #70), and both pre-existing rather than introduced by that change.
+
+test('REQ-CAT-9: the matching items are a list, not a run of unrelated blocks', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    const html = page.itemsHtml();
+    assert.match(html, /<ul[^>]*>/, 'the items belong in a list element');
+    assert.match(html, /<li[^>]*class="card"/, 'one list item per catalogue item');
+    assert.doesNotMatch(
+      html,
+      /<div[^>]*class="card"/,
+      'a card is a list item now; a bare div gives assistive technology nothing to count',
+    );
+  });
+});
+
+test('REQ-CAT-9: styling away the markers does not cost the list semantics', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    const list = page.itemsHtml().match(/<ul[^>]*>/)[0];
+    assert.match(
+      list,
+      /role="list"/,
+      'list-style:none drops list semantics in at least one browser and screen-reader pairing, ' +
+        'so the role has to be restored explicitly',
+    );
+  });
+});
+
+test('REQ-CAT-9: the empty state is a message, not an empty list', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.search('nothing-matches-this-query');
+    const html = page.itemsHtml();
+    assert.doesNotMatch(html, /<li/, 'an empty list would be announced as a list of zero items');
+    assert.match(html, /Nothing matches/, 'the empty-state message stands in its place');
+  });
+});
+
+test('REQ-ORD-9: a reason the page has wording for keeps that wording', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 999); // more than stock — a reason the page names
+    assert.match(page.noteHtml(), /not enough in stock/i);
+  });
+});
+
+test('REQ-ORD-9: a reason the page cannot name does not leak its identifier', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base, {
+      // Stand in for a server the page is older than: a reason code it has no wording for.
+      fetch: (path, options) =>
+        path === '/api/orders' && options?.method === 'POST'
+          ? Promise.resolve({ status: 422, json: async () => ({ reason: 'quota_exhausted_today' }) })
+          : fetch(base + path, options),
+    });
+    await page.order('MUG-1', 1);
+    const shown = page.noteHtml();
+    assert.doesNotMatch(shown, /quota_exhausted_today/, 'an internal code is not a sentence');
+    assert.doesNotMatch(shown, /_/, 'nor is anything underscore-joined');
+    assert.match(shown, /Rejected/, 'it still reads as a refusal');
+  });
+});
+
+test('REQ-ORD-9: a rejection carrying no reason at all still reads as English', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base, {
+      fetch: (path, options) =>
+        path === '/api/orders' && options?.method === 'POST'
+          ? Promise.resolve({ status: 422, json: async () => ({}) })
+          : fetch(base + path, options),
+    });
+    await page.order('MUG-1', 1);
+    const shown = page.noteHtml();
+    assert.doesNotMatch(shown, /undefined|null/, 'the shopper should never be shown a missing value');
+    assert.match(shown, /Rejected/);
+  });
+});
