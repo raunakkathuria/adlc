@@ -1,5 +1,39 @@
 ## MODIFIED Requirements
 
+### Requirement: REQ-ORD-7 — order outcome is announced to assistive technology
+
+The page's order-outcome region SHALL be exposed as an ARIA live region (for example, `role="status"` or an equivalent `aria-live` announcement), so that assistive technology announces its content automatically whenever it changes, without the user needing to move focus to it. When a successful order's confirmation message echoes that order's item SKU back to the shopper, that SKU SHALL be inert text: no part of it SHALL be interpreted as markup, inserted as a page element, or run as script — the same guarantee already required for the search query (`REQ-CAT-6`) and for the item card's own display of that SKU (`REQ-CAT-10`, `REQ-ORD-8`).
+
+#### Scenario: success is announced
+
+- **WHEN** an order is placed successfully
+- **THEN** the confirmation message is written into the live region
+- **AND** assistive technology announces it automatically
+
+#### Scenario: the SKU echoed in a successful order's confirmation is inert text
+
+- **WHEN** an order for an item whose `sku` contains characters that would otherwise be read as markup — for example a quote or an ampersand — is placed and accepted
+- **THEN** the confirmation message written into the live region displays that SKU as literal, inert text
+- **AND** no script associated with that SKU runs
+
+#### Scenario: rejection is announced
+
+- **WHEN** an order is rejected, for any reason
+- **THEN** the rejection message is written into the live region
+- **AND** assistive technology announces it automatically
+
+#### Scenario: the region announces from the first order
+
+- **WHEN** the page has just loaded and no order has been placed yet
+- **THEN** the live region is already present in the page's markup
+- **AND** the first order's outcome is announced, the same as every order after it
+
+#### Scenario: a later outcome replaces an earlier one
+
+- **WHEN** a second order is placed after the first, whether its outcome message reads the same as before or differently
+- **THEN** the live region's content is replaced with the new outcome
+- **AND** the new outcome is announced on its own, not appended to or stacked with the previous one
+
 ### Requirement: REQ-ORD-8 — the Order button names the item it orders
 
 Each item card's Order button SHALL have an accessible name that includes the item's name, so that assistive technology distinguishes it from every other item's Order button instead of announcing plain "Order" with no context. The item's name embedded in that accessible name, and the item's SKU carried in the button's `data-sku` attribute (which identifies which item an order is for), SHALL both be inert text: no part of either SHALL be interpreted as markup, inserted as a page element, or run as script — the same guarantee already required for the search query (`REQ-CAT-6`) and for the rest of the item card's own display of that name and SKU (`REQ-CAT-10`).
