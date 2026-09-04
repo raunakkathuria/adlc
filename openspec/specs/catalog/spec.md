@@ -238,3 +238,21 @@ When the search query changes again before an in-flight request for an earlier q
 - **THEN** once the "cup" response arrives, the page shows and announces (`REQ-CAT-7`) the "cup" results
 - **AND** the late-arriving "mug" refresh response is discarded when it arrives, rather than reverting the list back to "mug" results
 
+### Requirement: REQ-CAT-9 — the catalogue is marked up as a list
+
+The catalogue page SHALL present its matching items as a list in the accessibility tree, so assistive technology can report how many items there are and offer list navigation, as it already does for the order history. Where the list's visual styling removes list markers, the list role SHALL be restored explicitly, because at least one browser and screen-reader pairing drops list semantics from a marker-less list.
+
+#### Scenario: the items are a list, not a run of unrelated blocks
+
+- **WHEN** a search returns one or more items
+- **THEN** the items are contained in a list element, one list item per catalogue item
+
+#### Scenario: styling away the markers does not cost the semantics
+
+- **WHEN** the list is styled without visible markers
+- **THEN** the list still carries an explicit `list` role
+
+#### Scenario: the empty state is not an empty list
+
+- **WHEN** a search matches nothing
+- **THEN** the empty-state message (`REQ-CAT-6`) is shown in place of the list, not as a list item

@@ -35,6 +35,7 @@
     background: var(--accent); color: var(--bg); cursor: pointer;
   }
   button:hover { opacity: .88; }
+  .cards { list-style: none; padding: 0; margin: 0; }
   .card {
     display: flex; align-items: center; gap: .75rem; padding: .85rem 1rem;
     border: 1px solid var(--line); border-radius: 9px; background: var(--surface);
@@ -120,16 +121,16 @@ async function loadItems({ announce = true, query, seq } = {}) {
   if (items.length === 0) {
     el('items').innerHTML = `<p class="empty">Nothing matches “${escapeHtml(q)}”.</p>`;
   } else {
-    el('items').innerHTML = items.map((item) => `
-      <div class="card">
+    el('items').innerHTML = `<ul class="cards" role="list">` + items.map((item) => `
+      <li class="card">
         <div class="grow">
           <div class="name">${item.name}</div>
           <div class="meta">${item.sku} · ${money(item.price)} · ${item.stock} in stock</div>
         </div>
         <input type="number" min="1" value="1" id="qty-${item.sku}" aria-label="Quantity of ${item.name}">
         <button data-sku="${item.sku}" aria-label="Order ${item.name}">Order</button>
-      </div>
-    `).join('');
+      </li>
+    `).join('') + `</ul>`;
 
     for (const button of el('items').querySelectorAll('button')) {
       button.addEventListener('click', () => order(button.dataset.sku));
@@ -159,7 +160,7 @@ async function order(sku) {
   if (status === 201) {
     note(`Order #${body.id} placed — ${body.qty} × ${body.sku} for ${money(body.total)}.`, 'good');
   } else {
-    note(REJECTIONS[body.reason] ?? `Rejected — ${body.reason}.`, 'bad');
+    note(REJECTIONS[body.reason] ?? 'Rejected — the order could not be placed.', 'bad');
   }
 
   await loadItems({ announce: false, query, seq });
