@@ -52,6 +52,10 @@
   .empty { color: var(--muted); font-size: .875rem; padding: .5rem 0; }
   ol { padding-left: 1.25rem; margin: 0; color: var(--muted); font-size: .875rem; }
   code { font-size: .85em; }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
 </style>
 </head>
 <body>
@@ -63,6 +67,7 @@
 
   <h2>Catalogue</h2>
   <div id="items"></div>
+  <p id="summary" class="visually-hidden" role="status"></p>
   <div id="note" role="status"></div>
 
   <h2>Orders</h2>
@@ -86,6 +91,12 @@ function note(message, kind) {
   el('note').innerHTML = message ? `<p class="note ${kind}">${message}</p>` : '';
 }
 
+function summaryText(q, count) {
+  if (!q) return count === 1 ? 'Showing 1 item.' : `Showing ${count} items.`;
+  if (count === 0) return `Nothing matches “${escapeHtml(q)}”.`;
+  return count === 1 ? `1 item matches “${escapeHtml(q)}”.` : `${count} items match “${escapeHtml(q)}”.`;
+}
+
 const REJECTIONS = {
   over_limit: 'Rejected — no more than 20 units per order.',
   insufficient_stock: 'Rejected — not enough in stock.',
@@ -93,29 +104,39 @@ const REJECTIONS = {
   invalid_qty: 'Rejected — quantity must be a whole number, at least 1.',
 };
 
-async function loadItems() {
-  const q = el('q').value.trim();
+// The most recently issued request for the item list wins — reserving a slot up front (rather
+// than only once a response arrives) means a slow request started earlier always loses to a
+// faster one started later, no matter which resolves first.
+let requestSeq = 0;
+const nextRequestSeq = () => ++requestSeq;
+
+async function loadItems({ announce = true, query, seq } = {}) {
+  const mySeq = seq ?? nextRequestSeq();
+  const q = (query ?? el('q').value).trim();
   const { body: items } = await api('/items' + (q ? '?q=' + encodeURIComponent(q) : ''));
+
+  if (mySeq !== requestSeq) return; // superseded by a newer request; discard
 
   if (items.length === 0) {
     el('items').innerHTML = `<p class="empty">Nothing matches “${escapeHtml(q)}”.</p>`;
-    return;
-  }
-
-  el('items').innerHTML = items.map((item) => `
-    <div class="card">
-      <div class="grow">
-        <div class="name">${item.name}</div>
-        <div class="meta">${item.sku} · ${money(item.price)} · ${item.stock} in stock</div>
+  } else {
+    el('items').innerHTML = items.map((item) => `
+      <div class="card">
+        <div class="grow">
+          <div class="name">${item.name}</div>
+          <div class="meta">${item.sku} · ${money(item.price)} · ${item.stock} in stock</div>
+        </div>
+        <input type="number" min="1" value="1" id="qty-${item.sku}" aria-label="Quantity of ${item.name}">
+        <button data-sku="${item.sku}" aria-label="Order ${item.name}">Order</button>
       </div>
-      <input type="number" min="1" value="1" id="qty-${item.sku}" aria-label="Quantity of ${item.name}">
-      <button data-sku="${item.sku}" aria-label="Order ${item.name}">Order</button>
-    </div>
-  `).join('');
+    `).join('');
 
-  for (const button of el('items').querySelectorAll('button')) {
-    button.addEventListener('click', () => order(button.dataset.sku));
+    for (const button of el('items').querySelectorAll('button')) {
+      button.addEventListener('click', () => order(button.dataset.sku));
+    }
   }
+
+  if (announce) el('summary').innerHTML = summaryText(q, items.length);
 }
 
 async function loadOrders() {
@@ -126,6 +147,8 @@ async function loadOrders() {
 }
 
 async function order(sku) {
+  const query = el('q').value;
+  const seq = nextRequestSeq(); // reserve the refresh's place in line right away, not once it fires
   const qty = Number(el('qty-' + sku).value);
   const { status, body } = await api('/orders', {
     method: 'POST',
@@ -139,11 +162,11 @@ async function order(sku) {
     note(REJECTIONS[body.reason] ?? `Rejected — ${body.reason}.`, 'bad');
   }
 
-  await loadItems();
+  await loadItems({ announce: false, query, seq });
   await loadOrders();
 }
 
-el('q').addEventListener('input', loadItems);
+el('q').addEventListener('input', () => loadItems());
 loadItems();
 loadOrders();
 </script>
