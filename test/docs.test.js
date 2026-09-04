@@ -12,11 +12,18 @@ import { dirname, join, normalize, relative } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SKIP = new Set(['node_modules', '.git', '.adlc', 'work', '.agents', '.claude', '.buildwright']);
+// Archived deltas are a historical record, and `openspec archive` relocates them one level deeper —
+// so a link that resolved correctly while the change was in flight resolves to nothing afterwards,
+// through no edit of anyone's. Walking them made this guard block the line's own finalize station:
+// the archive commit could never pass the gate it had to pass to land. The archive is a snapshot of
+// what was true then, not live documentation, so its internal links are out of scope here.
+const ARCHIVE = join('openspec', 'changes', 'archive');
 
 function markdown(dir = root, found = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (SKIP.has(entry.name)) continue;
     const p = join(dir, entry.name);
+    if (relative(root, p) === ARCHIVE) continue;
     if (entry.isDirectory()) markdown(p, found);
     else if (entry.name.endsWith('.md')) found.push(p);
   }
