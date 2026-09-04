@@ -221,3 +221,29 @@ test('the runner\'s variable names appear only in the seam, its guard, and the d
     'these name a runner-specific variable outside the seam; map it in scripts/run-station.sh instead',
   );
 });
+
+// Gate 1 approves a commit, not a branch.
+//
+// build.yml's checkout step has always been called "Branch the implementation from the approved
+// spec head" while actually checking out `origin/spec/<slug>` — the branch TIP. Those are the same
+// commit right up until a /revise lands between the approval and the build, at which point the line
+// implements a delta nobody approved. It happened on a live run: the approval fired the build while
+// the Planner was still pushing its revision, and the build started on the superseded delta.
+
+test('build.yml refuses an approval that is no longer the spec PR head', () => {
+  const build = readFileSync(join(stationDir, 'build.yml'), 'utf8');
+  assert.match(build, /REVIEW_SHA: \$\{\{ github\.event\.review\.commit_id \}\}/,
+    'the gate needs the commit the review was submitted on');
+  assert.match(build, /headRefOid/, 'and the head it is being compared against');
+  assert.match(build, /stale=true/, 'a mismatch has to be recorded as a refusal');
+  assert.match(build, /steps\.gate\.outputs\.stale == 'true'/,
+    "the stop condition must include the stale case, or the guard computes a value nobody reads");
+});
+
+test('build.yml builds the approved commit, not the branch tip', () => {
+  const build = readFileSync(join(stationDir, 'build.yml'), 'utf8');
+  assert.match(build, /checkout -B "impl\/\$SLUG" "\$\{\{ steps\.gate\.outputs\.approved_sha \}\}"/,
+    'the implementation branches from the approved SHA');
+  assert.doesNotMatch(build, /checkout -B "impl\/\$SLUG" "origin\/spec\/\$SLUG"/,
+    'branching from the tip is the bug: a push landing after the gate would be built unapproved');
+});

@@ -92,6 +92,7 @@ jobs:
         id: gate
         env:
           REVIEWER: ${{ github.event.review.user.login || github.actor }}
+          REVIEW_SHA: ${{ github.event.review.commit_id }}
         run: |
           mkdir -p work
           gh pr view "$PR" --json state,headRefName,files,body,reviews > work/pr.json
@@ -109,6 +110,27 @@ jobs:
             if (!issue) fail("no Relates-to issue recorded on the PR");
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `ok=true\nissue=${issue}\nslug=${slug}\n`);
           '
+          # Gate 1 approves a COMMIT, not a branch. A revision landing between the approval and
+          # this run would otherwise be built unapproved: /revise pushes to the same spec branch, so
+          # the tip moves under the build. Refuse unless the approved commit is still the head, and
+          # hand that SHA to the checkout so a later push cannot change what gets built.
+          HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          APPROVED_SHA="${REVIEW_SHA:-}"
+          if [ -z "$APPROVED_SHA" ]; then
+            APPROVED_SHA=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" \
+              --jq '[.[] | select(.state == "APPROVED")] | last | .commit_id // empty')
+          fi
+          echo "approved_sha=$APPROVED_SHA" >> "$GITHUB_OUTPUT"
+          if [ -z "$APPROVED_SHA" ]; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            echo "stale_why=no approving review was found on this PR" >> "$GITHUB_OUTPUT"
+          elif [ "$APPROVED_SHA" != "$HEAD_SHA" ]; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            echo "stale_why=the approval is on ${APPROVED_SHA:0:8} but the spec PR head is now ${HEAD_SHA:0:8}" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          fi
+
           APPROVER="$REVIEWER"
           PERM=$(gh api "repos/${{ github.repository }}/collaborators/$APPROVER/permission" --jq .permission)
           echo "Approver $APPROVER has permission: $PERM"
@@ -118,9 +140,12 @@ jobs:
           esac
 
       - name: Not buildable — say why and stop
-        if: steps.runner.outputs.on == 'true' && (steps.gate.outputs.ok != 'true' || steps.gate.outputs.approver_ok != 'true')
+        if: steps.runner.outputs.on == 'true' && (steps.gate.outputs.ok != 'true' || steps.gate.outputs.approver_ok != 'true' || steps.gate.outputs.stale == 'true')
         run: |
-          echo "Gate 1 fine print not met: ${{ steps.gate.outputs.why || 'approver lacks write access' }}"
+          echo "Gate 1 fine print not met: ${{ steps.gate.outputs.why || steps.gate.outputs.stale_why || 'approver lacks write access' }}"
+          if [ "${{ steps.gate.outputs.stale }}" = "true" ]; then
+            gh pr comment "$PR" --body "The build did not start: ${{ steps.gate.outputs.stale_why }}. Gate 1 approves a commit, not a branch — the delta has changed since it was approved, so it needs approving again. Re-review this PR at its current head to build it."
+          fi
           if [ "${{ steps.gate.outputs.approver_ok }}" = "false" ]; then
             gh pr comment "$PR" --body "An approving review was submitted, but the reviewer does not have write access to this repository, so the build did not start. Gate 1 requires an approval from a maintainer."
           fi
@@ -169,7 +194,8 @@ jobs:
           git config user.name "adlc-line"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin "spec/$SLUG" main
-          git checkout -B "impl/$SLUG" "origin/spec/$SLUG"
+          # The approved commit, not the branch tip — the step name has always claimed this.
+          git checkout -B "impl/$SLUG" "${{ steps.gate.outputs.approved_sha }}"
           # Then bring main in. A spec branch cut before a change to the line carries that
           # change's absence — the first build here ran a req-coverage predating the fix that
           # was supposed to guard it. Merging also means the delta arrives with main's history
