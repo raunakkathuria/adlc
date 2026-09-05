@@ -168,6 +168,16 @@ test('REQ-ORD-3: exactly 20 units is allowed', () =>
     assert.equal(status, 201);
   }));
 
+// The scenario's "WHEN 21 units are ordered" names no SKU, and REQ-ORD-3 says the limit applies
+// "regardless of stock" — so the cap must win even for an item whose stock is also below the
+// requested qty, not only for items with stock to spare (issue #85).
+test('REQ-ORD-3: the unit limit rejects an order even when stock is also insufficient', () =>
+  withServer(async ({ post }) => {
+    const { status, body } = await post('/api/orders', { sku: 'PEN-1', qty: 21 });
+    assert.equal(status, 422);
+    assert.equal(body.reason, 'over_limit');
+  }));
+
 // REQ-ORD-4 promises "every rejection reason, not just some of them", and the test above covers
 // exactly one — insufficient_stock, which happens to return before anything is written. Each
 // reason gets its own case, because the requirement is about all of them.
@@ -432,7 +442,7 @@ test('REQ-CAT-9: the empty state is a message, not an empty list', async () => {
 test('REQ-ORD-9: a reason the page has wording for keeps that wording', async () => {
   await withServer(async ({ base }) => {
     const page = await loadClientPage(base);
-    await page.order('MUG-1', 999); // more than stock — a reason the page names
+    await page.order('PEN-1', 12); // more than stock (8), but under the unit limit — insufficient_stock alone
     assert.match(page.noteHtml(), /not enough in stock/i);
   });
 });
