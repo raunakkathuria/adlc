@@ -4,7 +4,7 @@ Notable changes to the line. Adopting repos consume the stations by tag, so a ve
 
 Semantic versioning, read from the adopter's side: a major bump means a caller file or a repo setting has to change, a minor bump adds a station or an input, a patch fixes a station without changing how it is called. The moving `v1` tag always points at the newest `v1.x.y`.
 
-## v1.0.0 — 4 September 2026
+## v1.0.0 — 5 September 2026
 
 The first tagged line: six reusable stations, two human gates, and the kit for wiring it into another repo.
 
