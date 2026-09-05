@@ -63,9 +63,13 @@ export function createOrder(sku, qty) {
   if (!Number.isInteger(qty) || qty < 1) return { ok: false, reason: 'invalid_qty' };
   if (qty > item.stock) return { ok: false, reason: 'insufficient_stock' };
 
-  item.stock -= qty; // reserve the units
-
   if (qty > MAX_UNITS_PER_ORDER) return { ok: false, reason: 'over_limit' };
+
+  // Every rejection is decided before anything is written. Reserving first and rejecting after
+  // consumed stock for a trade that never happened (REQ-ORD-4), which the one test citing that
+  // requirement could not see: it ordered more than was in stock, so it always returned earlier
+  // than this line.
+  item.stock -= qty; // reserve the units
 
   const order = { id: nextOrderId++, sku, qty, total: orderTotal(item.price, qty) };
   orders.push(order);

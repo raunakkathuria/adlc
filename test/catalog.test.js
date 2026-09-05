@@ -70,9 +70,9 @@ function fakeItemsFetch(base, items) {
 
 /** A promise a test can resolve from the outside, to control when a stubbed request settles. */
 function deferred() {
-  let resolve;
-  const promise = new Promise((r) => { resolve = r; });
-  return { promise, resolve };
+  let resolve, reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
 }
 
 /**
@@ -581,3 +581,87 @@ test('REQ-CAT-5: the search field has an accessible name independent of its plac
       'search field needs an aria-label or an associated <label for="q"> for its accessible name'
     );
   }));
+
+// REQ-CAT-11 — what a shopper sees when the catalogue itself cannot be loaded (#83).
+//
+// The real server always answers, so this is driven by standing in for it. Without this the page
+// throws inside loadItems() and simply stops: no list, no message, nothing to act on.
+
+test('REQ-CAT-11: a catalogue that cannot be loaded says so rather than showing nothing', async () => {
+  await withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, () => Promise.reject(new TypeError('Failed to fetch')));
+    await sandbox.loadItems();
+    assert.match(element('items').innerHTML, /could not load the catalogue/i,
+      'the message belongs where the items were, not only in the live region');
+  });
+});
+
+test('REQ-CAT-11: the failure is announced, not only shown', async () => {
+  await withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, () => Promise.reject(new TypeError('Failed to fetch')));
+    await sandbox.loadItems();
+    assert.notEqual(element('summary').innerHTML.trim(), '',
+      'the summary is the live region a screen-reader user hears; silence there hides the failure');
+  });
+});
+
+test('REQ-CAT-11: a reply that is not readable is treated as a failure, not as an empty catalogue', async () => {
+  await withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, (path, options) =>
+      path.startsWith('/api/items')
+        ? Promise.resolve({ status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } })
+        : fetch(base + path, options));
+    await sandbox.loadItems();
+    const shown = element('items').innerHTML;
+    assert.doesNotMatch(shown, /Nothing matches/,
+      'an unreadable reply is not the same as a search that matched nothing');
+  });
+});
+
+test('REQ-CAT-11: a reply that parses but is not a list is a failure too', async () => {
+  await withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    // A proxy's error envelope, or this server's own { reason } shape on a 4xx: valid JSON, but
+    // not the item list. Without the shape check this reaches `.map` and throws.
+    const { sandbox, element } = createSandbox(script, () =>
+      Promise.resolve({ status: 502, json: async () => ({ reason: 'bad_gateway' }) }));
+    await sandbox.loadItems();
+    assert.match(element('items').innerHTML, /could not load the catalogue/i);
+    assert.doesNotMatch(element('items').innerHTML, /Nothing matches/);
+  });
+});
+
+test('REQ-CAT-11: the failure message carries a way to retry', async () => {
+  await withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, () => Promise.reject(new TypeError('Failed to fetch')));
+    await sandbox.loadItems();
+    assert.match(element('items').innerHTML, /<button[^>]*>Try again<\/button>/,
+      'the failure replaces every Order button, so it has to offer its own way back');
+  });
+});
+
+test('REQ-CAT-11: a failure that arrived too late changes nothing', async () => {
+  await withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const slow = deferred();
+    let call = 0;
+    const { sandbox, element } = createSandbox(script, (path, options) => {
+      if (!path.startsWith('/api/items')) return fetch(base + path, options);
+      return ++call === 1 ? slow.promise : fetch(base + path, options);
+    });
+
+    const first = sandbox.loadItems();   // will fail, but is superseded before it does
+    await sandbox.loadItems();           // a newer request lands first and renders
+    const rendered = element('items').innerHTML;
+
+    slow.reject(new TypeError('Failed to fetch'));
+    await first;
+
+    assert.equal(element('items').innerHTML, rendered,
+      'a superseded failure must be discarded exactly like a superseded success (REQ-CAT-8)');
+  });
+});
