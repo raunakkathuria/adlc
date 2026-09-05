@@ -6,9 +6,53 @@ import { withServer } from './helpers.mjs';
 const LIVE_REGION = /role="status"|aria-live="(polite|assertive)"/;
 
 /**
+ * Decode the HTML entities `escapeHtml` produces, the way a browser's attribute-value parser
+ * decodes them back into characters. Limited to the entities this app writes — a stand-in for
+ * a browser parse, not a general HTML decoder. `&amp;` decodes last so a literal "&lt;" in the
+ * original text (itself escaped to "&amp;lt;") does not get mistaken for an escaped "<".
+ */
+function decodeHtmlEntities(s) {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+/** Parse an opening tag's attributes, decoding entity-escaped values as a browser would. */
+function parseAttrs(tag) {
+  const attrs = {};
+  for (const m of tag.matchAll(/([a-zA-Z-]+)="([^"]*)"/g)) {
+    attrs[m[1]] = decodeHtmlEntities(m[2]);
+  }
+  return attrs;
+}
+
+/**
+ * A `fetch` that answers every `/items` request with a fixed, caller-chosen result — for
+ * injecting catalog data (like a markup-bearing sku) the real in-memory catalog has no write
+ * path to produce. Everything else still talks to the real server.
+ */
+function fakeItemsFetch(base, items) {
+  return (path, options) => {
+    if (path.startsWith('/api/items?') || path === '/api/items') {
+      return Promise.resolve({ status: 200, json: async () => items });
+    }
+    return fetch(base + path, options);
+  };
+}
+
+/**
  * Load the real page served for `/`, and run its actual inline script against a minimal
  * DOM stub wired to the live server, so REQ-ORD-7 is exercised the way a browser would run
  * it rather than by pattern-matching the script's source.
+ *
+ * The `items` element's `innerHTML` setter parses the rendered quantity inputs and Order
+ * buttons for real (decoding attribute values as a browser would), so `querySelectorAll` and
+ * a button's own `click()` exercise the app's actual listener-attachment code path, and a
+ * quantity input found by its rendered, decoded `id` is the same element the app's `order()`
+ * looks up — rather than a stand-in keyed by a raw string the test already knows.
  */
 async function loadClientPage(base, { fetch: fetchImpl } = {}) {
   const html = await (await fetch(base + '/')).text();
@@ -16,17 +60,45 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
   const elements = new Map();
-  function element(id) {
-    if (!elements.has(id)) {
-      elements.set(id, {
-        value: '',
-        innerHTML: '',
-        dataset: {},
-        addEventListener() {},
-        querySelectorAll() { return []; },
-      });
+  let itemButtons = [];
+
+  function makeStub() {
+    return {
+      value: '',
+      innerHTML: '',
+      dataset: {},
+      listeners: {},
+      addEventListener(type, fn) { this.listeners[type] = fn; },
+      click() { return this.listeners.click?.(); },
+      querySelectorAll() { return []; },
+    };
+  }
+
+  function renderItemsMarkup(itemsHtml) {
+    for (const m of itemsHtml.matchAll(/<input[^>]*\btype="number"[^>]*>/g)) {
+      const attrs = parseAttrs(m[0]);
+      if (attrs.id) element(attrs.id).value = attrs.value ?? '';
     }
-    return elements.get(id);
+    itemButtons = [...itemsHtml.matchAll(/<button[^>]*>/g)].map((m) => {
+      const button = makeStub();
+      button.dataset = { sku: parseAttrs(m[0])['data-sku'] };
+      return button;
+    });
+  }
+
+  function element(id) {
+    if (elements.has(id)) return elements.get(id);
+    const stub = makeStub();
+    if (id === 'items') {
+      let html = '';
+      Object.defineProperty(stub, 'innerHTML', {
+        get() { return html; },
+        set(v) { html = v; renderItemsMarkup(v); },
+      });
+      stub.querySelectorAll = (selector) => (selector === 'button' ? itemButtons : []);
+    }
+    elements.set(id, stub);
+    return stub;
   }
 
   const sandbox = {
@@ -51,6 +123,7 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
       element('q').value = query;
       await sandbox.loadItems();
     },
+    getElementById: element,
   };
 }
 
@@ -152,6 +225,22 @@ test("REQ-ORD-7: a successful order's confirmation is written into the live regi
     assert.match(page.noteHtml(), /Order #\d+ placed/);
   }));
 
+test("REQ-ORD-7: a successful order's confirmation shows a markup SKU as inert text and runs no script", () =>
+  withServer(async ({ base }) => {
+    const markupSku = '<img src=x onerror=alert(1)>';
+    const page = await loadClientPage(base, {
+      fetch: (path, options) =>
+        path === '/api/orders' && options?.method === 'POST'
+          ? Promise.resolve({ status: 201, json: async () => ({ id: 1, sku: markupSku, qty: 2, total: 200 }) })
+          : fetch(base + path, options),
+    });
+
+    await page.order('MUG-1', 2); // the sku sent is irrelevant; the stubbed POST always echoes markupSku
+    const html = page.noteHtml();
+    assert.doesNotMatch(html, /<img[^>]*onerror/);
+    assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+  }));
+
 test("REQ-ORD-7: a rejected order's reason is written into the live region", () =>
   withServer(async ({ base }) => {
     const page = await loadClientPage(base);
@@ -216,6 +305,76 @@ test('REQ-ORD-8: a remaining item keeps its accessible name after a search narro
     const button = orderButtonMarkup(page.itemsHtml(), 'MUG-1');
     assert.ok(button, 'expected MUG-1 to remain after searching "mug"');
     assert.match(button, /aria-label="[^"]*Enamel Mug[^"]*"/);
+  }));
+
+test("REQ-ORD-8: markup in an item's name is shown as text within the Order button's accessible name, not parsed", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base, {
+      fetch: fakeItemsFetch(base, [{ sku: 'SKU-1', name: '<b>bold</b> & "quoted"', price: 100, stock: 5 }]),
+    });
+    const button = orderButtonMarkup(page.itemsHtml(), 'SKU-1');
+    assert.ok(button, 'expected an Order button for SKU-1');
+    assert.doesNotMatch(button, /<b>bold<\/b>/);
+    assert.match(button, /aria-label="Order &lt;b&gt;bold&lt;\/b&gt; &amp; &quot;quoted&quot;"/);
+  }));
+
+test("REQ-ORD-8: markup in an item's SKU is shown as text in the Order button's data-sku attribute, not parsed", () =>
+  withServer(async ({ base }) => {
+    const injectedSku = '"><script>alert(1)</script>';
+    const page = await loadClientPage(base, {
+      fetch: fakeItemsFetch(base, [{ sku: injectedSku, name: 'Widget', price: 100, stock: 5 }]),
+    });
+    const html = page.itemsHtml();
+    assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
+    assert.match(html, /data-sku="&quot;&gt;&lt;script&gt;alert\(1\)&lt;\/script&gt;"/);
+  }));
+
+test('REQ-CAT-10, REQ-ORD-8: an item whose sku contains markup can still be ordered, proven through the rendered markup', () =>
+  withServer(async ({ base }) => {
+    const rawSku = `SKU&"'<>1`;
+    const fakeItem = { sku: rawSku, name: 'Marked-up Mug', price: 500, stock: 10 };
+    let capturedOrderRequest;
+    const itemsFetch = fakeItemsFetch(base, [fakeItem]);
+
+    const page = await loadClientPage(base, {
+      fetch: async (path, options) => {
+        if (path === '/api/orders' && options?.method === 'POST') {
+          capturedOrderRequest = JSON.parse(options.body);
+        }
+        return itemsFetch(path, options);
+      },
+    });
+
+    // Recover the quantity input's id and the button's data-sku from the page's own rendered,
+    // escaped markup — decoded the way a browser's attribute parser would — rather than reusing
+    // the raw fixture sku as a shortcut.
+    const html = page.itemsHtml();
+    const qtyIdEscaped = html.match(/<input[^>]*\btype="number"[^>]*\bid="([^"]*)"/)?.[1];
+    const dataSkuEscaped = html.match(/<button[^>]*\bdata-sku="([^"]*)"/)?.[1];
+    assert.ok(qtyIdEscaped, 'expected a quantity input in the rendered markup');
+    assert.ok(dataSkuEscaped, 'expected an Order button with data-sku in the rendered markup');
+
+    const qtyId = decodeHtmlEntities(qtyIdEscaped);
+    const recoveredSku = decodeHtmlEntities(dataSkuEscaped);
+    assert.equal(qtyId, `qty-${rawSku}`);
+    assert.equal(recoveredSku, rawSku);
+
+    page.getElementById(qtyId).value = '3';
+
+    const buttons = page.getElementById('items').querySelectorAll('button');
+    assert.equal(buttons.length, 1, 'expected exactly one rendered Order button');
+    assert.equal(buttons[0].dataset.sku, recoveredSku);
+
+    await buttons[0].click(); // drives the app's real click-listener-attachment code path
+
+    assert.ok(capturedOrderRequest, 'expected the click to reach POST /api/orders');
+    assert.equal(capturedOrderRequest.sku, rawSku, 'the SKU sent to the API must be the unescaped, stored form');
+    assert.equal(capturedOrderRequest.qty, 3);
+
+    // Known limit of this harness: it is a Node-based DOM stand-in, not a browser engine, so
+    // this proves the app's escape-on-write and this test's decode-on-read logic agree with
+    // each other, not that an actual browser's HTML parser round-trips these characters
+    // identically. See the delta's open question.
   }));
 
 // REQ-CAT-9 and REQ-ORD-9 — both found by the quality station while it was working on the search

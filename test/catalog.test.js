@@ -332,6 +332,40 @@ test('REQ-CAT-7: a script-injection query in a match-count announcement does not
     assert.match(html, /1 item matches “&lt;img src=x onerror=alert\(1\)&gt;”\./);
   }));
 
+test("REQ-CAT-10: markup in an item's name or SKU is shown as text, not parsed, in the item card", () =>
+  withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, fakeItemsFetch(base, [
+      { sku: `<i>SKU</i>&'quote'`, name: '<b>bold</b> & "quoted"', price: 100, stock: 5 },
+    ]));
+    await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+    const html = element('items').innerHTML;
+
+    assert.doesNotMatch(html, /<b>bold<\/b>/);
+    assert.doesNotMatch(html, /<i>SKU<\/i>/);
+    assert.match(html, /<div class="name">&lt;b&gt;bold&lt;\/b&gt; &amp; &quot;quoted&quot;<\/div>/);
+    assert.match(html, /<div class="meta">&lt;i&gt;SKU&lt;\/i&gt;&amp;&#39;quote&#39; ·/);
+    assert.match(html, /aria-label="Quantity of &lt;b&gt;bold&lt;\/b&gt; &amp; &quot;quoted&quot;"/);
+    assert.match(html, /id="qty-&lt;i&gt;SKU&lt;\/i&gt;&amp;&#39;quote&#39;"/);
+  }));
+
+test("REQ-CAT-10: a script-injection attempt in an item's name or SKU does not run and is shown as inert text in the item card", () =>
+  withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const injectedName = '<img src=x onerror=alert(1)>';
+    const injectedSku = '"><script>alert(1)</script>';
+    const { sandbox, element } = createSandbox(script, fakeItemsFetch(base, [
+      { sku: injectedSku, name: injectedName, price: 100, stock: 5 },
+    ]));
+    await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+    const html = element('items').innerHTML;
+
+    assert.doesNotMatch(html, /<img[^>]*onerror/);
+    assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
+    assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+    assert.match(html, /&quot;&gt;&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  }));
+
 test('REQ-CAT-7: a search that matches nothing announces the empty-state message', () =>
   withServer(async ({ base }) => {
     const script = await loadPageScript(base);
