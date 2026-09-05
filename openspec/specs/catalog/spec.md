@@ -290,3 +290,43 @@ Each item card the catalogue page renders SHALL display that item's `name` and `
 - **WHEN** an item's `sku` contains characters that would otherwise be read as markup — for example a quote or an ampersand
 - **THEN** the shopper can still enter a quantity in that item's quantity input and have it read correctly when an order is placed
 - **AND** placing that order still succeeds through the normal ordering flow (`REQ-ORD-1`), unaffected by how the SKU is rendered as inert text
+
+### Requirement: REQ-CAT-11 — a catalogue that cannot be loaded says so
+
+When the catalogue page cannot load the item list — because the request never reaches the server, or because the reply cannot be read as the page expects — the page SHALL tell the shopper that the catalogue could not be loaded, and SHALL announce it through the search-results live region (`REQ-CAT-7`). It SHALL NOT leave the catalogue area empty and silent, and SHALL NOT present the failure as a search that matched nothing (`REQ-CAT-6`), because those are different facts and lead a shopper to different actions. The failure message SHALL carry a control that retries loading, because the failure replaces the item cards — and with them every Order button — so without one the only ways back are to type in the search box or reload the page.
+
+#### Scenario: a request that never reaches the server
+
+- **WHEN** a request for the item list cannot be completed at all
+- **THEN** the catalogue area shows a message saying the catalogue could not be loaded
+- **AND** that message is written into the search-results live region, so it is announced rather than only shown
+
+#### Scenario: a reply that cannot be read
+
+- **WHEN** the server answers but the reply cannot be read as the page expects
+- **THEN** the page treats it as a failure to load, not as an empty catalogue
+- **AND** the shopper is not shown the empty-state wording of `REQ-CAT-6`
+
+#### Scenario: a superseded failure is still discarded
+
+- **WHEN** a request for the item list fails after a newer request for the item list has already been issued
+- **THEN** the failure changes nothing on the page, exactly as a superseded success changes nothing (`REQ-CAT-8`)
+
+#### Scenario: the failure offers a way to retry
+
+- **WHEN** the catalogue could not be loaded and the failure message is shown
+- **THEN** that message includes a control that retries loading
+- **AND** operating it reloads the catalogue, so a shopper who lost the server and got it back does not have to reload the page
+
+#### Scenario: a failed refresh after an order does not announce
+
+- **WHEN** the item list refreshes after an order (`REQ-ORD-1`) and that refresh fails
+- **THEN** the failure is shown where the items are displayed, with its retry control
+- **AND** the search summary is left exactly as it was, because `REQ-CAT-7` promises no announcement for a post-order refresh
+
+Note a known limitation, recorded rather than papered over. When the order itself was *accepted* and only the refresh failed, the order-outcome region announces the success and nothing announces the catalogue failure, so the summary goes on describing the last search that did load while no items are displayed. The alternative — announcing into the summary — contradicts `REQ-CAT-7`, which is shipped and explicit. Reconciling the two needs a delta that revisits `REQ-CAT-7`'s promise, not a decision taken here.
+
+#### Scenario: a successful load is unaffected
+
+- **WHEN** the item list loads normally
+- **THEN** the catalogue and the search-results announcement behave exactly as before, unaffected by this requirement

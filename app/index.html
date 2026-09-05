@@ -51,6 +51,11 @@
   .note.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
   .note.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
   .empty { color: var(--muted); font-size: .875rem; padding: .5rem 0; }
+  li.bare { list-style: none; margin-left: -1.25rem; }
+  button.retry {
+    margin-left: .6rem; padding: .25rem .6rem; font-size: .8rem;
+    background: transparent; color: inherit; border-color: currentColor;
+  }
   ol { padding-left: 1.25rem; margin: 0; color: var(--muted); font-size: .875rem; }
   code { font-size: .85em; }
   .visually-hidden {
@@ -62,7 +67,7 @@
 <body>
 <main>
   <h1>Storefront</h1>
-  <p class="sub">Behaviour is specified in <code>spec/</code>. If this page and the spec disagree, this page is wrong.</p>
+  <p class="sub">Search the catalogue, then order what you need. Stock updates as orders are placed.</p>
 
   <input type="search" id="q" aria-label="Search the catalogue" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
 
@@ -79,14 +84,29 @@
 const money = (cents) => '£' + (cents / 100).toFixed(2);
 const el = (id) => document.getElementById(id);
 
+// A request that never lands, or a reply that is not JSON, is a failure the shopper has to be
+// told about — not an exception thrown past every caller. `ok: false` is that, in a value.
 async function api(path, options) {
-  const res = await fetch('/api' + path, options);
-  return { status: res.status, body: await res.json() };
+  try {
+    const res = await fetch('/api' + path, options);
+    return { ok: true, status: res.status, body: await res.json() };
+  } catch (err) {
+    console.warn('request failed', path, err);
+    return { ok: false, status: 0, body: null };
+  }
 }
 
-const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[c]));
+
+// Every failure message carries its own way out. Both retry everything, because the failure
+// that actually happens is the server going away, which takes both loads down together.
+const retryButton = (id) => ` <button type="button" class="retry" id="${id}">Try again</button>`;
+
+function onRetry(id) {
+  el(id)?.addEventListener('click', () => { loadItems(); loadOrders(); });
+}
 
 function note(message, kind) {
   el('note').innerHTML = message ? `<p class="note ${kind}">${message}</p>` : '';
@@ -97,6 +117,10 @@ function summaryText(q, count) {
   if (count === 0) return `Nothing matches “${escapeHtml(q)}”.`;
   return count === 1 ? `1 item matches “${escapeHtml(q)}”.` : `${count} items match “${escapeHtml(q)}”.`;
 }
+
+const CATALOGUE_FAILED = 'Could not load the catalogue. Check your connection.';
+const HISTORY_FAILED = 'Could not load your orders. Check your connection.';
+const ORDER_FAILED = 'Could not reach the server — your order was not sent. Check your connection and try again.';
 
 const REJECTIONS = {
   over_limit: 'Rejected — no more than 20 units per order.',
@@ -114,9 +138,19 @@ const nextRequestSeq = () => ++requestSeq;
 async function loadItems({ announce = true, query, seq } = {}) {
   const mySeq = seq ?? nextRequestSeq();
   const q = (query ?? el('q').value).trim();
-  const { body: items } = await api('/items' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  const { ok, body: items } = await api('/items' + (q ? '?q=' + encodeURIComponent(q) : ''));
 
   if (mySeq !== requestSeq) return; // superseded by a newer request; discard
+
+  if (!ok || !Array.isArray(items)) {
+    // A failure is not an empty catalogue, and it is not a search that matched nothing. The
+    // summary still follows `announce`: REQ-CAT-7 promises the post-order refresh leaves that
+    // region alone, and the order's own outcome has already spoken through #note.
+    el('items').innerHTML = `<p class="note bad">${CATALOGUE_FAILED}${retryButton('retry-items')}</p>`;
+    onRetry('retry-items');
+    if (announce) el('summary').innerHTML = CATALOGUE_FAILED;
+    return;
+  }
 
   if (items.length === 0) {
     el('items').innerHTML = `<p class="empty">Nothing matches “${escapeHtml(q)}”.</p>`;
@@ -125,7 +159,7 @@ async function loadItems({ announce = true, query, seq } = {}) {
       <li class="card">
         <div class="grow">
           <div class="name">${escapeHtml(item.name)}</div>
-          <div class="meta">${escapeHtml(item.sku)} · ${money(item.price)} · ${item.stock} in stock</div>
+          <div class="meta">${escapeHtml(item.sku)} · ${money(item.price)} · ${escapeHtml(item.stock)} in stock</div>
         </div>
         <input type="number" min="1" value="1" id="qty-${escapeHtml(item.sku)}" aria-label="Quantity of ${escapeHtml(item.name)}">
         <button data-sku="${escapeHtml(item.sku)}" aria-label="Order ${escapeHtml(item.name)}">Order</button>
@@ -141,26 +175,34 @@ async function loadItems({ announce = true, query, seq } = {}) {
 }
 
 async function loadOrders() {
-  const { body: orders } = await api('/orders');
+  const { ok, body: orders } = await api('/orders');
+  if (!ok || !Array.isArray(orders)) {
+    el('orders').innerHTML = `<li class="empty bare">${HISTORY_FAILED}${retryButton('retry-orders')}</li>`;
+    onRetry('retry-orders');
+    return;
+  }
   el('orders').innerHTML = orders.length
-    ? orders.map((o) => `<li>#${o.id} — ${o.qty} × ${o.sku} — ${money(o.total)}</li>`).join('')
-    : '<li class="empty" style="list-style:none;margin-left:-1.25rem">No orders yet.</li>';
+    ? orders.map((o) => `<li>#${escapeHtml(o.id)} — ${escapeHtml(o.qty)} × ${escapeHtml(o.sku)} — ${money(o.total)}</li>`).join('')
+    : '<li class="empty bare">No orders yet.</li>';
 }
 
 async function order(sku) {
   const query = el('q').value;
   const seq = nextRequestSeq(); // reserve the refresh's place in line right away, not once it fires
   const qty = Number(el('qty-' + sku).value);
-  const { status, body } = await api('/orders', {
+  const { ok, status, body } = await api('/orders', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ sku, qty }),
   });
 
-  if (status === 201) {
-    note(`Order #${body.id} placed — ${body.qty} × ${escapeHtml(body.sku)} for ${money(body.total)}.`, 'good');
+  if (!ok) {
+    note(ORDER_FAILED, 'bad');
+  } else if (status === 201) {
+    note(`Order #${escapeHtml(body.id)} placed — ${escapeHtml(body.qty)} × ${escapeHtml(body.sku)} for ${money(body.total)}.`, 'good');
   } else {
-    note(REJECTIONS[body.reason] ?? 'Rejected — the order could not be placed.', 'bad');
+    const reason = body && Object.hasOwn(REJECTIONS, body.reason) ? REJECTIONS[body.reason] : null;
+    note(reason ?? 'Rejected — the order could not be placed.', 'bad');
   }
 
   await loadItems({ announce: false, query, seq });
