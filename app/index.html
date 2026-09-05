@@ -124,11 +124,11 @@ async function loadItems({ announce = true, query, seq } = {}) {
     el('items').innerHTML = `<ul class="cards" role="list">` + items.map((item) => `
       <li class="card">
         <div class="grow">
-          <div class="name">${item.name}</div>
-          <div class="meta">${item.sku} · ${money(item.price)} · ${item.stock} in stock</div>
+          <div class="name">${escapeHtml(item.name)}</div>
+          <div class="meta">${escapeHtml(item.sku)} · ${money(item.price)} · ${item.stock} in stock</div>
         </div>
-        <input type="number" min="1" value="1" id="qty-${item.sku}" aria-label="Quantity of ${item.name}">
-        <button data-sku="${item.sku}" aria-label="Order ${item.name}">Order</button>
+        <input type="number" min="1" value="1" id="qty-${escapeHtml(item.sku)}" aria-label="Quantity of ${escapeHtml(item.name)}">
+        <button data-sku="${escapeHtml(item.sku)}" aria-label="Order ${escapeHtml(item.name)}">Order</button>
       </li>
     `).join('') + `</ul>`;
 
@@ -158,7 +158,7 @@ async function order(sku) {
   });
 
   if (status === 201) {
-    note(`Order #${body.id} placed — ${body.qty} × ${body.sku} for ${money(body.total)}.`, 'good');
+    note(`Order #${body.id} placed — ${body.qty} × ${escapeHtml(body.sku)} for ${money(body.total)}.`, 'good');
   } else {
     note(REJECTIONS[body.reason] ?? 'Rejected — the order could not be placed.', 'bad');
   }
