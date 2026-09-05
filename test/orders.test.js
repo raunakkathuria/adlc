@@ -168,17 +168,29 @@ test('REQ-ORD-3: exactly 20 units is allowed', () =>
     assert.equal(status, 201);
   }));
 
-test('REQ-ORD-4: a rejected order leaves stock untouched', () =>
-  withServer(async ({ post, get, stock }) => {
-    const before = await stock('PEN-1');
+// REQ-ORD-4 promises "every rejection reason, not just some of them", and the test above covers
+// exactly one — insufficient_stock, which happens to return before anything is written. Each
+// reason gets its own case, because the requirement is about all of them.
+for (const [name, order] of [
+  ['unknown_sku', { sku: 'NOPE-1', qty: 1 }],
+  ['invalid_qty', { sku: 'MUG-1', qty: 0 }],
+  ['insufficient_stock', { sku: 'PEN-1', qty: 12 }],
+  ['over_limit', { sku: 'MUG-1', qty: 21 }],   // under MUG-1's stock, over the 20-unit limit
+]) {
+  test(`REQ-ORD-4: a rejection for ${name} consumes nothing`, () =>
+    withServer(async ({ post, get }) => {
+      const { body: before } = await get('/api/items');
 
-    const { status } = await post('/api/orders', { sku: 'PEN-1', qty: 12 });
-    assert.equal(status, 422);
+      const { status, body } = await post('/api/orders', order);
+      assert.equal(status >= 400, true, 'this order is meant to be rejected');
+      assert.equal(body.reason, name);
 
-    assert.equal(await stock('PEN-1'), before);
-    const { body: orders } = await get('/api/orders');
-    assert.equal(orders.length, 0);
-  }));
+      const { body: after } = await get('/api/items');
+      assert.deepEqual(after, before, 'a rejection must leave every item exactly as it was');
+      const { body: orders } = await get('/api/orders');
+      assert.equal(orders.length, 0, 'a rejected order is not recorded');
+    }));
+}
 
 test('REQ-ORD-5: 12 units take 10% off, rounded down', () =>
   withServer(async ({ post }) => {
@@ -454,5 +466,142 @@ test('REQ-ORD-9: a rejection carrying no reason at all still reads as English', 
     const shown = page.noteHtml();
     assert.doesNotMatch(shown, /undefined|null/, 'the shopper should never be shown a missing value');
     assert.match(shown, /Rejected/);
+  });
+});
+
+// REQ-ORD-10 and REQ-ORD-11 — the last unescaped interpolation on the page, and what a shopper
+// is told when the server cannot be reached. Both found by the line's own quality station (#81,
+// #83) and both pre-existing.
+//
+// The real server cannot produce either condition: it never rejects a connection, and it always
+// answers JSON. So both are driven by standing in for it, which is the only way to watch the
+// failure path fail.
+
+/** A fetch that refuses to connect, the way a dropped network does. */
+function unreachableFetch() {
+  return () => Promise.reject(new TypeError('Failed to fetch'));
+}
+
+/** A fetch that answers, but with something that is not JSON. */
+function nonJsonFetch(base) {
+  return (path, options) =>
+    path.startsWith('/api')
+      ? Promise.resolve({ status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } })
+      : fetch(base + path, options);
+}
+
+/**
+ * A `fetch` that answers the order history with a fixed, caller-chosen list. The real server
+ * gates every order through its own catalogue (three clean SKUs, no write path), so a
+ * markup-bearing SKU cannot be made to reach the history any other way. POSTs still go to the
+ * real server, so ordering keeps working.
+ */
+function fakeOrdersFetch(base, orders) {
+  return (path, options) => {
+    if (path === '/api/orders' && !options) {
+      return Promise.resolve({ status: 200, json: async () => orders });
+    }
+    return fetch(base + path, options);
+  };
+}
+
+test('REQ-ORD-10: an ordinary order-history entry is unchanged', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 2);
+    const html = page.getElementById('orders').innerHTML;
+    assert.match(html, /#1\b/, 'the order number is shown');
+    assert.match(html, /2 × MUG-1/, 'the quantity and SKU, in that order');
+    assert.match(html, /£25\.00/, 'and the total');
+  });
+});
+
+test('REQ-ORD-10: markup in an order-history SKU is shown as text, not parsed', async () => {
+  await withServer(async ({ base }) => {
+    const hostile = '<img src=x onerror="alert(1)">';
+    const page = await loadClientPage(base, {
+      fetch: fakeOrdersFetch(base, [{ id: 1, sku: hostile, qty: 1, total: 1250 }]),
+    });
+    const html = page.getElementById('orders').innerHTML;
+
+    assert.doesNotMatch(html, /<img/, 'the SKU must not become an element');
+    // The characters "onerror=" survive as text, which is harmless; what must not survive is the
+    // raw quote that would let them become an attribute.
+    assert.doesNotMatch(html, /onerror="/, 'the quote that would open an attribute is escaped');
+    assert.match(html, /&lt;img/, 'it is displayed as inert text instead');
+    assert.match(html, /&quot;|&#39;/, 'quotes inside it are escaped too');
+  });
+});
+
+test('REQ-ORD-11: an order that could not be submitted says so, and does not claim it was placed', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base, { fetch: unreachableFetch() });
+    await page.order('MUG-1', 1);
+    const shown = page.noteHtml();
+    assert.notEqual(shown, '', 'silence is the worst outcome: the shopper cannot tell what happened');
+    assert.doesNotMatch(shown, /Order #/, 'it must not show a confirmation for an order that never left');
+    assert.doesNotMatch(shown, /Rejected/,
+      'an order that never arrived was not decided on — calling it a rejection is the whole point of this requirement');
+    assert.match(shown, /was not sent/i, 'it has to say what actually happened');
+  });
+});
+
+test('REQ-ORD-11: a reply that is not readable is reported, not swallowed', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base, { fetch: nonJsonFetch(base) });
+    await page.order('MUG-1', 1);
+    const shown = page.noteHtml();
+    assert.notEqual(shown, '', 'an unreadable reply must still reach the shopper');
+    assert.doesNotMatch(shown, /Rejected/, 'an unreadable reply is not a decision to refuse');
+    assert.match(shown, /was not sent/i);
+  });
+});
+
+test('REQ-CAT-11 × REQ-CAT-7: a refresh that fails after an order does not touch the summary', async () => {
+  await withServer(async ({ base }) => {
+    let live = true;
+    const page = await loadClientPage(base, {
+      fetch: (path, options) =>
+        live ? fetch(base + path, options) : Promise.reject(new TypeError('Failed to fetch')),
+    });
+    const summaryBefore = page.getElementById('summary').innerHTML;
+    assert.notEqual(summaryBefore, '', 'the load announced something to begin with');
+
+    live = false;                       // the server goes away mid-order
+    await page.order('MUG-1', 1);
+
+    assert.equal(page.getElementById('summary').innerHTML, summaryBefore,
+      'REQ-CAT-7 promises a post-order refresh leaves the summary alone, failure included');
+    assert.match(page.noteHtml(), /could not reach/i,
+      'the shopper still hears about it — through the order-outcome region, which owns this');
+  });
+});
+
+test('REQ-ORD-11: an order history that cannot be loaded is not an empty history', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base, {
+      fetch: (path, options) =>
+        path === '/api/orders' && !options
+          ? Promise.reject(new TypeError('Failed to fetch'))
+          : fetch(base + path, options),
+    });
+    const html = page.getElementById('orders').innerHTML;
+    assert.match(html, /could not load your orders/i);
+    assert.doesNotMatch(html, /No orders yet/,
+      'telling a shopper they have no orders when we simply could not ask is the wrong fact');
+    assert.match(html, /<button[^>]*>Try again<\/button>/,
+      'nothing else reloads the history except placing another order');
+  });
+});
+
+test('REQ-ORD-11: a history reply that parses but is not a list is a failure too', async () => {
+  await withServer(async ({ base }) => {
+    const page = await loadClientPage(base, {
+      fetch: (path, options) =>
+        path === '/api/orders' && !options
+          ? Promise.resolve({ status: 502, json: async () => ({ reason: 'bad_gateway' }) })
+          : fetch(base + path, options),
+    });
+    assert.match(page.getElementById('orders').innerHTML, /could not load your orders/i);
   });
 });
