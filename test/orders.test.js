@@ -138,6 +138,7 @@ test('REQ-ORD-1: an accepted order is created and takes units out of stock', () 
     const { status, body } = await post('/api/orders', { sku: 'MUG-1', qty: 2 });
     assert.equal(status, 201);
     assert.equal(body.sku, 'MUG-1');
+    assert.equal(body.name, 'Enamel Mug');
     assert.equal(body.qty, 2);
     assert.equal(body.total, 2500);
 
@@ -146,6 +147,7 @@ test('REQ-ORD-1: an accepted order is created and takes units out of stock', () 
     const { body: orders } = await get('/api/orders');
     assert.equal(orders.length, 1);
     assert.equal(orders[0].id, body.id);
+    assert.equal(orders[0].name, 'Enamel Mug');
   }));
 
 test('REQ-ORD-2: an order beyond available stock is rejected', () =>
@@ -515,13 +517,13 @@ function fakeOrdersFetch(base, orders) {
   };
 }
 
-test('REQ-ORD-10: an ordinary order-history entry is unchanged', async () => {
+test('REQ-ORD-10: an ordinary order still displays correctly', async () => {
   await withServer(async ({ base }) => {
     const page = await loadClientPage(base);
     await page.order('MUG-1', 2);
     const html = page.getElementById('orders').innerHTML;
     assert.match(html, /#1\b/, 'the order number is shown');
-    assert.match(html, /2 × MUG-1/, 'the quantity and SKU, in that order');
+    assert.match(html, /2 × Enamel Mug \(MUG-1\)/, 'the quantity, item name, and SKU, in that order');
     assert.match(html, /£25\.00/, 'and the total');
   });
 });
@@ -537,6 +539,21 @@ test('REQ-ORD-10: markup in an order-history SKU is shown as text, not parsed', 
     assert.doesNotMatch(html, /<img/, 'the SKU must not become an element');
     // The characters "onerror=" survive as text, which is harmless; what must not survive is the
     // raw quote that would let them become an attribute.
+    assert.doesNotMatch(html, /onerror="/, 'the quote that would open an attribute is escaped');
+    assert.match(html, /&lt;img/, 'it is displayed as inert text instead');
+    assert.match(html, /&quot;|&#39;/, 'quotes inside it are escaped too');
+  });
+});
+
+test("REQ-ORD-10: markup in the order-history item's name is shown as text, not parsed, and no script runs", async () => {
+  await withServer(async ({ base }) => {
+    const hostile = '<img src=x onerror="alert(1)">';
+    const page = await loadClientPage(base, {
+      fetch: fakeOrdersFetch(base, [{ id: 1, sku: 'MUG-1', name: hostile, qty: 1, total: 1250 }]),
+    });
+    const html = page.getElementById('orders').innerHTML;
+
+    assert.doesNotMatch(html, /<img/, 'the name must not become an element');
     assert.doesNotMatch(html, /onerror="/, 'the quote that would open an attribute is escaped');
     assert.match(html, /&lt;img/, 'it is displayed as inert text instead');
     assert.match(html, /&quot;|&#39;/, 'quotes inside it are escaped too');

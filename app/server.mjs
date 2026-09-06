@@ -70,7 +70,7 @@ export function createOrder(sku, qty) {
   // than this line.
   item.stock -= qty; // reserve the units
 
-  const order = { id: nextOrderId++, sku, qty, total: orderTotal(item.price, qty) };
+  const order = { id: nextOrderId++, sku, name: item.name, qty, total: orderTotal(item.price, qty) };
   orders.push(order);
   return { ok: true, order };
 }
