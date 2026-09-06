@@ -182,7 +182,7 @@ async function loadOrders() {
     return;
   }
   el('orders').innerHTML = orders.length
-    ? orders.map((o) => `<li>#${escapeHtml(o.id)} — ${escapeHtml(o.qty)} × ${escapeHtml(o.sku)} — ${money(o.total)}</li>`).join('')
+    ? orders.map((o) => `<li>#${escapeHtml(o.id)} — ${escapeHtml(o.qty)} × ${escapeHtml(o.name)} (${escapeHtml(o.sku)}) — ${money(o.total)}</li>`).join('')
     : '<li class="empty bare">No orders yet.</li>';
 }
 
