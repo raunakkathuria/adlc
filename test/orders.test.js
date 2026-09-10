@@ -180,6 +180,19 @@ test('REQ-ORD-3: the unit limit rejects an order even when stock is also insuffi
     assert.equal(body.reason, 'over_limit');
   }));
 
+test('REQ-ORD-12: the quantity input carries the limit as its max', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    assert.match(page.itemsHtml(), /<input[^>]*\btype="number"[^>]*\bmin="1"[^>]*\bmax="20"[^>]*>/);
+  }));
+
+test('REQ-ORD-12: the hint composes with search', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.search('Mug');
+    assert.match(page.itemsHtml(), /<input[^>]*\btype="number"[^>]*\bmin="1"[^>]*\bmax="20"[^>]*>/);
+  }));
+
 // REQ-ORD-4 promises "every rejection reason, not just some of them", and the test above covers
 // exactly one — insufficient_stock, which happens to return before anything is written. Each
 // reason gets its own case, because the requirement is about all of them.
