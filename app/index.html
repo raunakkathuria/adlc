@@ -199,7 +199,7 @@ async function order(sku) {
   if (!ok) {
     note(ORDER_FAILED, 'bad');
   } else if (status === 201) {
-    note(`Order #${escapeHtml(body.id)} placed — ${escapeHtml(body.qty)} × ${escapeHtml(body.sku)} for ${money(body.total)}.`, 'good');
+    note(`Order #${escapeHtml(body.id)} placed — ${escapeHtml(body.qty)} × ${escapeHtml(body.name)} (${escapeHtml(body.sku)}) for ${money(body.total)}.`, 'good');
   } else {
     const reason = body && Object.hasOwn(REJECTIONS, body.reason) ? REJECTIONS[body.reason] : null;
     note(reason ?? 'Rejected — the order could not be placed.', 'bad');
