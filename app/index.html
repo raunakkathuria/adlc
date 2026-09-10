@@ -161,7 +161,7 @@ async function loadItems({ announce = true, query, seq } = {}) {
           <div class="name">${escapeHtml(item.name)}</div>
           <div class="meta">${escapeHtml(item.sku)} · ${money(item.price)} · ${escapeHtml(item.stock)} in stock</div>
         </div>
-        <input type="number" min="1" value="1" id="qty-${escapeHtml(item.sku)}" aria-label="Quantity of ${escapeHtml(item.name)}">
+        <input type="number" min="1" max="20" value="1" id="qty-${escapeHtml(item.sku)}" aria-label="Quantity of ${escapeHtml(item.name)}">
         <button data-sku="${escapeHtml(item.sku)}" aria-label="Order ${escapeHtml(item.name)}">Order</button>
       </li>
     `).join('') + `</ul>`;
