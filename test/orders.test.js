@@ -278,6 +278,29 @@ test("REQ-ORD-7: a successful order's confirmation shows a markup SKU as inert t
     assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
   }));
 
+test("REQ-ORD-7: a successful order's confirmation includes the ordered item's name alongside its SKU", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 2);
+    assert.match(page.noteHtml(), /Order #\d+ placed — 2 × Enamel Mug \(MUG-1\) for £25\.00\./);
+  }));
+
+test("REQ-ORD-7: a successful order's confirmation shows a markup item name as inert text and runs no script", () =>
+  withServer(async ({ base }) => {
+    const hostileName = '<img src=x onerror=alert(1)>';
+    const page = await loadClientPage(base, {
+      fetch: (path, options) =>
+        path === '/api/orders' && options?.method === 'POST'
+          ? Promise.resolve({ status: 201, json: async () => ({ id: 1, sku: 'MUG-1', name: hostileName, qty: 2, total: 2500 }) })
+          : fetch(base + path, options),
+    });
+
+    await page.order('MUG-1', 2); // the name sent is irrelevant; the stubbed POST always echoes hostileName
+    const html = page.noteHtml();
+    assert.doesNotMatch(html, /<img[^>]*onerror/);
+    assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+  }));
+
 test("REQ-ORD-7: a rejected order's reason is written into the live region", () =>
   withServer(async ({ base }) => {
     const page = await loadClientPage(base);
