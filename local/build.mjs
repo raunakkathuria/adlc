@@ -352,14 +352,20 @@ function main(pr) {
     writeFileSync(bodyFile, prBody(review, issue, vendorOf(reviewer)));
     url = existing;
     if (existing) {
+      // Comment AND replace the body. The comment is this run's record; the body is what the Gate 2
+      // reader looks at first, and left alone it keeps the FIRST build's review while newer ones
+      // pile up underneath — a review several builds out of date, presented as current.
       gh('pr', 'comment', existing, '--body-file', bodyFile);
+      gh('pr', 'edit', existing, '--body-file', bodyFile);
     } else {
       url = gh('pr', 'create', '--base', 'main', '--head', `impl/${slug}`,
         '--title', `impl: ${slug}`, '--body-file', bodyFile);
     }
   } catch (e) {
     // The branch is pushed and the gate was green — losing the PR must not also lose the issue.
-    park(issue, `The build was green and \`impl/${slug}\` is pushed, but the pull request could not be opened: ${e.message}\n\nOpen it by hand, or re-run the build.`);
+    // "could not be opened" was wrong whenever this is a rebuild — the PR was already open and it
+    // is the comment or the body update that failed. Say what is true of both shapes.
+    park(issue, `The build was green and \`impl/${slug}\` is pushed, but the pull request could not be brought up to date: ${e.message}\n\nCheck whether a PR for that branch already exists — it may be open with a stale body — then finish it by hand or re-run the build.`);
     process.exit(1);
   }
 

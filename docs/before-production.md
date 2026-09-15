@@ -62,3 +62,16 @@ itself; `local/build.mjs` does the same through `GUARDED_PATHS`.
   recorded patch, as `build.yml` does.
 - **Why now is OK:** it is `build.yml`'s own documented degrade path, and the
   spec still describes the failing behaviour.
+
+## `build.yml` still leaves a stale review in a rebuilt PR's body
+
+- **Ships now:** `local/build.mjs` replaces the PR body as well as commenting
+  when it reuses an existing implementation PR, so the body always carries the
+  current run's review.
+- **Before production:** `build.yml` only comments. A CI rebuild therefore keeps
+  the first build's review as the body — which a Gate 2 reader takes as current —
+  with later reviews accumulating as comments beneath it. Same one-line fix:
+  `gh pr edit` alongside the existing `gh pr comment`.
+- **Why now is OK:** the rebuild path needs a spec revision after an
+  implementation PR is already open, which is rare, and the newest review is
+  always present as the last comment.
