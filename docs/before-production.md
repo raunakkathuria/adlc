@@ -4,17 +4,24 @@ Decisions that are fine while the local driver is one hand-run command on one
 machine, and must be resolved before it is trusted to run unattended or on a
 repo you do not own.
 
-## The self-build guard is off in CI
+## ~~The self-build guard is off in CI~~ — fixed
 
-- **Ships now:** `local/build.mjs` guards `prompts`, `scripts`, `local`,
-  `.github` and `package.json` against edits by the Executor.
-- **Before production:** `build.yml`'s equivalent guard is gated on
-  `env.ADLC == '.adlc'`, and `.adlc` is only checked out when
-  `github.repository != ADLC_REPO`. **When adlc builds adlc, the CI guard does
-  not run at all.** That is a gap in the line itself, independent of this
-  driver, and it should be fixed upstream in `build.yml`.
-- **Why now is OK:** locally driven builds carry the guard; a person triggers
-  each run and reads the diff at Gate 2.
+`build.yml`'s guard was gated on `env.ADLC == '.adlc'`, so it never ran when
+adlc built adlc. Now fixed in both drivers: CI checks the whole `.adlc`
+checkout for an adopter and `prompts scripts local .github` for the line
+itself; `local/build.mjs` does the same through `GUARDED_PATHS`.
+
+## The gate's own definition is only guarded locally
+
+- **Ships now:** `local/build.mjs` reads `scripts.verify` from `package.json`
+  before and after the Executor and refuses to open a PR if it moved — a build
+  that rewrites its own gate clears a gate that checks nothing.
+- **Before production:** `build.yml` has no equivalent. `package.json` cannot
+  simply be added to its path guard, because the reinstall-after-manifest-change
+  step exists precisely so a delta *can* change the manifest. CI needs the same
+  before/after comparison of the `verify` script.
+- **Why now is OK:** the risk needs an Executor that both rewrites the gate and
+  gets past a human reading the diff at Gate 2. Locally it is closed already.
 
 ## The guard reads the working tree, not the commit
 

@@ -41,6 +41,15 @@ approver having write access — the same branch cut from the **approved commit*
 attempt caps and links block. The work happens in a git worktree under `~/.adlc/worktrees/`, so
 the checkout you are editing is never touched.
 
+It runs `npm run verify` **before** the Executor as well as after. A base that is already red —
+`main` was red, or the merge produced it — would otherwise be reported as the build's failure,
+parking the issue and consuming an attempt for something the Executor did not do.
+
+One thing to be clear about: the default tool allowlist is **not a sandbox**. `Bash(node:*)` is a
+full shell. It is the same allowlist `build.yml` uses, and running a logged-in coding CLI on your
+own machine is the point — but if you want the agent contained, `codex exec --sandbox
+workspace-write` sandboxes and the default does not.
+
 **Three things it does not do**, because only the build station is wired up:
 
 - **No independent review.** `build.yml` runs `prompts/review.md` in a fresh context and makes
