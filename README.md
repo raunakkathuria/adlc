@@ -50,14 +50,24 @@ full shell. It is the same allowlist `build.yml` uses, and running a logged-in c
 own machine is the point — but if you want the agent contained, `codex exec --sandbox
 workspace-write` sandboxes and the default does not.
 
-**Three things it does not do**, because only the build station is wired up:
+Then it reviews the build — with a **different vendor than built it**, which is the whole reason
+this runs locally rather than in Actions. Two seats you already pay for, so a second opinion from
+an agent that shares none of the builder's blind spots costs nothing:
 
-- **No independent review.** `build.yml` runs `prompts/review.md` in a fresh context and makes
-  those findings the PR body. This does not, so the body holds the Executor's own report and says
-  so at the top. The Gate 2 reader is looking at a self-report.
+```bash
+AGENT_CMD='claude -p …'  REVIEW_CMD='codex exec --sandbox read-only'  node local/build.mjs 42
+```
+
+`REVIEW_CMD` runs `prompts/review.md` — the same station `build.yml` runs — in a fresh session
+against the unstaged diff, and its findings become the PR body. The driver **refuses to start** if
+both stations resolve to the same vendor; that is a rule it enforces, not a habit to remember.
+Unset, the builder is `claude -p` and the reviewer is `codex exec --sandbox read-only`.
+
+**Two things it does not do**, because only the build and review stations are wired up:
+
 - **No verifier.** `verifier.yml` starts only on `workflow_dispatch`, and nothing dispatches it
   here. The issue therefore goes to `state:gate-2`, not `state:verifying` — a label claiming a
-  drift check that is not running would be worse than no label.
+  drift check that is not running would be worse than no label, and the PR body says so too.
 - **No reproduce patch.** For a bug that came through the reproduce station, the Executor writes
   its red test from the spec rather than applying the recorded patch.
 

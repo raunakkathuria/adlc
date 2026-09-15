@@ -22,6 +22,10 @@ import { join } from 'node:path';
 
 const ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 const DEFAULT_AGENT = 'claude -p --allowedTools "Read,Grep,Glob,Edit,Write,Bash(node:*),Bash(npm:*)"';
+// A different vendor from the builder, and read-only by construction. The reviewer's own flags
+// belong in the command string, the same way the builder's allowlist does — a claude reviewer
+// would carry build.yml's read-only set: Read,Grep,Glob,Bash(node:*),Bash(npm:*),Bash(git:*).
+const DEFAULT_REVIEWER = 'codex exec --sandbox read-only';
 
 // A slug becomes a branch name and a path segment, so it is checked before either is built from it.
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,60}$/;
@@ -39,6 +43,18 @@ export const WRITE_PERMISSIONS = ['admin', 'write', 'maintain'];
 // the gate's own definition — `verifyScript` guards that precisely, instead of freezing the whole
 // file and making the reinstall step unreachable.
 export const GUARDED_PATHS = ['prompts', 'scripts', 'local', '.github'];
+
+/**
+ * The binary a station's command runs — how the line knows the reviewer is not the builder.
+ *
+ * A reviewer from the same vendor shares the builder's blind spots and its training; the whole
+ * reason this runs locally is that a second vendor costs nothing when both are seats you already
+ * pay for. So it is a rule the driver enforces, not a habit to remember.
+ */
+export function vendorOf(command) {
+  const first = String(command ?? '').trim().split(/\s+/)[0] ?? '';
+  return first.split('/').pop() ?? '';
+}
 
 /** The `verify` script as package.json defines it — the command the deterministic gate runs. */
 export function verifyScript(packageJsonText) {
@@ -99,15 +115,18 @@ Built from the spec delta approved at Gate 1 (spec PR stays open until this merg
 Relates to #${issue}`;
 }
 
-export function prBody(report, issue) {
-  // build.yml puts the INDEPENDENT reviewer's findings here, from a fresh context. This driver
-  // does not run that station, so what follows is the Executor's own account of its own work.
-  // Saying so is the difference between a smaller pipeline and a misleading one.
-  return `> **Built locally — no independent review and no drift check ran.** The reviewer and
-> verifier stations run in Actions, not here. What follows is the Executor's own report on its
-> own work; read the diff accordingly.
+export function prBody(review, issue, reviewerVendor) {
+  // The INDEPENDENT reviewer's findings, from a fresh context and a different vendor — the same
+  // artifact build.yml puts here. The Executor's own account of its work is NOT in this body; it
+  // stays in the worktree's work/build.md for whoever wants it, because a self-report next to a
+  // review is read as though it answered it.
+  //
+  // No drift check, though: verifier.yml starts only on workflow_dispatch and nothing dispatches
+  // it here, so the issue goes to gate-2 and this says so rather than implying otherwise.
+  return `> Reviewed independently by \`${reviewerVendor}\`, which did not build this change.
+> No drift check ran — the verifier station runs in Actions, not here.
 
-${report.slice(-MAX_BODY)}
+${review.slice(-MAX_BODY)}
 
 ---
 
@@ -149,11 +168,11 @@ const gh = (...a) => execFileSync('gh', a, { encoding: 'utf8' }).trim();
 const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
 const node = (script, ...a) => execFileSync('node', [join(ROOT, 'scripts', script), ...a], { stdio: 'inherit' });
 
-function readReport(tree) {
+function readReport(tree, file) {
   try {
-    return readFileSync(join(tree, 'work', 'build.md'), 'utf8');
+    return readFileSync(join(tree, 'work', file), 'utf8');
   } catch {
-    return '(the Executor produced no output)';
+    return '(the station produced no output)';
   }
 }
 
@@ -173,6 +192,15 @@ function park(issue, message) {
 function main(pr) {
   if (!/^\d+$/.test(pr ?? '')) {
     console.error('usage: node local/build.mjs <spec-pr-number>');
+    process.exit(2);
+  }
+
+  const agent = process.env.AGENT_CMD || DEFAULT_AGENT;
+  const reviewer = process.env.REVIEW_CMD || DEFAULT_REVIEWER;
+  if (vendorOf(agent) === vendorOf(reviewer)) {
+    console.error(`The reviewer must not be the vendor that built the change — both are \`${vendorOf(agent)}\`.`);
+    console.error('Set REVIEW_CMD to a different CLI. A reviewer sharing the builder\'s vendor shares its blind spots,');
+    console.error('and a second vendor costs nothing when both are subscriptions you already pay for.');
     process.exit(2);
   }
 
@@ -248,7 +276,6 @@ function main(pr) {
   const verifyBefore = verifyScript(readFileSync(join(tree, 'package.json'), 'utf8'));
 
   mkdirSync(join(tree, 'work'), { recursive: true });
-  const agent = process.env.AGENT_CMD || DEFAULT_AGENT;
   try {
     // pipefail: a crashed agent must fail this step, not be hidden by tee. stdout is inherited, so
     // there is no buffer to overflow and you watch the build as it happens.
@@ -256,10 +283,10 @@ function main(pr) {
       cwd: tree, input: prompt, stdio: ['pipe', 'inherit', 'inherit'],
     });
   } catch (e) {
-    park(issue, `The Executor did not finish: ${e.message}\n\nWhat it managed to say:\n\n${readReport(tree)}`);
+    park(issue, `The Executor did not finish: ${e.message}\n\nWhat it managed to say:\n\n${readReport(tree, 'build.md')}`);
     process.exit(1);
   }
-  const report = readReport(tree);
+  const report = readReport(tree, 'build.md');
 
   // The line's own tools must be untouched. build.yml skips this guard when adlc builds adlc,
   // which is exactly the case here — so locally it matters more, not less.
@@ -294,6 +321,24 @@ function main(pr) {
     process.exit(1);
   }
 
+  // The reviewer gets a fresh session, the diff, and no memory of writing either — and a
+  // different vendor from the builder. It runs before the commit so `git diff` shows the change
+  // unstaged, which is what prompts/review.md asks it to read.
+  //
+  // stderr is inherited, not merged: `codex exec` puts its transcript there and only the final
+  // message on stdout, so tee captures the report and not a file dump. Verified.
+  try {
+    execFileSync('bash', ['-c', `set -o pipefail; ${reviewer} | tee work/review.md`], {
+      cwd: tree,
+      input: readFileSync(join(ROOT, 'prompts', 'review.md'), 'utf8'),
+      stdio: ['pipe', 'inherit', 'inherit'],
+    });
+  } catch (e) {
+    park(issue, `The build was green, but the independent review did not finish: ${e.message}\n\nNo pull request was opened — a change nobody reviewed is not what this line ships.`);
+    process.exit(1);
+  }
+  const review = readReport(tree, 'review.md');
+
   git(tree, 'add', '-A', '--', '.', ':!work', ':!node_modules');
   git(tree, 'config', 'user.name', 'adlc-line');
   git(tree, 'config', 'user.email', 'adlc-line@users.noreply.github.com');
@@ -304,7 +349,7 @@ function main(pr) {
   try {
     const existing = gh('pr', 'list', '--head', `impl/${slug}`, '--state', 'open', '--json', 'url', '--jq', '.[0].url // empty');
     const bodyFile = join(tree, 'work', 'pr-body.md');
-    writeFileSync(bodyFile, prBody(report, issue));
+    writeFileSync(bodyFile, prBody(review, issue, vendorOf(reviewer)));
     url = existing;
     if (existing) {
       gh('pr', 'comment', existing, '--body-file', bodyFile);

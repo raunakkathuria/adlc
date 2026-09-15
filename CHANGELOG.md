@@ -44,12 +44,20 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
     alone so a legitimate manifest change still works; what is guarded instead is the gate's own
     definition — the `verify` script is compared before and after, because a build that rewrites
     it clears a gate that no longer checks anything.
-  - Only the build station is wired up, and the driver says so rather than implying parity it does
-    not have: no independent review (the PR body carries the Executor's own report, labelled as
-    such, where `build.yml` carries `prompts/review.md`'s findings), no verifier dispatch (so the
-    issue goes to `state:gate-2`, not the `state:verifying` label that would claim a drift check
-    nobody is running), and no reproduce patch applied for bugs. The spec, verifier, quality and
-    finalize stations are unchanged in Actions, but nothing routes a locally driven build to them.
+  - **The review station runs too, with a different vendor than built the change** — the reason
+    this runs locally at all. `REVIEW_CMD` runs `prompts/review.md` (the same station `build.yml`
+    runs) in a fresh session against the unstaged diff, and its findings become the PR body. The
+    driver refuses to start when both stations resolve to the same vendor: a reviewer sharing the
+    builder's vendor shares its blind spots, and a second vendor is free when both are
+    subscriptions already paid for. Defaults: builder `claude -p`, reviewer
+    `codex exec --sandbox read-only`.
+  - stderr is inherited rather than merged, because `codex exec` puts its transcript there and
+    only the final message on stdout — so `tee` captures a review and not a file dump. No
+    transcript parsing, no vendor-specific JSON.
+  - Still not wired up locally, and the PR body says so rather than implying parity: no verifier
+    dispatch (the issue goes to `state:gate-2`, not the `state:verifying` label that would claim a
+    drift check nobody is running) and no reproduce patch applied for bugs. The spec, verifier,
+    quality and finalize stations are unchanged in Actions.
   - Model output travels as a file to `--body-file`, and the agent streams through `tee` with
     stdout inherited, matching the workflows — nothing buffers an unbounded report in memory or
     passes it as an argv.

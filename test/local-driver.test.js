@@ -16,7 +16,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { gate1, commitMessage, prBody, prepareImplBranch, GUARDED_PATHS, verifyScript } from '../local/build.mjs';
+import { gate1, commitMessage, prBody, prepareImplBranch, GUARDED_PATHS, verifyScript, vendorOf } from '../local/build.mjs';
 
 // A spec PR as `gh pr view --json state,headRefName,files,body` returns it.
 const specPr = (over = {}) => ({
@@ -113,22 +113,27 @@ test('commitMessage: names the change and relates it to the source issue', () =>
 });
 
 test('prBody: carries the trailers GitHub and Gate 1 read', () => {
-  const b = prBody('the build report', '4');
-  assert.match(b, /the build report/);
+  const b = prBody('the review findings', '4', 'codex');
+  assert.match(b, /the review findings/);
   assert.match(b, /Closes #4/);
   assert.match(b, /Relates to #4/);
 });
 
-test('prBody: says plainly that no independent review ran', () => {
-  // build.yml puts the independent reviewer's findings here. This driver does not run that
-  // station, so the body must not read as though it did — the Gate 2 human relies on it.
-  const b = prBody('the build report', '4');
-  assert.match(b, /no independent review/i);
+test('prBody: names the vendor that reviewed it, so the reader can see it was not the builder', () => {
+  const b = prBody('findings', '4', 'codex');
+  assert.match(b, /codex/);
+  assert.match(b, /did not build this change/i);
+});
+
+test('prBody: still says plainly that no drift check ran', () => {
+  // verifier.yml starts only on workflow_dispatch and nothing dispatches it here. Claiming a
+  // review happened is now true; claiming drift was checked would not be.
+  assert.match(prBody('findings', '4', 'codex'), /no drift check/i);
 });
 
 test('prBody: a huge report is truncated, because GitHub refuses a body over 65536 characters', () => {
   // Otherwise the branch pushes, then `gh pr create` 422s and the issue is stranded.
-  const b = prBody('x'.repeat(200_000), '4');
+  const b = prBody('x'.repeat(200_000), '4', 'codex');
   assert.ok(b.length < 65_536, `body was ${b.length} characters`);
   assert.match(b, /Closes #4/, 'the trailers survive the truncation');
 });
@@ -167,6 +172,36 @@ test('verifyScript: a missing script or unparseable manifest reads as null, not 
   assert.equal(verifyScript('{"scripts":{}}'), null);
   assert.equal(verifyScript('{}'), null);
   assert.equal(verifyScript('not json at all'), null);
+});
+
+// --- The reviewer must not be the builder ---------------------------------------------------------
+
+test('vendorOf: reads the binary out of a station command', () => {
+  assert.equal(vendorOf('claude -p --allowedTools "Read,Edit"'), 'claude');
+  assert.equal(vendorOf('codex exec --sandbox read-only'), 'codex');
+  assert.equal(vendorOf('cursor-agent --force --print'), 'cursor-agent');
+});
+
+test('vendorOf: an absolute path still names the vendor', () => {
+  // AGENT_CMD may well be a full path; the rule compares vendors, not command strings.
+  assert.equal(vendorOf('/Users/someone/.local/bin/claude -p'), 'claude');
+});
+
+test('vendorOf: the same vendor invoked differently is still the same vendor', () => {
+  // This is the case the rule exists to catch — two claude commands that look unalike.
+  assert.equal(
+    vendorOf('claude -p --allowedTools "Read"'),
+    vendorOf('claude -p --output-format json --model opus'),
+  );
+});
+
+test('vendorOf: two different vendors do not collide', () => {
+  assert.notEqual(vendorOf('claude -p'), vendorOf('codex exec'));
+});
+
+test('vendorOf: nothing at all reads as no vendor rather than throwing', () => {
+  assert.equal(vendorOf(''), '');
+  assert.equal(vendorOf(undefined), '');
 });
 
 // --- The branch choreography, against real git ----------------------------------------------------
