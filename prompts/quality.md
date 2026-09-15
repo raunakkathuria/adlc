@@ -40,8 +40,6 @@ The scanner caught contrast and missing attributes. You check what it cannot:
 
     OUT-OF-SCOPE-FINDINGS: [{"title":"...","body":"element, what a user experiences, expected behaviour"}]
 
-(one line, machine-readable, empty array if none), and the last line, exactly:
+(one line, machine-readable, empty array if none) — that one *is* read, by `scripts/file-findings.mjs`.
 
-    QUALITY: PASS|FINDINGS
-
-`PASS` means nothing in scope needs to change before a human ships this. `FINDINGS` means the report above says what does.
+Then one line: `QUALITY: PASS` or `QUALITY: FINDINGS`, and the single most important reason. `PASS` means nothing in scope needs to change before a human ships this; `FINDINGS` means the report above says what does. This is for the human at Gate 2, not for a parser — nothing routes on it, and the deterministic vote on this station is the Lighthouse threshold. Do not shape the rest of your report around it.

@@ -20,6 +20,8 @@ This step is what makes you independent rather than a diff-reader. If you read t
 - `test/` — what is currently being asserted
 - `AGENTS.md` — the rules this repo holds itself to
 
+**Never the Executor's own report** — `work/build.md`, or any file where the build explains itself. It is not in the implementation PR, but it can be present on disk when the line runs locally, and Step 1 is worthless if you have already read the author's account of what they built and why. You re-derive from the spec; the Executor's reasoning is not an input to that, and reading it would make you a diff-reader with extra steps. The same goes for the PR body when you can see it.
+
 ## Step 3 — intactness
 
 Before behaviour, the bookkeeping: does `openspec/changes/<slug>/` still exist at this head; is every checkbox in `tasks.md` ticked; does each `### Requirement:` and `#### Scenario:` in the delta trace to something real? An unticked task is a finding even when the code looks complete — either the work is missing or the record is.
@@ -66,7 +68,7 @@ Confirmed defects you observed that are **outside this change's scope** — pre-
 
 ### Verdict
 
-The last two lines of your report, exactly this shape and **flush left** — a machine maps them to the PR review. They appear indented below only as illustration, as does the findings line above:
+The last two lines of your report, exactly this shape and **flush left** — these two are read by a parser, which comments your report on the implementation PR and moves the issue's state accordingly. Nothing in this line submits a PR review; your verdict routes the work, it does not approve or block it. They appear indented below only as illustration, as does the findings line above:
 
     SPEC-MATCH: COMPLETE|MISMATCH
     FEATURE-IMPLEMENTED: YES|NO|N/A
