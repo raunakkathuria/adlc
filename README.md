@@ -26,6 +26,42 @@ With a credential set, open an issue and watch the labels move: `state:triaging 
 
 Want the product first? `npm start`, then http://localhost:3000. The gate is `npm run verify` — tests plus requirement coverage, deterministic, under a second, no model in it.
 
+## Run a station on your own machine
+
+Actions authenticates the CLI from a secret and bills tokens. If you are already logged into a
+coding CLI on your laptop, `local/` runs the same station on that login instead:
+
+```bash
+node local/build.mjs 42        # 42 = the approved spec PR
+```
+
+It is a twin of `build.yml` for the build station: the same Gate 1 fine print — including the
+approver having write access — the same branch cut from the **approved commit** and merged with
+`main`, the same `npm run verify` gate before any PR, the same commit and PR trailers, the same
+attempt caps and links block. The work happens in a git worktree under `~/.adlc/worktrees/`, so
+the checkout you are editing is never touched.
+
+**Three things it does not do**, because only the build station is wired up:
+
+- **No independent review.** `build.yml` runs `prompts/review.md` in a fresh context and makes
+  those findings the PR body. This does not, so the body holds the Executor's own report and says
+  so at the top. The Gate 2 reader is looking at a self-report.
+- **No verifier.** `verifier.yml` starts only on `workflow_dispatch`, and nothing dispatches it
+  here. The issue therefore goes to `state:gate-2`, not `state:verifying` — a label claiming a
+  drift check that is not running would be worse than no label.
+- **No reproduce patch.** For a bug that came through the reproduce station, the Executor writes
+  its red test from the spec rather than applying the recorded patch.
+
+The CLI is the seam, and `AGENT_CMD` moves it — the same variable `run.sh` uses. The prompt
+arrives on stdin, so anything that reads stdin works:
+
+```bash
+AGENT_CMD='codex exec --sandbox workspace-write' node local/build.mjs 42
+```
+
+One repo, one run, triggered by hand. There is no daemon and no config file: the build station
+is the only one wired up so far, so the spec PR still comes from `spec.yml` or from you.
+
 ## The stations
 
 | Station | Workflow | Trigger | What it does |
@@ -65,6 +101,7 @@ prompts/            one markdown file per station — the single definition, CLI
 scripts/            run-station.sh = the provider seam · links.mjs · labels.mjs · attempts.mjs
                     file-findings.mjs · req-coverage.mjs · req-ids.mjs · lint-workflows.mjs · install-deps.sh
 .github/workflows/  the six stations + verify.yml (the gate) · callers/ = the adoption kit
+local/              the same stations driven from your machine, on a CLI you are already logged into
 .buildwright/       the engineering discipline the Executor works to (KISS · YAGNI · DRY · TDD)
 app/  test/         the storefront and its tests — the product that ships through the line
 issues/             the three seed reports as files — how a station runs with no GitHub token
