@@ -4,6 +4,35 @@ Notable changes to the line. Adopting repos consume the stations by tag, so a ve
 
 Semantic versioning, read from the adopter's side: a major bump means a caller file or a repo setting has to change, a minor bump adds a station or an input, a patch fixes a station without changing how it is called. The moving `v1` tag always points at the newest `v1.x.y`.
 
+## Unreleased
+
+### Added
+
+- `local/build.mjs` — the build station driven from your machine rather than from Actions, so it
+  runs on a coding CLI you are already logged into instead of billing tokens against a secret. A
+  twin of `build.yml` for the build station: the same Gate 1 fine print — including the approver
+  having write access — the same implementation branch cut from the **approved** commit and merged
+  with `main`, the same `npm run verify` gate before any PR, the same commit and PR trailers, the
+  same attempt caps and links block. The work happens in a worktree under `~/.adlc/worktrees/`,
+  never in your checkout.
+  - `AGENT_CMD` selects the CLI, the same variable `run.sh` already uses; the prompt arrives on
+    stdin, so nothing depends on slash-command expansion. Unset, it uses `claude -p` with
+    `build.yml`'s tool allowlist.
+  - One repo, one run, by hand. No daemon, no polling, no config file — a poll loop needs crash
+    recovery, locks and concurrency control, and none of that earns its keep before hand-running
+    this is proven.
+  - Carries the guard that `build.yml` skips when adlc builds adlc: if the agent edits the line's
+    own `prompts/`, `scripts/` or `local/`, the run stops instead of opening a PR.
+  - Only the build station is wired up, and the driver says so rather than implying parity it does
+    not have: no independent review (the PR body carries the Executor's own report, labelled as
+    such, where `build.yml` carries `prompts/review.md`'s findings), no verifier dispatch (so the
+    issue goes to `state:gate-2`, not the `state:verifying` label that would claim a drift check
+    nobody is running), and no reproduce patch applied for bugs. The spec, verifier, quality and
+    finalize stations are unchanged in Actions, but nothing routes a locally driven build to them.
+  - Model output travels as a file to `--body-file`, and the agent streams through `tee` with
+    stdout inherited, matching the workflows — nothing buffers an unbounded report in memory or
+    passes it as an argv.
+
 ## v1.0.0 — 5 September 2026
 
 The first tagged line: six reusable stations, two human gates, and the kit for wiring it into another repo.
