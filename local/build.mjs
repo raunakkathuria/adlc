@@ -31,9 +31,23 @@ export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,60}$/;
 export const WRITE_PERMISSIONS = ['admin', 'write', 'maintain'];
 
 // What the Executor must not touch. build.yml skips this guard entirely when adlc builds adlc —
-// which is this case — so it is new coverage, and its breadth is the whole point: a workflow runs
-// with the line's credentials once merged, and package.json defines the very gate that clears it.
-export const GUARDED_PATHS = ['prompts', 'scripts', 'local', '.github', 'package.json'];
+// which is this case — so it is new coverage. A workflow is here because it runs with the line's
+// credentials once merged.
+//
+// package.json is deliberately NOT in this list: prompts/build.md may legitimately need a
+// manifest change, and the reinstall step below exists for exactly that. What must not move is
+// the gate's own definition — `verifyScript` guards that precisely, instead of freezing the whole
+// file and making the reinstall step unreachable.
+export const GUARDED_PATHS = ['prompts', 'scripts', 'local', '.github'];
+
+/** The `verify` script as package.json defines it — the command the deterministic gate runs. */
+export function verifyScript(packageJsonText) {
+  try {
+    return JSON.parse(packageJsonText)?.scripts?.verify ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // A PR body over GitHub's 65,536-character cap is rejected with a 422 — after the branch is
 // already pushed. Truncate to the same budget build.yml uses.
@@ -219,6 +233,20 @@ function main(pr) {
     `The delta is \`openspec/changes/${slug}/\`.`,
   ].join('\n');
 
+  // The gate must be green BEFORE the Executor starts. If `main` was red, or the merge produced a
+  // red state, the run would otherwise finish, fail the gate, and park the issue blaming a build
+  // that did nothing wrong — and burn an attempt doing it. Under a second, so it costs nothing.
+  try {
+    execFileSync('npm', ['run', 'verify'], { cwd: tree, stdio: 'inherit' });
+  } catch {
+    node('attempts.mjs', 'reset', issue, 'build'); // the attempt never happened
+    park(issue, 'The build did not start: `npm run verify` is already red on the approved delta merged with `main`, before the Executor ran. Nothing here is the build\'s fault — fix the base, then re-run the build.');
+    process.exit(1);
+  }
+
+  // The gate's own definition, as it stood before the Executor could touch it.
+  const verifyBefore = verifyScript(readFileSync(join(tree, 'package.json'), 'utf8'));
+
   mkdirSync(join(tree, 'work'), { recursive: true });
   const agent = process.env.AGENT_CMD || DEFAULT_AGENT;
   try {
@@ -235,12 +263,15 @@ function main(pr) {
 
   // The line's own tools must be untouched. build.yml skips this guard when adlc builds adlc,
   // which is exactly the case here — so locally it matters more, not less.
-  // .github/ and package.json are the highest-leverage things an agent could change: a workflow
-  // runs with the line's credentials once merged, and package.json defines the very gate below.
-  const touched = git(tree, 'status', '--porcelain', '--',
-    'prompts', 'scripts', 'local', '.github', 'package.json');
+  const touched = git(tree, 'status', '--porcelain', '--', ...GUARDED_PATHS);
   if (touched) {
     console.error(`The agent modified the line's own tools — refusing to continue:\n${touched}`);
+    process.exit(1);
+  }
+
+  // A build that rewrites `npm run verify` clears a gate that no longer checks anything.
+  if (verifyScript(readFileSync(join(tree, 'package.json'), 'utf8')) !== verifyBefore) {
+    console.error('The agent changed the `verify` script — the gate would be clearing itself. Refusing to continue.');
     process.exit(1);
   }
 

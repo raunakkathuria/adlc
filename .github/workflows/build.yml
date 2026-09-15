@@ -244,11 +244,24 @@ jobs:
             "${REPRO:-}" \
             | tee work/build.md
 
+      # Two shapes, and the second one used to be skipped. An adopter repo carries the line in
+      # .adlc/, so that whole checkout must stay clean. THIS repo *is* the line — and the step was
+      # gated on `env.ADLC == '.adlc'`, so when adlc built adlc the guard did not run at all and
+      # nothing stopped an Executor rewriting a station it was standing in.
+      #
+      # package.json is deliberately not guarded: a delta may legitimately change the manifest,
+      # which is what the reinstall step below is for.
       - name: The line's own tools must be untouched
-        if: env.GO == 'true' && steps.attempts.outputs.within == 'true' && env.ADLC == '.adlc'
+        if: env.GO == 'true' && steps.attempts.outputs.within == 'true'
         run: |
-          if [ -n "$(git -C .adlc status --porcelain)" ]; then
-            echo "::error::The agent modified the line's own prompts or scripts (.adlc/) — refusing to continue."
+          if [ "$ADLC" = ".adlc" ]; then
+            DIRTY="$(git -C .adlc status --porcelain)"
+          else
+            DIRTY="$(git status --porcelain -- prompts scripts local .github)"
+          fi
+          if [ -n "$DIRTY" ]; then
+            echo "::error::The agent modified the line's own prompts, scripts or workflows — refusing to continue."
+            printf '%s\n' "$DIRTY"
             exit 1
           fi
 

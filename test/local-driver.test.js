@@ -16,7 +16,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { gate1, commitMessage, prBody, prepareImplBranch, GUARDED_PATHS } from '../local/build.mjs';
+import { gate1, commitMessage, prBody, prepareImplBranch, GUARDED_PATHS, verifyScript } from '../local/build.mjs';
 
 // A spec PR as `gh pr view --json state,headRefName,files,body` returns it.
 const specPr = (over = {}) => ({
@@ -133,11 +133,40 @@ test('prBody: a huge report is truncated, because GitHub refuses a body over 655
   assert.match(b, /Closes #4/, 'the trailers survive the truncation');
 });
 
-test('the tools guard covers what an agent could use to clear its own gate', () => {
-  // .github/ runs with the line's credentials once merged; package.json defines `npm run verify`.
-  for (const path of ['prompts', 'scripts', 'local', '.github', 'package.json']) {
+test('the tools guard covers the line\'s own machinery', () => {
+  // .github/ matters because a workflow runs with the line's credentials once merged.
+  for (const path of ['prompts', 'scripts', 'local', '.github']) {
     assert.ok(GUARDED_PATHS.includes(path), `${path} must stay guarded`);
   }
+});
+
+test('the tools guard deliberately leaves package.json alone', () => {
+  // Freezing the whole manifest would block a legitimate dependency change and make the
+  // reinstall-after-manifest-change step unreachable. The gate's definition is guarded instead,
+  // by verifyScript — see below.
+  assert.ok(!GUARDED_PATHS.includes('package.json'));
+});
+
+test('verifyScript: reads the command the deterministic gate actually runs', () => {
+  // Compared before and after the build: an Executor that rewrites this clears a gate that no
+  // longer checks anything.
+  assert.equal(
+    verifyScript('{"scripts":{"verify":"npm test --silent && npm run req-coverage --silent"}}'),
+    'npm test --silent && npm run req-coverage --silent',
+  );
+});
+
+test('verifyScript: a rewritten gate does not compare equal to the original', () => {
+  const before = verifyScript(JSON.stringify({ scripts: { verify: 'npm test && npm run req-coverage' } }));
+  const after = verifyScript(JSON.stringify({ scripts: { verify: 'true' } }));
+  assert.notEqual(after, before, 'a self-clearing gate must be detectable');
+});
+
+test('verifyScript: a missing script or unparseable manifest reads as null, not a crash', () => {
+  // Null on both sides compares equal, so a repo with no verify script is not falsely accused.
+  assert.equal(verifyScript('{"scripts":{}}'), null);
+  assert.equal(verifyScript('{}'), null);
+  assert.equal(verifyScript('not json at all'), null);
 });
 
 // --- The branch choreography, against real git ----------------------------------------------------

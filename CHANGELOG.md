@@ -6,6 +6,23 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ## Unreleased
 
+### Fixed
+
+- **`build.yml`'s "line's own tools must be untouched" guard never ran when adlc built adlc.** The
+  step was gated on `env.ADLC == '.adlc'`, and `.adlc` is only checked out for an adopter repo — so
+  on this repo the guard was skipped entirely and nothing stopped an Executor rewriting a station
+  it was standing in. It now runs in both shapes: the whole `.adlc` checkout for an adopter, and
+  `prompts scripts local .github` for the line itself. `package.json` is deliberately not guarded,
+  because a delta may legitimately change the manifest — that is what the reinstall step is for.
+
+### Changed
+
+- **`prompts/review.md`: the reviewer must not read the Executor's own report.** `work/build.md`
+  sits in the workspace and the review station's allowlist can open it. An author's account of
+  their own change is the one input that makes a reviewer agree with it — it hands over the
+  framing of what was hard, what was deliberate and what was "out of scope". The reviewer reads
+  the diff and the spec.
+
 ### Added
 
 - `local/build.mjs` — the build station driven from your machine rather than from Actions, so it
@@ -21,8 +38,12 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   - One repo, one run, by hand. No daemon, no polling, no config file — a poll loop needs crash
     recovery, locks and concurrency control, and none of that earns its keep before hand-running
     this is proven.
-  - Carries the guard that `build.yml` skips when adlc builds adlc: if the agent edits the line's
-    own `prompts/`, `scripts/` or `local/`, the run stops instead of opening a PR.
+  - Runs the gate **before** the Executor as well as after, and resets the attempt if it is
+    already red: a red base is not the build's fault and must not park the issue or burn a try.
+  - Guards the line's own `prompts/`, `scripts/`, `local/` and `.github/`. `package.json` is left
+    alone so a legitimate manifest change still works; what is guarded instead is the gate's own
+    definition — the `verify` script is compared before and after, because a build that rewrites
+    it clears a gate that no longer checks anything.
   - Only the build station is wired up, and the driver says so rather than implying parity it does
     not have: no independent review (the PR body carries the Executor's own report, labelled as
     such, where `build.yml` carries `prompts/review.md`'s findings), no verifier dispatch (so the
