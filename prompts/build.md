@@ -23,7 +23,12 @@ The delta's `tasks.md` is the plan. Follow it in order, and **tick each box (`- 
 ## Output
 
 - What you did, task by task, in one line each.
-- The **failing** output you saw first, pasted — the test name and the assertion that failed. Rule 2 already has you watch it fail; this is where that goes. `.buildwright/framework/tdd-evidence.md` is the standard: a test that never failed proves nothing, so a change whose tests were green from birth has to say which ones and why they are regression guards rather than presenting them as red-first work.
+- **The proof of red, one line per test, flush left.** `.buildwright/framework/tdd-evidence.md` owns the format and the reason — a test that never failed proves nothing:
+
+      Red: <test name> — expected <what the requirement says>, got <what it did>
+      Characterization: <test name> — <what it pins, that already worked>
+
+  A `Red:` line for every test you watched fail; a `Characterization:` line for every test that was green from birth, which is legitimate but must declare itself rather than pass as red-first work. **These lines are lifted into the commit message**, so keep them to facts — the test, the expectation, the outcome. No reasoning on them; that belongs in the prose below.
 - The `npm test` output when you are done, pasted.
 - Anything you noticed and deliberately left alone, and why.
 - Anything in the delta that turned out to be ambiguous once you tried to build it — reported plainly, for the Planner. That is the most useful thing you can report, because it goes back to the spec rather than into the code.

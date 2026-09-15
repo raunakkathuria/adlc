@@ -61,10 +61,16 @@ build the change**:
 AGENT_CMD='claude -p …'  REVIEW_CMD='codex exec --sandbox read-only'  node local/build.mjs 42
 ```
 
-Its findings become the PR body. **The driver refuses to start if both stations resolve to the same
-vendor** — a reviewer sharing the builder's vendor shares its blind spots, and a second vendor is
-free when both are subscriptions you already hold. That is enforced, not left to memory:
-`vendorOf()` compares the binary, so a full path and a bare name are the same vendor.
+Its findings become the PR body. **The driver refuses to start if it cannot show the two vendors
+differ** — a reviewer sharing the builder's vendor shares its blind spots, and a second vendor is
+free when both are subscriptions you already hold. The check scans the whole command for a vendor it
+recognises, so `npx @anthropic-ai/claude-code` is still claude and `bash -lc 'codex exec'` is still
+codex. A command naming no vendor it knows is **refused**, not waved through: a rule that silently
+passes on an unrecognised command is not a rule.
+
+If the reviewer produces no `APPROVE` or `REQUEST CHANGES` verdict — including exiting cleanly
+having printed nothing — the work **parks** instead of opening a PR. A body claiming an independent
+review that cannot be shown to have happened is worse than no body.
 
 The reviewer never reads the Executor's own report. `prompts/review.md` says so, and the reason is
 that an author's account of their change hands over its framing of what was hard, what was
@@ -125,6 +131,14 @@ and only the final message on stdout, so the captured report is a review and not
   gh workflow enable build.yml
   ```
   Re-running the driver on an already-approved PR submits no review, so it does not need this.
+- **The proof of red rides in the commit message.** The Executor emits `Red:` and
+  `Characterization:` lines in `.buildwright/framework/tdd-evidence.md`'s format and the driver
+  lifts them into the commit. They are facts — a test, an expectation, an outcome — which is why
+  they are safe where the reviewer sees them; what must not reach a reviewer is the author's
+  *narrative*, and that stays in `work/build.md`.
+- **Any unhandled failure parks the issue.** Once `state:building` is on an issue, one boundary
+  catches everything the run does not handle itself, so the board never claims the line is working
+  on something nothing is working on.
 - **The attempt cap is shared with CI.** Two automated round-trips per station per issue, then it
   parks — counted on the issue itself, so local runs and CI runs draw on the same budget.
 

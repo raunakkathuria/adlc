@@ -28,4 +28,4 @@ You are an independent reviewer with a fresh context. You did not write this cha
 
 For each finding: **severity** · **file:line** · what is wrong · the failure scenario · confidence.
 
-Then one line: `APPROVE` or `REQUEST CHANGES`, and why.
+Then one line: `APPROVE` or `REQUEST CHANGES`, and why. **That line is read.** A driver checks for it before it will claim this change was independently reviewed — a report without it is treated as no review at all, and the work parks instead of opening a pull request. Say it even when you found nothing.
