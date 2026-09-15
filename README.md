@@ -59,6 +59,13 @@ arrives on stdin, so anything that reads stdin works:
 AGENT_CMD='codex exec --sandbox workspace-write' node local/build.mjs 42
 ```
 
+A CLI that wants the prompt as an *argument* rather than on stdin works too — the command is
+evaluated by a shell, so `$(cat)` bridges it:
+
+```bash
+AGENT_CMD='some-other-harness --headless "$(cat)"' node local/build.mjs 42
+```
+
 One repo, one run, triggered by hand. There is no daemon and no config file: the build station
 is the only one wired up so far, so the spec PR still comes from `spec.yml` or from you.
 
