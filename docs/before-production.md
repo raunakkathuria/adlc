@@ -34,16 +34,12 @@ itself; `local/build.mjs` does the same through `GUARDED_PATHS`.
   `Bash(node:*)` already grants. The guard raises the cost of an accident, and
   is not a sandbox. Gate 2 is still a human reading a diff.
 
-## No independent review on locally driven builds
+## ~~No independent review on locally driven builds~~ — done
 
-- **Ships now:** the PR body carries the Executor's own report, labelled as a
-  self-report, and the issue goes to `state:gate-2`.
-- **Before production:** run `prompts/review.md` through the same `AGENT_CMD`
-  seam **with a different vendor than the build used**, so the reviewer never
-  saw the builder's session. That is the whole point of the driver and is the
-  next milestone.
-- **Why now is OK:** v1 deliberately proves the dispatch choreography first,
-  and the PR body does not pretend a review happened.
+`prompts/review.md` now runs as a station, in a fresh session, by a vendor the
+driver **requires** to differ from the builder's, and its findings are the PR
+body. The driver refuses to start if it cannot show the two vendors differ, and
+parks rather than opening a PR if the reviewer produces no verdict.
 
 ## A re-run destroys an unfinished worktree
 

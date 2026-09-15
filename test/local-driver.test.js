@@ -16,7 +16,10 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { gate1, commitMessage, prBody, prepareImplBranch, GUARDED_PATHS, verifyScript, vendorOf } from '../local/build.mjs';
+import {
+  gate1, commitMessage, prBody, prepareImplBranch, GUARDED_PATHS, verifyScript,
+  redCitations, reviewIsUsable, vendorsIn, vendorConflict,
+} from '../local/build.mjs';
 
 // A spec PR as `gh pr view --json state,headRefName,files,body` returns it.
 const specPr = (over = {}) => ({
@@ -174,36 +177,6 @@ test('verifyScript: a missing script or unparseable manifest reads as null, not 
   assert.equal(verifyScript('not json at all'), null);
 });
 
-// --- The reviewer must not be the builder ---------------------------------------------------------
-
-test('vendorOf: reads the binary out of a station command', () => {
-  assert.equal(vendorOf('claude -p --allowedTools "Read,Edit"'), 'claude');
-  assert.equal(vendorOf('codex exec --sandbox read-only'), 'codex');
-  assert.equal(vendorOf('cursor-agent --force --print'), 'cursor-agent');
-});
-
-test('vendorOf: an absolute path still names the vendor', () => {
-  // AGENT_CMD may well be a full path; the rule compares vendors, not command strings.
-  assert.equal(vendorOf('/Users/someone/.local/bin/claude -p'), 'claude');
-});
-
-test('vendorOf: the same vendor invoked differently is still the same vendor', () => {
-  // This is the case the rule exists to catch — two claude commands that look unalike.
-  assert.equal(
-    vendorOf('claude -p --allowedTools "Read"'),
-    vendorOf('claude -p --output-format json --model opus'),
-  );
-});
-
-test('vendorOf: two different vendors do not collide', () => {
-  assert.notEqual(vendorOf('claude -p'), vendorOf('codex exec'));
-});
-
-test('vendorOf: nothing at all reads as no vendor rather than throwing', () => {
-  assert.equal(vendorOf(''), '');
-  assert.equal(vendorOf(undefined), '');
-});
-
 // --- The branch choreography, against real git ----------------------------------------------------
 
 test('prepareImplBranch: the implementation is cut from the APPROVED commit and merges main', () => {
@@ -274,10 +247,120 @@ test('prepareImplBranch: a delta that conflicts with main parks instead of guess
   git('commit', '-qm', 'main edits the same line');
   git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
 
+  // The message must carry git's own reason. It used to say "conflicts with origin/main" whatever
+  // went wrong, which turned "Committer identity unknown" into a phantom conflict.
   assert.throws(
     () => prepareImplBranch(dir, 'thing', approved),
-    /conflicts with origin\/main/,
+    (e) => /merging origin\/main .* failed/.test(e.message) && /CONFLICT|Merge conflict/i.test(e.message),
   );
   // The failed merge must be backed out, or the worktree is left mid-conflict.
   assert.equal(git('ls-files', '--unmerged'), '', 'the merge was aborted, not left mid-conflict');
+});
+
+// --- Proof of red, carried where a human will actually see it -------------------------------------
+// The Executor's failing output used to land in work/build.md, which lives in a throwaway worktree,
+// is excluded from the commit and absent from the PR body — written, then discarded. The citation
+// format is not invented here: .buildwright/framework/tdd-evidence.md already specifies it.
+
+test('redCitations: lifts the citation lines tdd-evidence.md asks for', () => {
+  const report = [
+    'I did the thing.',
+    'Red: REQ-ORD-12 a scarcer item is hinted by its own stock — expected max="8", got "20"',
+    'Characterization: REQ-ORD-12 an item exactly at the cap — green either way, boundary guard',
+    'Then I made it pass.',
+  ].join('\n');
+  assert.deepEqual(redCitations(report), [
+    'Red: REQ-ORD-12 a scarcer item is hinted by its own stock — expected max="8", got "20"',
+    'Characterization: REQ-ORD-12 an item exactly at the cap — green either way, boundary guard',
+  ]);
+});
+
+test('redCitations: leading whitespace is tolerated, as every other parser here does', () => {
+  // Three outages in this repo came from a parser too narrow about indentation.
+  assert.deepEqual(redCitations('    Red: a test — expected x, got y'), ['Red: a test — expected x, got y']);
+});
+
+test('redCitations: prose that merely mentions red is not a citation', () => {
+  // The word has to start the line, or a narrative sentence becomes evidence.
+  assert.deepEqual(redCitations('I watched it go Red: briefly, then fixed it'), []);
+});
+
+test('redCitations: a report with no citations yields none rather than throwing', () => {
+  assert.deepEqual(redCitations('nothing to declare'), []);
+  assert.deepEqual(redCitations(''), []);
+});
+
+test('commitMessage: carries the citations so Gate 2 can read them', () => {
+  const m = commitMessage('some-slug', '4', ['Red: a test — expected x, got y']);
+  assert.match(m, /^impl: some-slug/);
+  assert.match(m, /Relates to #4/);
+  assert.match(m, /Red: a test — expected x, got y/);
+});
+
+test('commitMessage: no citations leaves the message otherwise intact', () => {
+  const m = commitMessage('some-slug', '4', []);
+  assert.match(m, /^impl: some-slug/);
+  assert.match(m, /Relates to #4/);
+  assert.doesNotMatch(m, /Red:/);
+});
+
+// --- A review has to exist before the PR claims one happened --------------------------------------
+
+test('reviewIsUsable: a verdict makes it usable', () => {
+  assert.equal(reviewIsUsable('No findings.\n\nAPPROVE — the change is fine.'), true);
+  assert.equal(reviewIsUsable('severity high ...\n\nREQUEST CHANGES — see above.'), true);
+});
+
+test('reviewIsUsable: nothing at all is not a review', () => {
+  // A reviewer command can exit 0 having printed nothing; the PR would then claim it was reviewed.
+  assert.equal(reviewIsUsable(''), false);
+  assert.equal(reviewIsUsable('   \n  \n'), false);
+});
+
+test('reviewIsUsable: readReport\'s placeholder is not a review', () => {
+  assert.equal(reviewIsUsable('(the station produced no output)'), false);
+});
+
+test('reviewIsUsable: findings without a verdict are not a review', () => {
+  // prompts/review.md asks for the verdict line; without it the driver cannot say what was decided.
+  assert.equal(reviewIsUsable('Looks broadly fine, a few nits below.'), false);
+});
+
+// --- The different-vendor rule has to survive ordinary wrappers -----------------------------------
+
+test('vendorsIn: a direct invocation names its vendor', () => {
+  assert.deepEqual(vendorsIn('claude -p --allowedTools "Read"'), ['claude']);
+  assert.deepEqual(vendorsIn('codex exec --sandbox read-only'), ['codex']);
+  assert.deepEqual(vendorsIn('cursor-agent --force --print'), ['cursor-agent']);
+});
+
+test('vendorsIn: an npx wrapper does not hide the vendor', () => {
+  // This is the real bypass: first-word parsing read this as "npx" and let claude review claude.
+  assert.deepEqual(vendorsIn('npx @anthropic-ai/claude-code -p'), ['claude']);
+});
+
+test('vendorsIn: a shell wrapper does not hide the vendor either', () => {
+  // And first-word parsing collapsed every one of these to "bash", refusing valid pairs.
+  assert.deepEqual(vendorsIn("bash -lc 'claude -p'"), ['claude']);
+  assert.deepEqual(vendorsIn("bash -lc 'codex exec'"), ['codex']);
+});
+
+test('vendorsIn: a command naming no known vendor names none', () => {
+  assert.deepEqual(vendorsIn('some-other-harness --headless "$(cat)"'), []);
+});
+
+test('vendorConflict: two different vendors are allowed', () => {
+  assert.equal(vendorConflict('claude -p', 'codex exec'), null);
+  assert.equal(vendorConflict("bash -lc 'claude -p'", "bash -lc 'codex exec'"), null);
+});
+
+test('vendorConflict: the same vendor is refused however it is invoked', () => {
+  assert.match(vendorConflict('claude -p', 'npx @anthropic-ai/claude-code -p'), /claude/);
+  assert.match(vendorConflict('claude -p', 'claude -p --model opus'), /claude/);
+});
+
+test('vendorConflict: a vendor it cannot identify is refused, not waved through', () => {
+  // Fail closed. Silently allowing an unrecognised command is how the rule stops being a rule.
+  assert.match(vendorConflict('mystery-cli --go', 'codex exec'), /could not tell/i);
+  assert.match(vendorConflict('claude -p', 'mystery-cli --go'), /could not tell/i);
 });

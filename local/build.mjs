@@ -44,16 +44,73 @@ export const WRITE_PERMISSIONS = ['admin', 'write', 'maintain'];
 // file and making the reinstall step unreachable.
 export const GUARDED_PATHS = ['prompts', 'scripts', 'local', '.github'];
 
+// The vendors this line knows how to recognise, and the tokens that give them away. Reading only
+// the first word of a command was not enough: `npx @anthropic-ai/claude-code -p` looked like "npx"
+// and let claude review claude, while `bash -lc '…'` collapsed every vendor to "bash" and refused
+// pairs that were genuinely different.
+const VENDOR_TOKENS = {
+  'claude-code': 'claude',
+  claude: 'claude',
+  codex: 'codex',
+  'cursor-agent': 'cursor-agent',
+  gemini: 'gemini',
+  opencode: 'opencode',
+};
+
+/** Every known vendor named anywhere in a station's command, however it is wrapped. */
+export function vendorsIn(command) {
+  const text = String(command ?? '');
+  const found = new Set();
+  for (const [token, vendor] of Object.entries(VENDOR_TOKENS)) {
+    if (new RegExp(`(^|[^a-z0-9])${token}([^a-z0-9]|$)`, 'i').test(text)) found.add(vendor);
+  }
+  return [...found].sort();
+}
+
 /**
- * The binary a station's command runs — how the line knows the reviewer is not the builder.
+ * Why these two stations may not both run, or null if they may.
  *
- * A reviewer from the same vendor shares the builder's blind spots and its training; the whole
- * reason this runs locally is that a second vendor costs nothing when both are seats you already
- * pay for. So it is a rule the driver enforces, not a habit to remember.
+ * A reviewer from the builder's vendor shares its blind spots and its training, and the whole
+ * reason this runs locally is that a second vendor costs nothing when both are seats already paid
+ * for. Unidentifiable commands are refused rather than waved through: silently allowing one is how
+ * a rule stops being a rule.
  */
-export function vendorOf(command) {
-  const first = String(command ?? '').trim().split(/\s+/)[0] ?? '';
-  return first.split('/').pop() ?? '';
+export function vendorConflict(agentCommand, reviewerCommand) {
+  const builder = vendorsIn(agentCommand);
+  const reviewer = vendorsIn(reviewerCommand);
+  if (!builder.length || !reviewer.length) {
+    const which = !builder.length ? `AGENT_CMD (\`${agentCommand}\`)` : `REVIEW_CMD (\`${reviewerCommand}\`)`;
+    return `could not tell which vendor ${which} runs, so the reviewer cannot be shown to differ from the builder`;
+  }
+  const shared = builder.filter((v) => reviewer.includes(v));
+  if (shared.length) return `both stations run \`${shared.join('`, `')}\``;
+  return null;
+}
+
+/**
+ * The citation lines `.buildwright/framework/tdd-evidence.md` asks for, lifted out of the report.
+ *
+ * A test that never failed proves nothing, so the failing run is the evidence — and it used to be
+ * written into work/build.md, which lives in a throwaway worktree, is excluded from the commit and
+ * absent from the PR body. Written, then discarded. These lines are FACTS (a test name, an expected
+ * value, an actual one), which is why they are safe to put in the commit where the reviewer will
+ * see them: what must not reach a reviewer is the author's narrative, not the author's measurements.
+ */
+export function redCitations(report) {
+  return String(report ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^(Red|Characterization):/.test(line));
+}
+
+/**
+ * Whether a review report is one. A reviewer command can exit 0 having printed nothing, and the PR
+ * would then carry a banner claiming an independent review that did not happen.
+ */
+export function reviewIsUsable(review) {
+  const text = String(review ?? '').trim();
+  if (!text) return false;
+  return /\b(APPROVE|REQUEST CHANGES)\b/.test(text);
 }
 
 /** The `verify` script as package.json defines it — the command the deterministic gate runs. */
@@ -108,10 +165,12 @@ export function gate1(pr, approval, headSha) {
   return { ok: true, issue, slug, approvedSha: approval.sha };
 }
 
-export function commitMessage(slug, issue) {
+export function commitMessage(slug, issue, citations = []) {
+  const evidence = citations.length ? `\n${citations.join('\n')}\n` : '';
   return `impl: ${slug}
 
 Built from the spec delta approved at Gate 1 (spec PR stays open until this merges).
+${evidence}
 Relates to #${issue}`;
 }
 
@@ -158,7 +217,10 @@ export function prepareImplBranch(cwd, slug, approvedSha, baseRef = 'origin/main
     git('merge', '--no-edit', baseRef);
   } catch (e) {
     try { git('merge', '--abort'); } catch {}
-    throw new Error(`the approved spec branch conflicts with ${baseRef}, and the line will not guess at a resolution`, { cause: e });
+    // Both streams: git reports "CONFLICT (content): ..." on stdout and unrelated notes on stderr,
+    // so stderr alone would have replaced one misdiagnosis with a quieter one.
+    const why = [e.stdout, e.stderr].map((x) => String(x ?? '').trim()).filter(Boolean).join('\n') || e.message;
+    throw new Error(`merging ${baseRef} into the approved delta failed, and the line will not guess at a resolution:\n${why}`, { cause: e });
   }
 }
 
@@ -189,6 +251,12 @@ function park(issue, message) {
   node('labels.mjs', 'add', issue, 'needs-human');
 }
 
+// The issue this run has claimed, or null before it claims one. The parking boundary at the bottom
+// of this file needs to know: once `state:building` is on an issue, ANY unhandled failure must park
+// it, or the board says the line is working on something nothing is working on. Before the claim
+// there is nothing to park and a stack trace is the honest output.
+let claimed = null;
+
 function main(pr) {
   if (!/^\d+$/.test(pr ?? '')) {
     console.error('usage: node local/build.mjs <spec-pr-number>');
@@ -197,10 +265,13 @@ function main(pr) {
 
   const agent = process.env.AGENT_CMD || DEFAULT_AGENT;
   const reviewer = process.env.REVIEW_CMD || DEFAULT_REVIEWER;
-  if (vendorOf(agent) === vendorOf(reviewer)) {
-    console.error(`The reviewer must not be the vendor that built the change — both are \`${vendorOf(agent)}\`.`);
-    console.error('Set REVIEW_CMD to a different CLI. A reviewer sharing the builder\'s vendor shares its blind spots,');
-    console.error('and a second vendor costs nothing when both are subscriptions you already pay for.');
+  const conflict = vendorConflict(agent, reviewer);
+  if (conflict) {
+    console.error(`The reviewer must be a different vendor from the builder: ${conflict}.`);
+    console.error('Set AGENT_CMD and REVIEW_CMD to different CLIs this line recognises');
+    console.error('(claude, codex, cursor-agent, gemini, opencode). A reviewer sharing the builder\'s');
+    console.error('vendor shares its blind spots, and a second vendor costs nothing when both are');
+    console.error('subscriptions you already pay for.');
     process.exit(2);
   }
 
@@ -236,6 +307,7 @@ function main(pr) {
   }
 
   node('labels.mjs', 'state', issue, 'building');
+  claimed = issue;
 
   // A worktree, never the checkout you are editing in another window.
   const tree = join(homedir(), '.adlc', 'worktrees', slug);
@@ -244,6 +316,12 @@ function main(pr) {
   try { git(ROOT, 'worktree', 'remove', '--force', tree); } catch {}
   git(ROOT, 'worktree', 'prune');
   git(ROOT, 'worktree', 'add', '--detach', '-f', tree, approvedSha);
+
+  // Before the merge, not before the commit: `git merge` creates a commit, and on a machine with
+  // no global user.name/user.email it fails "Committer identity unknown" — which this file then
+  // reported as a merge conflict. build.yml has always set identity first.
+  git(tree, 'config', 'user.name', 'adlc-line');
+  git(tree, 'config', 'user.email', 'adlc-line@users.noreply.github.com');
 
   try {
     prepareImplBranch(tree, slug, approvedSha);
@@ -292,13 +370,13 @@ function main(pr) {
   // which is exactly the case here — so locally it matters more, not less.
   const touched = git(tree, 'status', '--porcelain', '--', ...GUARDED_PATHS);
   if (touched) {
-    console.error(`The agent modified the line's own tools — refusing to continue:\n${touched}`);
+    park(issue, `The Executor modified the line's own tools, so no pull request was opened:\n\n\`\`\`\n${touched}\n\`\`\`\n\nRead the worktree at \`${tree}\` before re-running.`);
     process.exit(1);
   }
 
   // A build that rewrites `npm run verify` clears a gate that no longer checks anything.
   if (verifyScript(readFileSync(join(tree, 'package.json'), 'utf8')) !== verifyBefore) {
-    console.error('The agent changed the `verify` script — the gate would be clearing itself. Refusing to continue.');
+    park(issue, 'The Executor changed the `verify` script, so the gate would have been clearing itself. No pull request was opened.');
     process.exit(1);
   }
 
@@ -338,11 +416,15 @@ function main(pr) {
     process.exit(1);
   }
   const review = readReport(tree, 'review.md');
+  if (!reviewIsUsable(review)) {
+    // prompts/review.md asks for a verdict line. Without one there is nothing to put in the PR
+    // body but a banner claiming a review that cannot be shown to have happened.
+    park(issue, `The build was green but the reviewer produced no usable report — no \`APPROVE\` or \`REQUEST CHANGES\` verdict, so no pull request was opened. What it said:\n\n${review.slice(-20000)}`);
+    process.exit(1);
+  }
 
   git(tree, 'add', '-A', '--', '.', ':!work', ':!node_modules');
-  git(tree, 'config', 'user.name', 'adlc-line');
-  git(tree, 'config', 'user.email', 'adlc-line@users.noreply.github.com');
-  git(tree, 'commit', '-m', commitMessage(slug, issue));
+  git(tree, 'commit', '-m', commitMessage(slug, issue, redCitations(report)));
   git(tree, 'push', '-f', '-u', 'origin', `impl/${slug}`);
 
   let url;
@@ -379,5 +461,24 @@ function main(pr) {
 
 const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (isMain) {
-  main(process.argv[2]);
+  try {
+    main(process.argv[2]);
+  } catch (e) {
+    // One boundary for everything the run does not handle itself: fetch, worktree creation,
+    // install-deps, commit, push, links and the final label. Each used to throw straight out,
+    // leaving the issue at `state:building` with no comment and nobody looking at it.
+    if (claimed) {
+      try {
+        park(claimed, `The build stopped on an unhandled failure, so no pull request was opened:\n\n\`\`\`\n${e.message}\n\`\`\``);
+      } catch (parkFailure) {
+        // If gh is unreachable the park cannot land, and swallowing it here would lose the real
+        // failure as well — leaving the issue stranded AND unexplained, which is the whole thing
+        // this boundary exists to prevent. Say both, loudly.
+        console.error(`The issue could not be parked either: ${parkFailure.message}`);
+        console.error(`Issue #${claimed} is still at state:building and needs a person.`);
+      }
+    }
+    console.error(e.message);
+    process.exit(1);
+  }
 }

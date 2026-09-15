@@ -23,6 +23,33 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   framing of what was hard, what was deliberate and what was "out of scope". The reviewer reads
   the diff and the spec.
 
+### Fixed
+
+- **Six findings from an independent cross-vendor review of the driver** (Codex reviewing Claude's
+  code), each verified before acting on it:
+  - **Git identity was configured after the merge that needs it.** `git merge` creates a commit, so
+    on a machine with no global `user.name`/`user.email` it failed "Committer identity unknown" —
+    and the driver reported that as a merge conflict. `build.yml` has always set identity first.
+    The merge failure now carries git's own stdout and stderr, so a non-conflict is not dressed up
+    as one.
+  - **Failures could strand an issue at `state:building`.** The tools guard and the gate-definition
+    guard exited without parking, and fetch, worktree creation, install, commit, push, links and the
+    final label were uncaught. One boundary now parks anything unhandled once the issue is claimed.
+  - **The proof of red was written and thrown away.** The Executor's failing output went to
+    `work/build.md`, which lives in a throwaway worktree, is excluded from the commit and absent
+    from the PR body — and the reviewer is forbidden to read it, so no human ever saw it. The
+    Executor now emits `Red:`/`Characterization:` lines in `tdd-evidence.md`'s existing format and
+    the driver lifts them into the commit message. Facts travel; narrative does not.
+  - **An empty review passed as an independent review.** A reviewer exiting 0 having printed nothing
+    yielded a PR body claiming it was reviewed. A report must now carry an `APPROVE` or
+    `REQUEST CHANGES` verdict or the work parks.
+  - **The different-vendor rule was bypassable.** Reading the first word made
+    `npx @anthropic-ai/claude-code` look like "npx" — so claude could review claude — while
+    `bash -lc '…'` collapsed genuinely different vendors together. The check now scans the whole
+    command for a known vendor and refuses a command it cannot identify.
+  - `docs/before-production.md` claimed local builds ship without independent review, which this
+    branch implemented. A declared-deferrals list that is wrong is worse than none.
+
 ### Added
 
 - `local/build.mjs` — the build station driven from your machine rather than from Actions, so it
