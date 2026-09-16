@@ -114,3 +114,18 @@ parks rather than opening a PR if the reviewer produces no verdict.
   recorded rather than fixed because this rule has already been changed three
   times, and twice the change traded one defect for another. The fourth
   condition is where the next failure would hide.
+
+## ~~The Red:/Characterization: rule is implemented twice~~ — fixed, and gated
+
+`scripts/red-citations.mjs` now owns it, the way `review-verdict.mjs`,
+`labels.mjs`, `attempts.mjs` and `links.mjs` own theirs: `build.yml` runs it and
+`local/build.mjs` imports it. The copies had already diverged on trailing
+whitespace before anyone noticed.
+
+This was the **second** instance of one rule stated in a shared prompt being
+implemented twice, so the fix is not the extraction — it is
+`test/shared-rules.test.js`, which fails if any driver inlines a shape that
+`scripts/` owns, and also fails if the owner stops containing it, so the table
+cannot rot into a check of nothing. A third shared rule costs one line there.
+Found by `/bw-cleaner`; the extraction was left to `/bw-work` because a sweep may
+delete duplicates but not invent helpers.
