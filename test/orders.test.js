@@ -131,6 +131,13 @@ function orderButtonMarkup(itemsHtml, sku) {
   return itemsHtml.match(new RegExp(`<button[^>]*data-sku="${sku}"[^>]*>[\\s\\S]*?</button>`))?.[0];
 }
 
+/** The rendered quantity input for a SKU, parsed into its attributes as a browser would read them. */
+function quantityInput(itemsHtml, sku) {
+  const input = itemsHtml.match(new RegExp(`<input[^>]*\\bid="qty-${sku}"[^>]*>`))?.[0];
+  assert.ok(input, `expected a quantity input for ${sku}`);
+  return parseAttrs(input);
+}
+
 test('REQ-ORD-1: an accepted order is created and takes units out of stock', () =>
   withServer(async ({ post, get, stock }) => {
     const before = await stock('MUG-1');
@@ -180,17 +187,60 @@ test('REQ-ORD-3: the unit limit rejects an order even when stock is also insuffi
     assert.equal(body.reason, 'over_limit');
   }));
 
-test('REQ-ORD-12: the quantity input carries the limit as its max', () =>
-  withServer(async ({ base }) => {
+// REQ-ORD-12 — the quantity input's `max` is the lesser of the 20-unit cap and the item's own stock.
+// The seed's MUG-1 (47) is bound by the cap and PEN-1 (8) by its stock; the two boundaries the seed
+// lacks — exactly 20, and 0 — are reached through real orders before the page loads.
+
+test('REQ-ORD-12: a well-stocked item is hinted by the order cap', () =>
+  withServer(async ({ base, stock }) => {
+    assert.ok((await stock('MUG-1')) >= 20, 'precondition: MUG-1 has 20 or more in stock');
     const page = await loadClientPage(base);
-    assert.match(page.itemsHtml(), /<input[^>]*\btype="number"[^>]*\bmin="1"[^>]*\bmax="20"[^>]*>/);
+    const input = quantityInput(page.itemsHtml(), 'MUG-1');
+    assert.equal(input.max, '20');
+    assert.equal(input.min, '1');
+  }));
+
+test('REQ-ORD-12: a scarcer item is hinted by its own stock', () =>
+  withServer(async ({ base, stock }) => {
+    assert.equal(await stock('PEN-1'), 8, 'precondition: PEN-1 has 8 in stock');
+    const page = await loadClientPage(base);
+    assert.equal(quantityInput(page.itemsHtml(), 'PEN-1').max, '8');
+  }));
+
+test('REQ-ORD-12: an item exactly at the cap is hinted by the cap', () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'MUG-1', qty: 20 });
+    await post('/api/orders', { sku: 'MUG-1', qty: 7 });
+    assert.equal(await stock('MUG-1'), 20, 'precondition: MUG-1 brought to exactly 20 in stock');
+    const page = await loadClientPage(base);
+    assert.equal(quantityInput(page.itemsHtml(), 'MUG-1').max, '20');
+  }));
+
+test("REQ-ORD-12: an out-of-stock item's hint is its own stock", () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    assert.equal(await stock('PEN-1'), 0, 'precondition: PEN-1 sold out');
+    const page = await loadClientPage(base);
+    const input = quantityInput(page.itemsHtml(), 'PEN-1');
+    assert.equal(input.max, '0');
+    // "the existing minimum and default are unaffected" — even here, where max sits below min.
+    assert.equal(input.min, '1');
+    assert.equal(input.value, '1');
   }));
 
 test('REQ-ORD-12: the hint composes with search', () =>
   withServer(async ({ base }) => {
     const page = await loadClientPage(base);
-    await page.search('Mug');
-    assert.match(page.itemsHtml(), /<input[^>]*\btype="number"[^>]*\bmin="1"[^>]*\bmax="20"[^>]*>/);
+    await page.search('Pen');
+    assert.equal(quantityInput(page.itemsHtml(), 'PEN-1').max, '8');
+  }));
+
+test('REQ-ORD-12: the hint composes with an order that changes stock', () =>
+  withServer(async ({ base, stock }) => {
+    const page = await loadClientPage(base);
+    await page.order('PEN-1', 3);
+    assert.equal(await stock('PEN-1'), 5, 'the order was accepted and lowered the stock');
+    assert.equal(quantityInput(page.itemsHtml(), 'PEN-1').max, '5');
   }));
 
 // REQ-ORD-4 promises "every rejection reason, not just some of them", and the test above covers
