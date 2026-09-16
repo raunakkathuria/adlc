@@ -129,3 +129,37 @@ implemented twice, so the fix is not the extraction — it is
 cannot rot into a check of nothing. A third shared rule costs one line there.
 Found by `/bw-cleaner`; the extraction was left to `/bw-work` because a sweep may
 delete duplicates but not invent helpers.
+
+## `npm run verify` now needs the network on a cold npx cache
+
+- **Ships now:** `npm run lint` fetches `oxlint@1.82.0` through `npx --yes`, the
+  route `quality.yml:152` already uses for Lighthouse, so nothing is added to
+  `package.json` and `AGENTS.md`'s no-dependency rule is untouched. After the
+  first run it is cached in `~/.npm/_npx` and costs nothing. The version is
+  **pinned**, unlike the Lighthouse precedent: `verify` is the gate both drivers
+  clear, so an unpinned fetch would let the gate's behaviour change with no
+  commit — a new rule in a new release could redden a build nobody touched.
+- **Before production:** `verify` is the gate BOTH drivers clear, and
+  `local/build.mjs` runs it twice per build. On a cold cache with no network the
+  gate now fails where it used to pass — which would park a build for a reason
+  that has nothing to do with the build. If that ever bites, pin the version and
+  vendor the binary, or move lint out of `verify` into its own gate.
+- **Why now is OK:** CI always has network, the local cache survives between
+  runs, and the failure is loud and obviously unrelated rather than silent.
+
+## A bad named import is caught by the test suite, not the linter
+
+- **Ships now:** `no-undef` catches a bare dangling reference — the `vendorOf`
+  class. It does **not** catch `import { typo } from './x.mjs'`, because the
+  import binding is defined as far as scope analysis is concerned; measured, it
+  lints clean and fails only at module load. The full gate still catches it,
+  because `npm test` imports the module and the load raises a `SyntaxError` — so
+  `npm run verify` exits 1.
+- **Before production:** that coverage is **incidental**. It holds only while
+  every module is imported by some test. Checked today: all ten in `local/` and
+  `scripts/` are. A module added without a test importing it would lose it
+  silently.
+- **Why now is OK:** the condition holds, and this repo's house rule already
+  pushes every module to export something a test calls. If that ever stops being
+  true, oxlint's import plugin (`--import-plugin`, rule `import/named`) closes it
+  directly rather than by accident.

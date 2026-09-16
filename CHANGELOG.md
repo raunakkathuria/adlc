@@ -6,6 +6,25 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ## Unreleased
 
+### Added
+
+- **A linter, and the argument that settled it.** A dangling reference — `vendorOf`, called once and
+  defined nowhere — reached a pushed branch with 231 tests green, because `node --check` validates
+  syntax and says nothing about resolution. Two review rounds went on it. `no-undef` is what exists
+  for that.
+  - `oxlint` runs through `npx --yes`, the same route `quality.yml:152` already uses for Lighthouse,
+    so `package.json` still has no dependencies and `AGENTS.md`'s rule is untouched.
+  - Config is `.oxlintrc.json`: node globals and **`no-undef` only**. It is here for dangling
+    references, not style.
+  - It sits inside `npm run verify`, the gate both drivers clear, so a dangling reference now parks
+    a build instead of reaching `main`.
+  - Measured on the only test that matters: against `6aecf16:local/build.mjs` it reports exactly one
+    finding — `'vendorOf' is not defined` at 434:51 — and exits 1. The current tree is clean.
+  - The route not taken, recorded because it nearly was: a hand-rolled scanner. Run against the same
+    commit it reported an unrelated identifier, because its stripping regex over-consumed and deleted
+    the region containing the bug. A tool that answers "clean" by discarding what it was asked to
+    check is worse than none.
+
 ### Fixed
 
 - **`build.yml`'s "line's own tools must be untouched" guard never ran when adlc built adlc.** The

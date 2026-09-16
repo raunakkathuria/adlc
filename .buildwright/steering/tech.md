@@ -9,10 +9,10 @@ for tests). No dependencies — `package.json` has no `dependencies` or
 | Gate | Command | Notes |
 |---|---|---|
 | Test | `npm test` | `node --test 'test/*.test.js'` — the built-in runner |
-| Verify | `npm run verify` | `npm test` + `req-coverage`. **This is the deterministic gate the line runs.** |
+| Verify | `npm run verify` | `lint` + `npm test` + `req-coverage`. **This is the deterministic gate the line runs.** |
 | Coverage | `npm run req-coverage` | Every `REQ-*` in `openspec/specs/` must be named by a test, and every `REQ-*` a test claims must exist |
 | Typecheck | SKIP | Plain JS, no TypeScript |
-| Lint | SKIP | No linter configured. `npm run lint-workflows` exists but only validates `.github/workflows/*.yml` |
+| Lint | `npm run lint` | `oxlint` via `npx --yes`, config in `.oxlintrc.json`, scoped to `local/ scripts/ test/`. **`no-undef` only** — it is here for dangling references, not style. Inside `npm run verify`, so it parks a build in both drivers. Separately, `npm run lint-workflows` validates the shell inside `.github/workflows/*.yml` |
 | Build | SKIP | No build step |
 
 ## Testing conventions
