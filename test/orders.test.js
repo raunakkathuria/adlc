@@ -138,6 +138,18 @@ function quantityInput(itemsHtml, sku) {
   return parseAttrs(input);
 }
 
+/**
+ * Whether the rendered Order button for a SKU is disabled. Only the attribute's presence counts,
+ * the way a browser reads a boolean attribute — `disabled`, `disabled=""` and `disabled="disabled"`
+ * all disable. Quoted values are stripped first so an item *named* "disabled" cannot pass for it.
+ */
+function orderButtonDisabled(itemsHtml, sku) {
+  const button = orderButtonMarkup(itemsHtml, sku);
+  assert.ok(button, `expected an Order button for ${sku}`);
+  const openingTag = button.match(/^<button[^>]*>/)[0].replace(/="[^"]*"/g, '');
+  return /\sdisabled\b/.test(openingTag);
+}
+
 test('REQ-ORD-1: an accepted order is created and takes units out of stock', () =>
   withServer(async ({ post, get, stock }) => {
     const before = await stock('MUG-1');
@@ -241,6 +253,68 @@ test('REQ-ORD-12: the hint composes with an order that changes stock', () =>
     await page.order('PEN-1', 3);
     assert.equal(await stock('PEN-1'), 5, 'the order was accepted and lowered the stock');
     assert.equal(quantityInput(page.itemsHtml(), 'PEN-1').max, '5');
+  }));
+
+// REQ-ORD-13 — a zero-stock item's Order button is disabled; any stock above zero leaves it alone.
+// The seed has no sold-out item, so PEN-1 (8 in stock) is sold out through real orders first.
+
+test("REQ-ORD-13: a zero-stock item's Order button is disabled", () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    assert.equal(await stock('PEN-1'), 0, 'precondition: PEN-1 sold out');
+    const page = await loadClientPage(base);
+    const html = page.itemsHtml();
+    assert.equal(orderButtonDisabled(html, 'PEN-1'), true, 'expected the sold-out PEN-1 Order button to be disabled');
+    // "the button's accessible name is unaffected" (REQ-ORD-8) and "the quantity input is
+    // unaffected" (REQ-ORD-12) — disabled or not, the card names and hints the item as before.
+    assert.match(orderButtonMarkup(html, 'PEN-1'), /aria-label="[^"]*Fineliner Pen[^"]*"/);
+    const input = quantityInput(html, 'PEN-1');
+    assert.equal(input.min, '1');
+    assert.equal(input.max, '0');
+    assert.equal(input.value, '1');
+  }));
+
+test('REQ-ORD-13: an item with 1 or more in stock keeps an enabled Order button', () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 7 });
+    assert.equal(await stock('PEN-1'), 1, 'precondition: PEN-1 brought to exactly 1 in stock');
+    assert.ok((await stock('MUG-1')) >= 20, 'precondition: MUG-1 is well stocked');
+    const page = await loadClientPage(base);
+    const html = page.itemsHtml();
+    assert.equal(orderButtonDisabled(html, 'PEN-1'), false, 'expected the last-unit PEN-1 Order button to be enabled');
+    assert.equal(orderButtonDisabled(html, 'MUG-1'), false, 'expected the well-stocked MUG-1 Order button to be enabled');
+  }));
+
+test('REQ-ORD-13: the disabled state composes with search', () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    assert.equal(await stock('PEN-1'), 0, 'precondition: PEN-1 sold out');
+    const page = await loadClientPage(base);
+    await page.search('Pen');
+    const html = page.itemsHtml();
+    assert.equal(orderButtonMarkup(html, 'MUG-1'), undefined, 'expected the search to have narrowed MUG-1 out of the list');
+    assert.equal(orderButtonDisabled(html, 'PEN-1'), true, 'expected the sold-out PEN-1 Order button to stay disabled after the re-render');
+  }));
+
+test('REQ-ORD-13: an item that drops to zero stock is disabled on the next render', () =>
+  withServer(async ({ base, stock }) => {
+    const page = await loadClientPage(base);
+    assert.equal(orderButtonDisabled(page.itemsHtml(), 'PEN-1'), false, 'precondition: PEN-1 starts enabled');
+    await page.order('PEN-1', 8);
+    assert.equal(await stock('PEN-1'), 0, 'the order was accepted and sold PEN-1 out');
+    assert.equal(orderButtonDisabled(page.itemsHtml(), 'PEN-1'), true, 'expected the refreshed PEN-1 Order button to be disabled');
+  }));
+
+// "the hint does not change what the server accepts" — a client that ignores the disabled state
+// still meets REQ-ORD-2's stock check on the server. The existing REQ-ORD-2 test orders *over*
+// stock; this one orders from *zero* stock, the case the hint is about.
+test('REQ-ORD-13, REQ-ORD-2: an order for a zero-stock item is still rejected by the server', () =>
+  withServer(async ({ post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    assert.equal(await stock('PEN-1'), 0, 'precondition: PEN-1 sold out');
+    const { status, body } = await post('/api/orders', { sku: 'PEN-1', qty: 1 });
+    assert.equal(status, 422);
+    assert.equal(body.reason, 'insufficient_stock');
   }));
 
 // REQ-ORD-4 promises "every rejection reason, not just some of them", and the test above covers
