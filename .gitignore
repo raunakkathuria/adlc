@@ -4,6 +4,11 @@ node_modules/
 .env
 
 # --- buildwright plan deliverables ---
+# Station scratch. Both drivers write model output, diffs and PR bodies here — build.yml in the
+# runner, local/build.mjs in the worktree — and the commit pathspec already excludes it. It was not
+# ignored, so a review diff written here got committed by a `git add -A`.
+work/
+
 # /bw-plan writes here. Plans are working notes for one change, not repo docs — keep them local.
 docs/plans/
 

@@ -20,6 +20,23 @@ Under `openspec/changes/<slug>/`:
 
 **`specs/<capability>/spec.md`** — the delta, in OpenSpec format: `## ADDED Requirements`, `## MODIFIED Requirements`, `## REMOVED Requirements` sections as needed, each containing complete `### Requirement:` blocks with `#### Scenario:` blocks (`- **WHEN** … - **THEN** …`). A MODIFIED requirement carries its complete new text. Keep the numbered REQ id in the requirement heading — `### Requirement: REQ-CAT-4 — …` — reusing the existing id when you modify, taking the next free number when you add. **Free** means unused by the living spec *and* by every other delta in `openspec/changes/` — you are not the only change in flight. Archived deltas don't count; their ids are already in the living spec. `npm run req-ids` lists what is claimed, and the spec station refuses a delta that takes an id twice.
 
+**A MODIFIED block must reproduce the living spec's wording, not just its id.** `openspec archive` finds the requirement you are modifying by its whole `### Requirement:` heading. Only the *ends* of the name are trimmed and only the spacing inside the `### Requirement:` marker itself is tolerated — **the name's internal spacing is significant**, so a double space where the living spec has one is a different requirement and the archive will not find it. And it refuses a block that omits any `#### Scenario:` the living requirement already has, because it cannot tell a rename from a deletion. So copy the existing heading and every existing scenario name across verbatim, and add your new scenarios alongside them.
+
+This is not cosmetic. A delta that renames either passes `openspec validate`, passes Gate 1, builds, verifies and merges, and then fails at the **last** station — with the code shipped and the living spec still describing the old behaviour, which is the drift this whole line exists to prevent, arriving after both human gates and needing a hand-archive to repair. It has happened, to `REQ-ORD-12`.
+
+**To rename a requirement, say so properly.** OpenSpec has a `## RENAMED Requirements` section, applied before modifications:
+
+    ## RENAMED Requirements
+
+    - FROM: `### Requirement: REQ-ORD-12 — the quantity input hints the unit limit`
+    - TO: `### Requirement: REQ-ORD-12 — the quantity input hints the binding limit`
+
+Use it when a heading has become wrong, and MODIFIED alongside it for the body.
+
+**There is no scenario-level equivalent.** A MODIFIED block can add scenarios; it cannot rename or remove an existing one — every name already in the living spec must appear in your block, or the archive refuses it. So inside a MODIFIED block, a scenario whose name no longer fits is kept as it is.
+
+Renaming or dropping a scenario is only reachable the long way round: OpenSpec's operations work on whole **requirements**, so REMOVED plus ADDED replaces the containing requirement and its scenarios with it. That costs the REQ id and rewrites a requirement wholesale, which is a decision for the human at Gate 1 rather than a detail of your delta — so put the case in `proposal.md` and let them choose. Do not reach for it to tidy a name.
+
 One file per capability the change touches. **A capability is a slice of the product, not a layer of it.** `catalog` and `orders` each cover every surface a user reaches that behaviour through — the HTTP API *and* the page. A requirement about what a shopper sees or operates belongs in the capability it serves, never in a separate UI capability, because splitting one behaviour across two files is how the two halves drift apart. Adding a new capability directory needs a reason stated in the proposal.
 
 **`tasks.md`** — the work as checkboxes (`- [ ] 1.1 …`), one task per surface, in dependency order: tests first, then implementation, then verification. The build ticks these; the verifier reads them. No estimates.
