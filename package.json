@@ -10,8 +10,9 @@
   "scripts": {
     "start": "node app/server.mjs",
     "test": "node --test 'test/*.test.js'",
+    "lint": "npx --yes oxlint@1.82.0 -c .oxlintrc.json local/ scripts/ test/",
     "req-coverage": "node scripts/req-coverage.mjs",
-    "verify": "npm test --silent && npm run req-coverage --silent",
+    "verify": "npm run lint --silent && npm test --silent && npm run req-coverage --silent",
     "req-ids": "node scripts/req-ids.mjs",
     "lint-workflows": "node scripts/lint-workflows.mjs"
   }
