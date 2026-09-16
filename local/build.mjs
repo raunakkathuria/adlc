@@ -20,6 +20,8 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { reviewVerdict } from '../scripts/review-verdict.mjs';
+
 const ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 const DEFAULT_AGENT = 'claude -p --allowedTools "Read,Grep,Glob,Edit,Write,Bash(node:*),Bash(npm:*)"';
 // A different vendor from the builder, and read-only by construction. The reviewer's own flags
@@ -109,26 +111,6 @@ export function redCitations(report) {
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => /^(Red|Characterization):/.test(line));
-}
-
-/**
- * Whether a review report is one.
- *
- * A reviewer command can exit 0 having printed nothing, and the PR would then carry a banner
- * claiming an independent review that did not happen. A substring test was not enough: it accepted
- * "do not APPROVE", a reviewer echoing its own instructions, and "I would REQUEST CHANGES if …".
- * `prompts/review.md` asks for the verdict as ONE LINE, so that is what this reads — anchored and
- * whitespace-tolerant, the same shape `verifier.yml` uses. Two different verdicts are no verdict:
- * contradictory output cannot be read as a decision.
- */
-export function reviewIsUsable(review) {
-  const verdicts = new Set(
-    String(review ?? '')
-      .split('\n')
-      .map((line) => (line.match(/^[ \t]*(APPROVE|REQUEST CHANGES)\b/) ?? [])[1])
-      .filter(Boolean),
-  );
-  return verdicts.size === 1;
 }
 
 /** The `verify` script as package.json defines it — the command the deterministic gate runs. */
@@ -265,10 +247,14 @@ function comment(issue, body) {
 }
 
 function park(issue, message) {
-  if (parked) return;
-  parked = true;
-  comment(issue, message);
-  node('labels.mjs', 'add', issue, 'needs-human');
+  if (!commented) {
+    comment(issue, message);
+    commented = true;
+  }
+  if (!labelled) {
+    node('labels.mjs', 'add', issue, 'needs-human');
+    labelled = true;
+  }
 }
 
 // The issue this run has claimed, or null before it claims one. The parking boundary at the bottom
@@ -276,9 +262,12 @@ function park(issue, message) {
 // it, or the board says the line is working on something nothing is working on. Before the claim
 // there is nothing to park and a stack trace is the honest output.
 let claimed = null;
-// Whether this run has already parked. The comment and the label are two calls: if the comment
-// lands and the label fails, the boundary below would park again and post the same comment twice.
-let parked = false;
+// Parking is a comment AND a label — two calls that fail independently. Each flag is set only
+// after its own call succeeds, so a retry from the boundary below finishes the half that did not
+// land without repeating the half that did. A single flag set up front looked simpler and was
+// worse: it suppressed the retry and left the issue at state:building with no label.
+let commented = false;
+let labelled = false;
 
 function main(pr) {
   if (!/^\d+$/.test(pr ?? '')) {
@@ -445,9 +434,10 @@ function main(pr) {
     process.exit(1);
   }
   const review = readReport(tree, 'review.md');
-  if (!reviewIsUsable(review)) {
-    // prompts/review.md asks for a verdict line. Without one there is nothing to put in the PR
-    // body but a banner claiming a review that cannot be shown to have happened.
+  if (!reviewVerdict(review)) {
+    // scripts/review-verdict.mjs is the one reader of that line, and build.yml runs the same
+    // script — so the two drivers cannot drift apart on it. They did, briefly: a JS copy and a
+    // shell copy disagreed on `APPROVED — looks good` within the hour.
     park(issue, `The build was green but the reviewer produced no usable report — no \`APPROVE\` or \`REQUEST CHANGES\` verdict, so no pull request was opened. What it said:\n\n${review.slice(-20000)}`);
     process.exit(1);
   }

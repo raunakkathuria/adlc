@@ -320,15 +320,16 @@ jobs:
       - name: The review must carry a verdict
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true' && steps.verify.outputs.green == 'true'
         run: |
-          VERDICTS=$(grep -oE '^[[:space:]]*(APPROVE|REQUEST CHANGES)' work/review.md \
-            | sed 's/^[[:space:]]*//' | sort -u | wc -l | tr -d ' ' || true)
-          if [ "$VERDICTS" != "1" ]; then
+          # The one reader of that line, shared with local/build.mjs — the rule is stated once in
+          # prompts/review.md, so it is implemented once here rather than twice. A shell copy and a
+          # JS copy disagreed on `APPROVED — looks good` within an hour of being written.
+          if ! node "$ADLC/scripts/review-verdict.mjs" work/review.md; then
             { printf 'The build was green but the reviewer produced no single verdict, so no pull request was opened. What it said:\n\n'
               tail -c 60000 work/review.md
             } > work/no-verdict.md
             gh issue comment "$ISSUE" --body-file work/no-verdict.md
             node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
-            echo "::error::The review carried $VERDICTS verdicts; exactly one is required."
+            echo "::error::The review reached no single verdict; exactly one is required."
             exit 1
           fi
 
