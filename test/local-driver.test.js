@@ -18,7 +18,7 @@ import { join } from 'node:path';
 
 import {
   gate1, commitMessage, prBody, prepareImplBranch, GUARDED_PATHS, verifyScript,
-  redCitations, vendorsIn, vendorConflict, remainingParkStages,
+  vendorsIn, vendorConflict, remainingParkStages,
 } from '../local/build.mjs';
 
 // A spec PR as `gh pr view --json state,headRefName,files,body` returns it.
@@ -255,39 +255,6 @@ test('prepareImplBranch: a delta that conflicts with main parks instead of guess
   );
   // The failed merge must be backed out, or the worktree is left mid-conflict.
   assert.equal(git('ls-files', '--unmerged'), '', 'the merge was aborted, not left mid-conflict');
-});
-
-// --- Proof of red, carried where a human will actually see it -------------------------------------
-// The Executor's failing output used to land in work/build.md, which lives in a throwaway worktree,
-// is excluded from the commit and absent from the PR body — written, then discarded. The citation
-// format is not invented here: .buildwright/framework/tdd-evidence.md already specifies it.
-
-test('redCitations: lifts the citation lines tdd-evidence.md asks for', () => {
-  const report = [
-    'I did the thing.',
-    'Red: REQ-ORD-12 a scarcer item is hinted by its own stock — expected max="8", got "20"',
-    'Characterization: REQ-ORD-12 an item exactly at the cap — green either way, boundary guard',
-    'Then I made it pass.',
-  ].join('\n');
-  assert.deepEqual(redCitations(report), [
-    'Red: REQ-ORD-12 a scarcer item is hinted by its own stock — expected max="8", got "20"',
-    'Characterization: REQ-ORD-12 an item exactly at the cap — green either way, boundary guard',
-  ]);
-});
-
-test('redCitations: leading whitespace is tolerated, as every other parser here does', () => {
-  // Three outages in this repo came from a parser too narrow about indentation.
-  assert.deepEqual(redCitations('    Red: a test — expected x, got y'), ['Red: a test — expected x, got y']);
-});
-
-test('redCitations: prose that merely mentions red is not a citation', () => {
-  // The word has to start the line, or a narrative sentence becomes evidence.
-  assert.deepEqual(redCitations('I watched it go Red: briefly, then fixed it'), []);
-});
-
-test('redCitations: a report with no citations yields none rather than throwing', () => {
-  assert.deepEqual(redCitations('nothing to declare'), []);
-  assert.deepEqual(redCitations(''), []);
 });
 
 test('commitMessage: carries the citations so Gate 2 can read them', () => {

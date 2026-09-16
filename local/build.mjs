@@ -20,6 +20,7 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { redCitations } from '../scripts/red-citations.mjs';
 import { reviewVerdict } from '../scripts/review-verdict.mjs';
 
 const ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
@@ -95,22 +96,6 @@ export function vendorConflict(agentCommand, reviewerCommand) {
   const [reviewer] = vendorsIn(reviewerCommand);
   if (builder === reviewer) return `both stations run \`${builder}\``;
   return null;
-}
-
-/**
- * The citation lines `.buildwright/framework/tdd-evidence.md` asks for, lifted out of the report.
- *
- * A test that never failed proves nothing, so the failing run is the evidence — and it used to be
- * written into work/build.md, which lives in a throwaway worktree, is excluded from the commit and
- * absent from the PR body. Written, then discarded. These lines are FACTS (a test name, an expected
- * value, an actual one), which is why they are safe to put in the commit where the reviewer will
- * see them: what must not reach a reviewer is the author's narrative, not the author's measurements.
- */
-export function redCitations(report) {
-  return String(report ?? '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => /^(Red|Characterization):/.test(line));
 }
 
 /** The `verify` script as package.json defines it — the command the deterministic gate runs. */

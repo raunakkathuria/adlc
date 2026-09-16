@@ -346,7 +346,7 @@ jobs:
           # whitespace the old inline heredoc baked into every commit message.
           { printf 'impl: %s\n\n' "$SLUG"
             printf 'Built from the spec delta approved at Gate 1 (spec PR stays open until this merges).\n'
-            CITATIONS=$(grep -E '^[[:space:]]*(Red|Characterization):' work/build.md | sed 's/^[[:space:]]*//' || true)
+            CITATIONS=$(node "$ADLC/scripts/red-citations.mjs" work/build.md)
             if [ -n "$CITATIONS" ]; then printf '\n%s\n' "$CITATIONS"; fi
             printf '\nRelates to #%s\n' "$ISSUE"
           } > work/commit-message.txt
