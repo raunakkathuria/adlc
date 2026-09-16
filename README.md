@@ -26,6 +26,29 @@ With a credential set, open an issue and watch the labels move: `state:triaging 
 
 Want the product first? `npm start`, then http://localhost:3000. The gate is `npm run verify` — tests plus requirement coverage, deterministic, under a second, no model in it.
 
+## Two drivers, one line
+
+The stations are `prompts/`, the state machine is `scripts/`, and the two human gates are labels on
+an issue. Everything that *dispatches* them is a driver, and there are two:
+
+| | what it is |
+|---|---|
+| `.github/workflows/` | all six stations, on GitHub events, unattended. Bills API tokens through the credential secret. This is the line as described below. |
+| `local/` | the **build and review** stations only, run by hand on a coding CLI you are already logged into. No daemon, one repo. |
+
+Both write the same labels and respect the same attempt caps, so the `state:*` label is the claim —
+**do not run both on one repo.** The local driver also requires the reviewer to be a **different
+vendor than the builder**, which is the reason it exists: two seats you already pay for, so a second
+opinion from an agent that shares none of the builder's blind spots costs nothing.
+
+```bash
+node local/build.mjs 42        # 42 = the approved spec PR number
+```
+
+**[`local/README.md`](local/README.md)** has the rest: what it copies from `build.yml` and what it
+deliberately does not do, how to choose the CLIs, and the handful of things that will surprise you
+(you cannot approve the PR it opens; approving a spec PR fires CI).
+
 ## The stations
 
 | Station | Workflow | Trigger | What it does |
@@ -65,6 +88,7 @@ prompts/            one markdown file per station — the single definition, CLI
 scripts/            run-station.sh = the provider seam · links.mjs · labels.mjs · attempts.mjs
                     file-findings.mjs · req-coverage.mjs · req-ids.mjs · lint-workflows.mjs · install-deps.sh
 .github/workflows/  the six stations + verify.yml (the gate) · callers/ = the adoption kit
+local/              the second driver — build + review on your own CLI logins (local/README.md)
 .buildwright/       the engineering discipline the Executor works to (KISS · YAGNI · DRY · TDD)
 app/  test/         the storefront and its tests — the product that ships through the line
 issues/             the three seed reports as files — how a station runs with no GitHub token

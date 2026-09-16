@@ -23,12 +23,18 @@ function gh(...args) {
   return execFileSync('gh', args, { encoding: 'utf8' });
 }
 
-function markers(issue, station) {
+// The count, as a pure function over comment bodies — the same seam `labels.mjs` exposes as
+// `exclusive`. This is the rule that decides whether the line keeps trying or parks for a human,
+// and it was the one piece of the brake that could not be tested without a network.
+export function attemptsSince(bodies, station) {
   const attempt = `<!-- adlc-attempt ${station} -->`;
   const reset = `<!-- adlc-attempts-reset ${station} -->`;
-  const bodies = issueCommentBodies(issue);
   const lastReset = bodies.findLastIndex((b) => b.includes(reset));
   return bodies.slice(lastReset + 1).filter((b) => b.includes(attempt)).length;
+}
+
+function markers(issue, station) {
+  return attemptsSince(issueCommentBodies(issue), station);
 }
 
 const [cmd, issue, station] = process.argv.slice(2);
