@@ -71,3 +71,29 @@ parks rather than opening a PR if the reviewer produces no verdict.
 - **Why now is OK:** the rebuild path needs a spec revision after an
   implementation PR is already open, which is rare, and the newest review is
   always present as the last comment.
+
+## The failure paths still have only unit coverage, and drilling them is blocked
+
+- **Ships now:** park, red gate, attempt cap, reviewer crash, no-verdict review and
+  the parking boundary are covered by tests over their pure decisions. The
+  orchestration between those decisions is covered by nothing — which is how a
+  dangling reference reached a pushed branch with 231 tests green.
+- **Before production:** exercise them deliberately. `AGENT_CMD` and `REVIEW_CMD`
+  are the fault-injection seam and need no model: a fake builder that breaks a
+  test drills the red gate, one that edits `prompts/` drills the tools guard, one
+  that exits non-zero drills the crash path, and a fake reviewer printing nothing
+  drills the verdict gate. Seconds each, no quota.
+- **Why it has not happened:** each drill needs a **claimed issue behind an
+  approved spec PR**, and Gate 1 needs an approving review from someone who is
+  not the PR's author. In this repo the spec station authors those PRs
+  (`app/github-actions`), so a maintainer can approve them. In a fresh private
+  drill repo the operator authors everything and GitHub refuses an author
+  approving their own PR — the same authorship asymmetry recorded in
+  `docs/design.md`, now blocking the drill setup rather than a merge. Drilling
+  against this repo instead would move a real issue backwards out of
+  `state:gate-2`, park it, and spend its attempt budget.
+- **The way through:** run the spec station in the drill repo so the PRs are
+  bot-authored, or drill with a second account. Both are real setup; neither is
+  hard. It is recorded here rather than done because the alternative was
+  disturbing live issues, and an independent review of the orchestration has so
+  far found more than a drill would have.
