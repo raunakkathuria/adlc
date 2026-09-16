@@ -25,6 +25,22 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **A third review round: the verdict rule existed twice and the copies had already drifted.**
+  `APPROVED — looks good` passed in CI and parked locally, and both copies read
+  `APPROVE / REQUEST CHANGES — undecided` as approval. The rule now lives in
+  `scripts/review-verdict.mjs`, which `local/build.mjs` imports and `build.yml` runs — the same
+  shape `labels.mjs` and `attempts.mjs` already use, so a rule stated once in a shared prompt is
+  implemented once.
+  - Parking could be **lost**: the once-only flag was set before the comment and the label, so a
+    failure in either made the boundary's retry a no-op and stranded the issue with no
+    `needs-human`. The fix for double-parking had been worse than double-parking. Each half now
+    sets its own flag after its own call succeeds.
+  - `prompts/spec.md`'s new rule was **factually wrong about OpenSpec**: matching normalises
+    whitespace rather than being character-for-character, and `## RENAMED Requirements` with
+    `FROM:`/`TO:` does exist. Verified against the installed 1.6.0 parser this time rather than
+    inferred from this repo's own deltas, which is how the error got in. Scenario renames really
+    are unsupported, so that half of the rule stands.
+
 - **A second cross-vendor review, of the first round of fixes, found the fixes had broken the
   driver outright.** A helper was renamed and one call site missed, so every successful build threw
   `ReferenceError` after pushing its branch and before opening its PR — with all 231 tests green,
