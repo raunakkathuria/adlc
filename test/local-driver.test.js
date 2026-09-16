@@ -306,9 +306,33 @@ test('commitMessage: no citations leaves the message otherwise intact', () => {
 
 // --- A review has to exist before the PR claims one happened --------------------------------------
 
-test('reviewIsUsable: a verdict makes it usable', () => {
-  assert.equal(reviewIsUsable('No findings.\n\nAPPROVE — the change is fine.'), true);
-  assert.equal(reviewIsUsable('severity high ...\n\nREQUEST CHANGES — see above.'), true);
+test('reviewIsUsable: a verdict on its own line makes it usable', () => {
+  // Both real verdicts this line has seen from a reviewer, verbatim.
+  assert.equal(reviewIsUsable('No findings.\n\nAPPROVE — no actionable findings; `npm run verify` passes all 185 tests.'), true);
+  assert.equal(reviewIsUsable('1. **High** ...\n\nREQUEST CHANGES — the driver can fail on a normal git setup.'), true);
+});
+
+test('reviewIsUsable: an indented verdict still counts', () => {
+  // Every parser in this repo tolerates leading whitespace; three outages came from one that did not.
+  assert.equal(reviewIsUsable('findings\n\n    APPROVE — fine.'), true);
+});
+
+test('reviewIsUsable: a verdict word inside a sentence is not a verdict', () => {
+  // A substring test accepted every one of these, which is the bug: the check meant to stop a PR
+  // claiming an unearned review could itself be satisfied without one.
+  assert.equal(reviewIsUsable('I could not complete the review; do not APPROVE'), false);
+  assert.equal(reviewIsUsable('I was told to end with APPROVE or REQUEST CHANGES. Notes: looks fine.'), false);
+  assert.equal(reviewIsUsable('I would REQUEST CHANGES if the tests were missing, but they are not.'), false);
+});
+
+test('reviewIsUsable: two different verdicts are no verdict at all', () => {
+  // Contradictory output cannot be read as a decision, so it is not one.
+  assert.equal(reviewIsUsable('APPROVE — looks fine.\n\nREQUEST CHANGES — on reflection, no.'), false);
+});
+
+test('reviewIsUsable: the same verdict restated is still a verdict', () => {
+  // codex prints its final message twice in some modes; that is one decision, not two.
+  assert.equal(reviewIsUsable('APPROVE — fine.\n\nAPPROVE — fine.'), true);
 });
 
 test('reviewIsUsable: nothing at all is not a review', () => {

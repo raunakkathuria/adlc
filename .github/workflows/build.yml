@@ -312,6 +312,26 @@ jobs:
             "Read,Grep,Glob,Bash(node:*),Bash(npm:*),Bash(git:*)" \
             | tee work/review.md
 
+      # prompts/review.md says the verdict line is read, and prompts/build.md says the Red:
+      # citations reach the commit. Both prompts are shared with the local driver, and a prompt
+      # that promises what its driver does not do is the failure this line keeps finding in
+      # itself — so CI honours them too. Exactly one distinct verdict: contradictory output cannot
+      # be read as a decision, and a mention inside a sentence ("do not APPROVE") is not one.
+      - name: The review must carry a verdict
+        if: env.GO == 'true' && steps.attempts.outputs.within == 'true' && steps.verify.outputs.green == 'true'
+        run: |
+          VERDICTS=$(grep -oE '^[[:space:]]*(APPROVE|REQUEST CHANGES)' work/review.md \
+            | sed 's/^[[:space:]]*//' | sort -u | wc -l | tr -d ' ' || true)
+          if [ "$VERDICTS" != "1" ]; then
+            { printf 'The build was green but the reviewer produced no single verdict, so no pull request was opened. What it said:\n\n'
+              tail -c 60000 work/review.md
+            } > work/no-verdict.md
+            gh issue comment "$ISSUE" --body-file work/no-verdict.md
+            node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
+            echo "::error::The review carried $VERDICTS verdicts; exactly one is required."
+            exit 1
+          fi
+
       - name: Open the implementation PR — never merge it
         if: env.GO == 'true' && steps.attempts.outputs.within == 'true' && steps.verify.outputs.green == 'true'
         id: pr
@@ -320,10 +340,16 @@ jobs:
           # working tree IS what npm run verify passed; under-staging would ship a PR that
           # differs from what was verified.)
           git add -A -- . ':!work' ':!.adlc' ':!node_modules'
-          git commit -m "impl: $SLUG
-
-          Built from the spec delta approved at Gate 1 (spec PR stays open until this merges).
-          Relates to #$ISSUE"
+          # -F, not -m: the citations are model output, so an over-long one would fail the commit
+          # with E2BIG after a green build. A file has no argv limit. It also drops the leading
+          # whitespace the old inline heredoc baked into every commit message.
+          { printf 'impl: %s\n\n' "$SLUG"
+            printf 'Built from the spec delta approved at Gate 1 (spec PR stays open until this merges).\n'
+            CITATIONS=$(grep -E '^[[:space:]]*(Red|Characterization):' work/build.md | sed 's/^[[:space:]]*//' || true)
+            if [ -n "$CITATIONS" ]; then printf '\n%s\n' "$CITATIONS"; fi
+            printf '\nRelates to #%s\n' "$ISSUE"
+          } > work/commit-message.txt
+          git commit -F work/commit-message.txt
           git push -f -u origin "impl/$SLUG"
           { cat work/review.md
             printf '\n\n---\n\nThe independent drift verdict lands below as a comment when the verifier finishes.\n\nCloses #%s\nRelates to #%s\n' "$ISSUE" "$ISSUE"
