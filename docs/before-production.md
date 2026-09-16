@@ -97,3 +97,20 @@ parks rather than opening a PR if the reviewer produces no verdict.
   hard. It is recorded here rather than done because the alternative was
   disturbing live issues, and an independent review of the orchestration has so
   far found more than a drill would have.
+
+## A reviewer that indents a restatement of the options poisons its own verdict
+
+- **Ships now:** `scripts/review-verdict.mjs` reads the decision field — the text
+  before the first dash or colon — so a reason may freely discuss the other
+  verdict. But a line that *begins* with a verdict and names both before the
+  dash is read as undecided, and an **indented** restatement such as
+  `    APPROVE or REQUEST CHANGES — the required shape` does begin with one.
+- **Before production:** if a real reviewer ever trips this, sharpen the rule
+  rather than adding a condition to it — a blockquote (`>`) is already immune,
+  so requiring the verdict to be the line's first non-blank token in the report
+  body would likely do it.
+- **Why now is OK:** narrow, not a regression (the previous rule rejected the
+  same line), and it fails **safe** — the work parks and a human looks. It is
+  recorded rather than fixed because this rule has already been changed three
+  times, and twice the change traded one defect for another. The fourth
+  condition is where the next failure would hide.

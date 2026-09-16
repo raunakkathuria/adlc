@@ -38,6 +38,23 @@ test('verdict: a line naming both verdicts is undecided, not approval', () => {
   assert.equal(reviewVerdict('APPROVE / REQUEST CHANGES — undecided'), null);
 });
 
+test('verdict: a reason may discuss the other verdict without invalidating the decision', () => {
+  // Round four's fix scanned the WHOLE line for both tokens, which rejected legitimate reviews —
+  // including, pointedly, a review discussing this parser. The decision is the field before the
+  // dash; what the reason says about grammar is not a second decision.
+  assert.equal(reviewVerdict('APPROVE — nothing here warrants REQUEST CHANGES.'), 'APPROVE');
+  assert.equal(
+    reviewVerdict('REQUEST CHANGES — the parser accepts APPROVE / REQUEST CHANGES as approval.'),
+    'REQUEST CHANGES',
+  );
+});
+
+test('verdict: an ambiguous DECISION field is still no decision', () => {
+  // Both verdicts before the dash: the reviewer did not choose.
+  assert.equal(reviewVerdict('APPROVE / REQUEST CHANGES — undecided'), null);
+  assert.equal(reviewVerdict('APPROVE or REQUEST CHANGES: cannot tell'), null);
+});
+
 test('verdict: an ambiguous line poisons the report, even with a clean verdict after it', () => {
   // Skipping the ambiguous line and taking the next clean one read this as APPROVE. A reviewer
   // that wrote both on one line did not reach a decision, and a later line does not undo that.
