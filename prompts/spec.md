@@ -33,7 +33,9 @@ This is not cosmetic. A delta that renames either passes `openspec validate`, pa
 
 Use it when a heading has become wrong, and MODIFIED alongside it for the body.
 
-**There is no equivalent for scenarios, and no way to drop one either.** A MODIFIED block can add scenarios; it cannot rename or remove an existing one — every name already in the living spec must appear in your block or the archive refuses it. So a scenario whose name no longer fits is kept as it is. If that is genuinely wrong, say so in `proposal.md` for the human at Gate 1 to decide; do not try to express it in the delta, because the delta cannot say it and the attempt fails at the last station.
+**There is no scenario-level equivalent.** A MODIFIED block can add scenarios; it cannot rename or remove an existing one — every name already in the living spec must appear in your block, or the archive refuses it. So inside a MODIFIED block, a scenario whose name no longer fits is kept as it is.
+
+Renaming or dropping a scenario is only reachable the long way round: OpenSpec's operations work on whole **requirements**, so REMOVED plus ADDED replaces the containing requirement and its scenarios with it. That costs the REQ id and rewrites a requirement wholesale, which is a decision for the human at Gate 1 rather than a detail of your delta — so put the case in `proposal.md` and let them choose. Do not reach for it to tidy a name.
 
 One file per capability the change touches. **A capability is a slice of the product, not a layer of it.** `catalog` and `orders` each cover every surface a user reaches that behaviour through — the HTTP API *and* the page. A requirement about what a shopper sees or operates belongs in the capability it serves, never in a separate UI capability, because splitting one behaviour across two files is how the two halves drift apart. Adding a new capability directory needs a reason stated in the proposal.
 

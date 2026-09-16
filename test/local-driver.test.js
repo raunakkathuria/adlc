@@ -18,7 +18,7 @@ import { join } from 'node:path';
 
 import {
   gate1, commitMessage, prBody, prepareImplBranch, GUARDED_PATHS, verifyScript,
-  redCitations, vendorsIn, vendorConflict,
+  redCitations, vendorsIn, vendorConflict, remainingParkStages,
 } from '../local/build.mjs';
 
 // A spec PR as `gh pr view --json state,headRefName,files,body` returns it.
@@ -302,6 +302,57 @@ test('commitMessage: no citations leaves the message otherwise intact', () => {
   assert.match(m, /^impl: some-slug/);
   assert.match(m, /Relates to #4/);
   assert.doesNotMatch(m, /Red:/);
+});
+
+// --- Parking, which has now been wrong three times in the same six lines --------------------------
+// Double comment, then a lost park, then a lost attempt reset — every one a sequencing bug, every
+// one shipped. The gh calls are untestable by house rule; deciding WHICH remain is not, and that is
+// where all three lived.
+
+test('park stages: a fresh park owes the comment and the label', () => {
+  assert.deepEqual(
+    remainingParkStages({ commented: false, labelled: false, pendingReset: null, resetDone: false }),
+    ['comment', 'label'],
+  );
+});
+
+test('park stages: a cap park also owes the attempt reset', () => {
+  assert.deepEqual(
+    remainingParkStages({ commented: false, labelled: false, pendingReset: 'build', resetDone: false }),
+    ['comment', 'label', 'reset'],
+  );
+});
+
+test('park stages: a retry owes only what did not land', () => {
+  // Round three's bug: the comment landed, the label threw, and the retry did nothing at all.
+  assert.deepEqual(
+    remainingParkStages({ commented: true, labelled: false, pendingReset: null, resetDone: false }),
+    ['label'],
+  );
+});
+
+test('park stages: a retry after a cap park still owes the reset', () => {
+  // Round five's bug: the reset sat after park() and a label failure threw straight past it.
+  assert.deepEqual(
+    remainingParkStages({ commented: true, labelled: false, pendingReset: 'build', resetDone: false }),
+    ['label', 'reset'],
+  );
+  assert.deepEqual(
+    remainingParkStages({ commented: true, labelled: true, pendingReset: 'build', resetDone: false }),
+    ['reset'],
+  );
+});
+
+test('park stages: a completed park owes nothing, and repeats nothing', () => {
+  // Round three's other half: parking twice posted the same comment twice.
+  assert.deepEqual(
+    remainingParkStages({ commented: true, labelled: true, pendingReset: 'build', resetDone: true }),
+    [],
+  );
+  assert.deepEqual(
+    remainingParkStages({ commented: true, labelled: true, pendingReset: null, resetDone: false }),
+    [],
+  );
 });
 
 // --- The different-vendor rule has to survive ordinary wrappers -----------------------------------

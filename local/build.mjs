@@ -246,14 +246,35 @@ function comment(issue, body) {
   gh('issue', 'comment', issue, '--body-file', file);
 }
 
+/**
+ * Which stages of a park have not landed yet.
+ *
+ * Parking is up to three calls that fail independently, and this sequencing has been wrong three
+ * times: a duplicated comment, a lost park, and a lost attempt reset. Each was a bug about WHICH
+ * calls still owed, not about the calls themselves — so that decision is a pure function and is
+ * tested, while the `gh` calls around it stay untested as the house rule has it.
+ */
+export function remainingParkStages({ commented, labelled, pendingReset, resetDone }) {
+  const stages = [];
+  if (!commented) stages.push('comment');
+  if (!labelled) stages.push('label');
+  if (pendingReset && !resetDone) stages.push('reset');
+  return stages;
+}
+
 function park(issue, message) {
-  if (!commented) {
-    comment(issue, message);
-    commented = true;
-  }
-  if (!labelled) {
-    node('labels.mjs', 'add', issue, 'needs-human');
-    labelled = true;
+  for (const stage of remainingParkStages({ commented, labelled, pendingReset, resetDone })) {
+    // Each flag is set only after its own call returns, so a retry resumes exactly here.
+    if (stage === 'comment') {
+      comment(issue, message);
+      commented = true;
+    } else if (stage === 'label') {
+      node('labels.mjs', 'add', issue, 'needs-human');
+      labelled = true;
+    } else {
+      node('attempts.mjs', 'reset', issue, pendingReset);
+      resetDone = true;
+    }
   }
 }
 
@@ -268,6 +289,13 @@ let claimed = null;
 // worse: it suppressed the retry and left the issue at state:building with no label.
 let commented = false;
 let labelled = false;
+// A cap park owes a third call: attempts.mjs reset. It used to sit AFTER park() in the catch block,
+// so a label failure threw past it and the count was never reset — leaving a parked issue that
+// re-parks on the very next try. scripts/attempts.mjs says why that is fatal in its own header: "a
+// park that could never be un-parked would be a dead end, not a brake." Recording it here makes it
+// a stage of the park, so the boundary's retry finishes it like any other.
+let pendingReset = null;
+let resetDone = false;
 
 function main(pr) {
   if (!/^\d+$/.test(pr ?? '')) {
@@ -324,8 +352,10 @@ function main(pr) {
   try {
     node('attempts.mjs', 'record', issue, 'build');
   } catch {
+    // Declared before the park, not called after it: the park owes this reset, and saying so here
+    // is what lets a retry finish it if the comment or the label fails first.
+    pendingReset = 'build';
     park(issue, 'The build station has hit its attempt cap for this issue. The line is parked — a person should read the attempts above and decide, then remove `needs-human` and re-run the build.');
-    node('attempts.mjs', 'reset', issue, 'build');
     process.exit(1);
   }
 
