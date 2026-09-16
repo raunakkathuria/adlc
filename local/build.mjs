@@ -76,14 +76,22 @@ export function vendorsIn(command) {
  * a rule stops being a rule.
  */
 export function vendorConflict(agentCommand, reviewerCommand) {
-  const builder = vendorsIn(agentCommand);
-  const reviewer = vendorsIn(reviewerCommand);
-  if (!builder.length || !reviewer.length) {
-    const which = !builder.length ? `AGENT_CMD (\`${agentCommand}\`)` : `REVIEW_CMD (\`${reviewerCommand}\`)`;
-    return `could not tell which vendor ${which} runs, so the reviewer cannot be shown to differ from the builder`;
+  // Exactly one vendor per station. Scanning the whole command is what catches a wrapper, but it
+  // also means an incidental mention resolves two — `claude -p < /tmp/codex-notes` reads as both.
+  // Refusing an ambiguous command is the honest answer and fails closed; parsing shell syntax to
+  // find the real executable is more machinery than the risk warrants.
+  for (const [name, command] of [['AGENT_CMD', agentCommand], ['REVIEW_CMD', reviewerCommand]]) {
+    const found = vendorsIn(command);
+    if (found.length === 0) {
+      return `could not tell which vendor ${name} (\`${command}\`) runs, so the reviewer cannot be shown to differ from the builder`;
+    }
+    if (found.length > 1) {
+      return `${name} (\`${command}\`) names more than one vendor (\`${found.join('`, `')}\`), so which one runs is ambiguous`;
+    }
   }
-  const shared = builder.filter((v) => reviewer.includes(v));
-  if (shared.length) return `both stations run \`${shared.join('`, `')}\``;
+  const [builder] = vendorsIn(agentCommand);
+  const [reviewer] = vendorsIn(reviewerCommand);
+  if (builder === reviewer) return `both stations run \`${builder}\``;
   return null;
 }
 
@@ -104,13 +112,23 @@ export function redCitations(report) {
 }
 
 /**
- * Whether a review report is one. A reviewer command can exit 0 having printed nothing, and the PR
- * would then carry a banner claiming an independent review that did not happen.
+ * Whether a review report is one.
+ *
+ * A reviewer command can exit 0 having printed nothing, and the PR would then carry a banner
+ * claiming an independent review that did not happen. A substring test was not enough: it accepted
+ * "do not APPROVE", a reviewer echoing its own instructions, and "I would REQUEST CHANGES if …".
+ * `prompts/review.md` asks for the verdict as ONE LINE, so that is what this reads — anchored and
+ * whitespace-tolerant, the same shape `verifier.yml` uses. Two different verdicts are no verdict:
+ * contradictory output cannot be read as a decision.
  */
 export function reviewIsUsable(review) {
-  const text = String(review ?? '').trim();
-  if (!text) return false;
-  return /\b(APPROVE|REQUEST CHANGES)\b/.test(text);
+  const verdicts = new Set(
+    String(review ?? '')
+      .split('\n')
+      .map((line) => (line.match(/^[ \t]*(APPROVE|REQUEST CHANGES)\b/) ?? [])[1])
+      .filter(Boolean),
+  );
+  return verdicts.size === 1;
 }
 
 /** The `verify` script as package.json defines it — the command the deterministic gate runs. */
@@ -247,6 +265,8 @@ function comment(issue, body) {
 }
 
 function park(issue, message) {
+  if (parked) return;
+  parked = true;
   comment(issue, message);
   node('labels.mjs', 'add', issue, 'needs-human');
 }
@@ -256,6 +276,9 @@ function park(issue, message) {
 // it, or the board says the line is working on something nothing is working on. Before the claim
 // there is nothing to park and a stack trace is the honest output.
 let claimed = null;
+// Whether this run has already parked. The comment and the label are two calls: if the comment
+// lands and the label fails, the boundary below would park again and post the same comment twice.
+let parked = false;
 
 function main(pr) {
   if (!/^\d+$/.test(pr ?? '')) {
@@ -266,6 +289,12 @@ function main(pr) {
   const agent = process.env.AGENT_CMD || DEFAULT_AGENT;
   const reviewer = process.env.REVIEW_CMD || DEFAULT_REVIEWER;
   const conflict = vendorConflict(agent, reviewer);
+  // Resolved here, next to the check that has just proved it is exactly one vendor, so nothing
+  // downstream has to work it out again. The previous shape called a helper at the point of use,
+  // and when that helper was replaced the call site was missed: every successful build then threw
+  // ReferenceError after pushing the branch, and 231 green tests said nothing, because they cover
+  // the pure helpers and never this path.
+  const reviewerVendor = conflict ? null : vendorsIn(reviewer)[0];
   if (conflict) {
     console.error(`The reviewer must be a different vendor from the builder: ${conflict}.`);
     console.error('Set AGENT_CMD and REVIEW_CMD to different CLIs this line recognises');
@@ -424,14 +453,19 @@ function main(pr) {
   }
 
   git(tree, 'add', '-A', '--', '.', ':!work', ':!node_modules');
-  git(tree, 'commit', '-m', commitMessage(slug, issue, redCitations(report)));
+  // -F, not -m: the citations come from model output, and an over-long one would fail the commit
+  // with E2BIG after a green build. A file has no argv limit, so the failure class goes away
+  // rather than being guarded. work/ is already excluded from the commit.
+  const messageFile = join(tree, 'work', 'commit-message.txt');
+  writeFileSync(messageFile, commitMessage(slug, issue, redCitations(report)));
+  git(tree, 'commit', '-F', messageFile);
   git(tree, 'push', '-f', '-u', 'origin', `impl/${slug}`);
 
   let url;
   try {
     const existing = gh('pr', 'list', '--head', `impl/${slug}`, '--state', 'open', '--json', 'url', '--jq', '.[0].url // empty');
     const bodyFile = join(tree, 'work', 'pr-body.md');
-    writeFileSync(bodyFile, prBody(review, issue, vendorOf(reviewer)));
+    writeFileSync(bodyFile, prBody(review, issue, reviewerVendor));
     url = existing;
     if (existing) {
       // Comment AND replace the body. The comment is this run's record; the body is what the Gate 2
@@ -469,7 +503,9 @@ if (isMain) {
     // leaving the issue at `state:building` with no comment and nobody looking at it.
     if (claimed) {
       try {
-        park(claimed, `The build stopped on an unhandled failure, so no pull request was opened:\n\n\`\`\`\n${e.message}\n\`\`\``);
+        // Deliberately silent on whether a PR exists: this boundary also catches failures AFTER
+        // the PR is opened (links, the final label), and claiming none was opened would be false.
+        park(claimed, `The build stopped on an unhandled failure:\n\n\`\`\`\n${e.message}\n\`\`\`\n\nCheck the branch and any pull request for it before re-running.`);
       } catch (parkFailure) {
         // If gh is unreachable the park cannot land, and swallowing it here would lose the real
         // failure as well — leaving the issue stranded AND unexplained, which is the whole thing

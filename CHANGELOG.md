@@ -25,6 +25,24 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **A second cross-vendor review, of the first round of fixes, found the fixes had broken the
+  driver outright.** A helper was renamed and one call site missed, so every successful build threw
+  `ReferenceError` after pushing its branch and before opening its PR — with all 231 tests green,
+  because they cover exported pure functions and never the orchestration between them. The
+  reviewer's vendor is now resolved once, beside the check that proves it exists.
+  - The verdict check accepted any occurrence of the words: `"do not APPROVE"`, a reviewer echoing
+    its own instructions, and two contradictory verdicts all passed. It now requires exactly one
+    anchored verdict line, the shape `verifier.yml` already uses.
+  - `build.yml` implements both promises the shared prompts make — citations lifted into the commit
+    and the verdict enforced before a PR — because a prompt that promises what its driver does not
+    do is the failure this line keeps finding in itself.
+  - The commit message travels as a file (`git commit -F`), removing the argv-limit failure class
+    rather than capping it, and dropping the leading whitespace the old inline heredoc baked into
+    every CI commit message.
+  - Parking is once-only, and the boundary no longer claims no PR was opened — it also catches
+    failures after one exists.
+  - The vendor check requires exactly one vendor per station; an ambiguous command is refused.
+
 - **Six findings from an independent cross-vendor review of the driver** (Codex reviewing Claude's
   code), each verified before acting on it:
   - **Git identity was configured after the merge that needs it.** `git merge` creates a commit, so

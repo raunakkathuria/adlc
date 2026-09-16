@@ -65,11 +65,14 @@ Its findings become the PR body. **The driver refuses to start if it cannot show
 differ** — a reviewer sharing the builder's vendor shares its blind spots, and a second vendor is
 free when both are subscriptions you already hold. The check scans the whole command for a vendor it
 recognises, so `npx @anthropic-ai/claude-code` is still claude and `bash -lc 'codex exec'` is still
-codex. A command naming no vendor it knows is **refused**, not waved through: a rule that silently
-passes on an unrecognised command is not a rule.
+codex. It requires **exactly one** vendor per station: a command naming none is refused rather than
+waved through, and so is one naming two — `claude -p < /tmp/codex-notes` is ambiguous about which
+vendor actually runs, and guessing would be worse than stopping.
 
-If the reviewer produces no `APPROVE` or `REQUEST CHANGES` verdict — including exiting cleanly
-having printed nothing — the work **parks** instead of opening a PR. A body claiming an independent
+If the reviewer produces no single `APPROVE` or `REQUEST CHANGES` verdict on a line of its own —
+including exiting cleanly having printed nothing, mentioning a verdict mid-sentence, or giving two
+contradictory ones — the work **parks** instead of opening a PR. `build.yml` enforces the same,
+since both drivers read the same prompt. A body claiming an independent
 review that cannot be shown to have happened is worse than no body.
 
 The reviewer never reads the Executor's own report. `prompts/review.md` says so, and the reason is
