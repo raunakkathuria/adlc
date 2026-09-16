@@ -38,6 +38,12 @@ test('verdict: a line naming both verdicts is undecided, not approval', () => {
   assert.equal(reviewVerdict('APPROVE / REQUEST CHANGES — undecided'), null);
 });
 
+test('verdict: an ambiguous line poisons the report, even with a clean verdict after it', () => {
+  // Skipping the ambiguous line and taking the next clean one read this as APPROVE. A reviewer
+  // that wrote both on one line did not reach a decision, and a later line does not undo that.
+  assert.equal(reviewVerdict('APPROVE / REQUEST CHANGES — undecided\nAPPROVE — final'), null);
+});
+
 test('verdict: two contradictory verdict lines are no verdict', () => {
   assert.equal(reviewVerdict('APPROVE — looks fine.\n\nREQUEST CHANGES — on reflection, no.'), null);
 });

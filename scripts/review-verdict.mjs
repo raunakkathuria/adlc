@@ -31,7 +31,11 @@ export function reviewVerdict(report) {
   for (const line of String(report ?? '').split('\n')) {
     const anchored = line.match(/^[ \t]*(APPROVE|REQUEST CHANGES)/);
     if (!anchored) continue;
-    if (new Set(line.match(VERDICT) ?? []).size > 1) continue; // names both: undecided
+    // A line naming both verdicts POISONS the report rather than being skipped past. Skipping it
+    // let "APPROVE / REQUEST CHANGES — undecided" followed by a clean "APPROVE" read as approval;
+    // a reviewer that wrote both on one line did not reach a decision, and a later line does not
+    // retract that.
+    if (new Set(line.match(VERDICT) ?? []).size > 1) return null;
     found.add(anchored[1]);
   }
   return found.size === 1 ? [...found][0] : null;

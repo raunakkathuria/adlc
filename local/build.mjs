@@ -314,6 +314,11 @@ function main(pr) {
     process.exit(1);
   }
   const { issue, slug, approvedSha } = gate;
+  // Claimed from here, not from the state:building call below. The attempt cap parks BEFORE that
+  // call, and with `claimed` still null the boundary could not retry a park whose label had
+  // failed — leaving a parking comment with no needs-human and no attempt reset. An attempt is
+  // about to be recorded against this issue, so the run owns it from this point.
+  claimed = issue;
 
   // The brake on unattended self-repair. Exit 1 means this attempt exceeds the cap.
   try {
@@ -325,7 +330,6 @@ function main(pr) {
   }
 
   node('labels.mjs', 'state', issue, 'building');
-  claimed = issue;
 
   // A worktree, never the checkout you are editing in another window.
   const tree = join(homedir(), '.adlc', 'worktrees', slug);
