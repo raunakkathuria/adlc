@@ -49,12 +49,12 @@ The catalogue page SHALL present its matching items as a list in the accessibili
 
 ### Requirement: REQ-CAT-12 — a catalogue with no items says so, distinctly from a search with no matches
 
-When the item list loads successfully with an empty query and the response holds zero items — meaning the catalogue itself holds no items, not that a search (`REQ-CAT-3`) filtered everything out — the catalogue page SHALL display a message stating that the catalogue is empty, in place of the no-results search message (`REQ-CAT-6`). This message SHALL NOT embed or reference the query, because there is none to report. The search-results live region (`REQ-CAT-7`) already announces `Showing 0 items.` for this same case; this requirement governs the message shown among the item cards and does not change that announcement's wording.
+When the item list loads successfully with no search query (`REQ-CAT-3`) and no other narrowing parameter applied — for example `max_price` (`REQ-CAT-4`) — and the response holds zero items, meaning the catalogue itself holds no items rather than any filter narrowing it to nothing, the catalogue page SHALL display the exact message `The catalogue is empty.` in place of the no-results search message (`REQ-CAT-6`). This message SHALL NOT embed or reference the query or any filter value, because there is none to report. A zero-item result produced while any filter is applied — a search query, or a narrowing parameter such as `max_price` — is not a genuinely empty catalogue and is out of this requirement's scope (see the proposal's Out of scope: the catalogue page has no control for `max_price` today, so that case cannot occur through the page yet). The search-results live region (`REQ-CAT-7`) already announces `Showing 0 items.` for this same case; this requirement governs the message shown among the item cards and does not change that announcement's wording.
 
 #### Scenario: a genuinely empty catalogue says so
 
-- **WHEN** the query is empty and the catalogue holds zero items
-- **THEN** the catalogue page displays a message stating the catalogue is empty, in place of the item cards
+- **WHEN** the query is empty, no other filter is applied, and the catalogue holds zero items
+- **THEN** the catalogue page displays the exact message `The catalogue is empty.`, in place of the item cards
 - **AND** that message does not read `Nothing matches "".` or embed the query in any form
 
 #### Scenario: a search with no matches is unaffected
