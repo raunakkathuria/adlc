@@ -1,11 +1,9 @@
 ---
 name: bw-ship
-version: 0.0.19
-description: Run full quality pipeline (verify → review) then commit, push, and create PR. Fails fast if any step fails.
-arguments:
-  - name: message
-    description: Commit message (conventional format). Required if there are uncommitted changes.
-    required: false
+description: Run the full quality pipeline, then commit, push, and create a PR. Use when verified work is ready to be reviewed and shipped.
+metadata:
+  author: raunakkathuria
+  version: "0.0.21"
 ---
 
 ## Ship Pipeline
@@ -112,7 +110,7 @@ Handle failure per the **Failure Handling** section below (context-inferred).
 Run **`/bw-review`** over the diff being shipped — invoke the real command
 (host-native command invocation, per `.buildwright/framework/capability.md`); do
 not re-enact it from memory. It is the single home for the review logic (DRY),
-adopting the security-engineer and staff-engineer personas and reporting both
+running the security-engineer and staff-engineer passes and reporting both
 security and code findings:
 
 - **Security:** dependency vulnerabilities, secrets, OWASP Top 10, financial-code

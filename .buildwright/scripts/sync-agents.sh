@@ -9,7 +9,6 @@
 #   .opencode/commands/      ← from .buildwright/commands/ (paths rewritten to .opencode/)
 #   .opencode/agents/        ← from .buildwright/agents/
 #   .opencode/steering/      ← from .buildwright/steering/
-#   .cursor/rules/steering/  ← .mdc files with alwaysApply: true
 #   .cursor/rules/commands/  ← .mdc files with alwaysApply: false
 #   .cursor/rules/agents/    ← .mdc files with alwaysApply: false
 #   .agents/skills/          ← per-command SKILL.md for Codex CLI discovery
@@ -100,7 +99,7 @@ CURSOR_ALWAYS_APPLY=""
 CURSOR_DESCRIPTION=""
 
 # set_cursor_frontmatter PRESET FILENAME SRC_FILE
-# Sets CURSOR_ALWAYS_APPLY (by preset) and CURSOR_DESCRIPTION globals. The
+# Sets CURSOR_ALWAYS_APPLY=false and CURSOR_DESCRIPTION globals. The
 # description is derived from the source file: its frontmatter `description:`
 # when present, else its first markdown heading, else a preset fallback.
 set_cursor_frontmatter() {
@@ -108,10 +107,7 @@ set_cursor_frontmatter() {
   local filename="$2"
   local src_file="$3"
 
-  case "$preset" in
-    steering|codebase|framework) CURSOR_ALWAYS_APPLY="true" ;;
-    *)                           CURSOR_ALWAYS_APPLY="false" ;;
-  esac
+  CURSOR_ALWAYS_APPLY="false"
 
   CURSOR_DESCRIPTION="$(awk '
     NR==1 && $0 !~ /^---/ { exit }
@@ -260,12 +256,23 @@ sync_dir ".buildwright/steering"  ".opencode/steering"
 sync_dir ".buildwright/codebase"  ".opencode/codebase"
 
 # ============================================================================
-# 3. .buildwright/ → .cursor/rules/ (convert to .mdc with frontmatter)
+# 3. Commands and personas → .cursor/rules/ (convert to opt-in .mdc rules)
 # ============================================================================
 
-sync_cursor_dir ".buildwright/framework" "framework" "framework"
-sync_cursor_dir ".buildwright/steering"  "steering"  "steering"
-sync_cursor_dir ".buildwright/codebase"  "codebase"  "codebase"
+# Repository context stays in canonical .buildwright/ files and is read only
+# when a selected command needs it. Remove legacy generated context rules so
+# Cursor cannot activate repository-controlled Markdown automatically.
+for context_dir in framework steering codebase; do
+  if [ "$CHECK_ONLY" = true ]; then
+    if [ -e ".cursor/rules/$context_dir" ]; then
+      echo "STALE: .cursor/rules/$context_dir must not contain generated repository context"
+      SYNC_NEEDED=true
+    fi
+  else
+    rm -rf ".cursor/rules/$context_dir"
+  fi
+done
+
 sync_cursor_dir ".buildwright/commands"  "commands"  "command"
 sync_cursor_dir ".buildwright/agents"    "agents"    "agent"
 
@@ -304,7 +311,7 @@ else
   echo "Sync complete. Source of truth: .buildwright/"
   echo "  .buildwright/ → .claude/         (paths rewritten)"
   echo "  .buildwright/ → .opencode/       (paths rewritten)"
-  echo "  .buildwright/ → .cursor/rules/   (.mdc with frontmatter)"
+  echo "  commands/agents → .cursor/rules/ (opt-in .mdc rules)"
   echo "  .buildwright/commands/ → .agents/skills/  (Codex CLI skill discovery)"
 
   # Validate all commands are documented in README.md
