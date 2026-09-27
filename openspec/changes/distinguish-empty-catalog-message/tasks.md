@@ -4,5 +4,5 @@
 - [ ] 1.2 Write a test asserting a non-empty query that matches nothing still renders `Nothing matches "{q}".` in the item area, unchanged — REQ-CAT-6.
 - [ ] 1.3 Write a test asserting the search-results live region still announces `Showing 0 items.` for an empty query against a zero-item catalogue, unchanged by this delta — REQ-CAT-7 (regression guard, not a new requirement).
 - [ ] 1.4 In `app/index.html`, change the `items.length === 0` branch of `loadItems()` to distinguish an empty query (catalogue itself empty) from a non-empty query (search matched nothing), rendering the exact text `The catalogue is empty.` in the former case and the existing `Nothing matches "{q}".` message in the latter. (The page sends no other filter parameter today, so an empty query is the whole condition in code; `max_price` (`REQ-CAT-4`) staying unwired from the page is what keeps that out of scope — see proposal.)
-- [ ] 1.5 Confirm the existing `REQ-CAT-9` "empty state is not an empty list" behaviour holds for both messages (neither renders as a list item).
+- [ ] 1.5 Write a test asserting that neither the empty-catalogue message nor the no-results message renders as a list item (`REQ-CAT-9`).
 - [ ] 1.6 Run `npm run verify` and confirm the new tests pass and coverage is green.
