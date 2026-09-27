@@ -4,7 +4,7 @@
 
 Each item card's Order button (`REQ-ORD-8`) SHALL be disabled whenever that item's stock is 0, so a shopper can tell the item cannot currently be ordered before they click, instead of learning only after a rejected round trip (`REQ-ORD-2`). This is a client-side hint only: it SHALL NOT replace or weaken the stock check the server performs on every order (`REQ-ORD-2`), which continues to reject an order for more units than an item currently has in stock regardless of what any particular client sent.
 
-A disabled button that gives no reason leaves assistive technology announcing only that the control is unavailable, with the explanation left in the card's stock text where the button does not point to it. When the button is disabled, it SHALL therefore carry an accessible description whose content is exactly that item's own stock text, "{n} in stock" (for example "0 in stock") — the same wording the item card already displays as part of its meta line (`REQ-CAT-10`), which is already inert text under that requirement, rather than introducing new wording — and not the card's whole meta line, which also carries that item's SKU and price and does not belong in the reason the button is disabled. So a screen-reader user tabbing to the button hears why it is unorderable without separately reading the rest of the card. This description SHALL be exposed as an accessible description associated with the button (for example, via `aria-describedby` referencing that stock text), not folded into the button's accessible name, so the name continues to name only the item exactly as `REQ-ORD-8` requires.
+A disabled button that gives no reason leaves assistive technology announcing only that the control is unavailable, with the explanation left in the card's stock text where the button does not point to it. When the button is disabled, it SHALL therefore carry an accessible description whose content is exactly that item's own stock text, "{n} in stock" (for example "0 in stock") — the same wording the item card already displays as part of its meta line, shown there as plain, inert text: no part of it SHALL be interpreted as markup, inserted as a page element, or run as script — and not the card's whole meta line, which also carries that item's SKU and price and does not belong in the reason the button is disabled. The button keeps its native `disabled` attribute, so it is not reachable by the Tab key; the description is instead heard when a screen-reader user reaches the button in browse mode — reading the page with the arrow keys — without separately reading the rest of the card first. This description SHALL be exposed as an accessible description associated with the button (for example, via `aria-describedby` referencing that stock text), not folded into the button's accessible name, so the name continues to name only the item exactly as `REQ-ORD-8` requires.
 
 #### Scenario: the button is disabled at zero stock
 
@@ -41,16 +41,16 @@ A disabled button that gives no reason leaves assistive technology announcing on
 - **WHEN** an item card is rendered for a zero-stock item
 - **THEN** that item's quantity input remains as enterable as before, carrying its existing `min`, `max` (`REQ-ORD-12`), and default value, unaffected by this requirement
 
-#### Scenario: the disabled button's reason is exposed to assistive technology
+#### Scenario: the disabled button's reason is reachable in browse mode
 
 - **WHEN** the catalogue page renders an item card for an item with 0 in stock
 - **THEN** its Order button carries an accessible description whose content is exactly that item's stock text, "0 in stock"
-- **AND** that description is reachable by assistive technology when focus lands on the button, without needing to read any other part of the card first
+- **AND** that description is reachable by assistive technology when a screen-reader user reaches the button in browse mode — reading the page with the arrow keys — without needing to read any other part of the card first, even though the button's native `disabled` attribute keeps it out of the Tab order
 
 #### Scenario: the reason reuses the card's existing stock text, not new wording
 
 - **WHEN** an item card's Order button carries this accessible description
-- **THEN** the description's content is exactly the stock text the card already displays as part of its meta line (`REQ-CAT-10`) — "{n} in stock" — carrying that requirement's inert-text guarantee with it, rather than a newly introduced label or icon
+- **THEN** the description's content is exactly the stock text the card already displays as part of its meta line — "{n} in stock" — shown there as plain, inert text, rather than a newly introduced label or icon
 - **AND** the description does not include the rest of that meta line — the item's SKU or its price are not part of it
 
 #### Scenario: each out-of-stock item's description is its own stock text
