@@ -81,16 +81,30 @@ test('verdict: a sentence that opens with a verdict word is prose, not a second 
   assert.equal(reviewVerdict(report), 'APPROVE');
 });
 
-test('verdict: the decision field must be the verdict alone', () => {
-  // A sentence is not a decision, however it opens. The cost, stated rather than hidden: a report
-  // whose ONLY verdict line puts words before the dash reads as no verdict and parks. No real review
-  // in this repo's history has done that; every one put the verdict alone before the dash.
-  for (const prose of ['REQUEST CHANGES is not warranted — minor findings only.', 'APPROVE with nits — see below.']) {
-    assert.equal(reviewVerdict(prose), null, prose);
-  }
-  for (const verdict of ['APPROVE', 'APPROVE.', 'APPROVED — fine.', '**REQUEST CHANGES** — x', '`APPROVE` — x', '**APPROVE — x**']) {
-    assert.notEqual(reviewVerdict(verdict), null, verdict);
-  }
+test('verdict: a verdict word followed by another word is a sentence, not a decision', () => {
+  // The cost, stated rather than hidden: a report whose ONLY verdict line is a sentence — the verdict
+  // followed by a word, like "APPROVE with nits" — reads as no verdict and parks. No real review in
+  // this repo's history has done that.
+  for (const prose of [
+    'REQUEST CHANGES is not warranted — minor findings only.',
+    'APPROVE with nits — see below.',
+    'REQUEST CHANGES because the test never fails.',
+  ]) assert.equal(reviewVerdict(prose), null, prose);
+});
+
+test('verdict: a lone verdict reads whatever follows it, as long as it is not a word', () => {
+  // Requiring the verdict alone before a dash parked lone verdicts that used another separator —
+  // both reviews of the tightening probed these, and each read APPROVE before it.
+  for (const verdict of [
+    'APPROVE', 'APPROVE.', 'APPROVED — fine.', '**REQUEST CHANGES** — x', '`APPROVE` — x', '**APPROVE — x**',
+    'APPROVE -- no blocking findings.', 'APPROVE, no blocking findings.', 'APPROVE. No blocking findings.',
+    'APPROVE (no blocking findings)', '**APPROVE**. The change is minimal.', 'APPROVE ✅', 'APPROVE; the change is minimal.',
+  ]) assert.notEqual(reviewVerdict(verdict), null, verdict);
+});
+
+test('verdict: a line that names both is undecided even when it reads like a sentence', () => {
+  // The sentence rule runs after the undecided rule, so this still poisons the clean line after it.
+  assert.equal(reviewVerdict('APPROVE or REQUEST CHANGES — undecided\nAPPROVE — final'), null);
 });
 
 test('verdict: an ambiguous DECISION field is still no decision', () => {

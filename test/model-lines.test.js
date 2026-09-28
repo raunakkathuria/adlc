@@ -36,7 +36,8 @@ const LINES = [
     plain: 'APPROVE — the change meets the spec',
     boldMarker: '**APPROVE** — the change meets the spec',
     value: 'APPROVE',
-    // prompts/review.md names both in one breath; echoed back, that is undecided, never an approval.
+    // prompts/review.md's wording, echoed back: it opens with no verdict word, and a fragment of it
+    // names both at once, which is undecided — neither is ever an approval.
     template: 'the verdict — `APPROVE` or `REQUEST CHANGES` — with nothing before it',
   },
   {
