@@ -28,6 +28,7 @@
 // Multi-valued: pass implementation_pr=<url> once per URL.
 
 import { execFileSync } from 'node:child_process';
+import { isMainModule } from './is-main.mjs';
 
 const MARKER = 'adlc-links v1';
 const BLOCK = /<!--\s*adlc-links v1\s*\n([\s\S]*?)-->/g;
@@ -93,7 +94,7 @@ function readIssueLinks(issue) {
   return parseLinks([body, ...issueCommentBodies(issue)].join('\n'));
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 const [cmd, issue, ...rest] = isMain ? process.argv.slice(2) : [];
 
 if (cmd === 'read') {

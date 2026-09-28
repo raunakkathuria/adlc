@@ -22,6 +22,7 @@
 
 import { readFileSync } from 'node:fs';
 import { unwrap } from './marker-line.mjs';
+import { isMainModule } from './is-main.mjs';
 
 /**
  * The citation lines in a build report, trimmed, in the order the Executor wrote them. A bold or
@@ -35,7 +36,7 @@ export function redCitations(report) {
     .filter((line) => /^(Red|Characterization):/.test(line));
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 if (isMain) {
   const file = process.argv[2];
   if (!file) {

@@ -14,6 +14,7 @@
 // Prints the verdict and exits 0 when there is exactly one; prints why and exits 1 otherwise.
 
 import { readFileSync } from 'node:fs';
+import { isMainModule } from './is-main.mjs';
 
 const VERDICT = /APPROVE|REQUEST CHANGES/g;
 
@@ -49,7 +50,7 @@ export function reviewVerdict(report) {
   return found.size === 1 ? [...found][0] : null;
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 if (isMain) {
   const file = process.argv[2];
   if (!file) {

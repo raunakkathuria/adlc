@@ -26,6 +26,7 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { parseLinks, renderLinks, issueCommentBodies } from './links.mjs';
 import { unwrap } from './marker-line.mjs';
+import { isMainModule } from './is-main.mjs';
 
 function gh(...args) {
   return execFileSync('gh', args, { encoding: 'utf8' });
@@ -81,7 +82,7 @@ export function findingsLine(report) {
 
 // The CLI sits behind isMain so the parser above can be imported and tested, the same shape as
 // links.mjs, req-coverage.mjs and req-ids.mjs.
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 
 if (isMain) {
   const [reportFile, parentIssue] = process.argv.slice(2);

@@ -23,6 +23,7 @@ import { join } from 'node:path';
 import { redCitations } from '../scripts/red-citations.mjs';
 import { stageVerified } from '../scripts/stage-verified.mjs';
 import { reviewVerdict } from '../scripts/review-verdict.mjs';
+import { isMainModule } from '../scripts/is-main.mjs';
 
 const ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 const DEFAULT_AGENT = 'claude -p --allowedTools "Read,Grep,Glob,Edit,Write,Bash(node:*),Bash(npm:*)"';
@@ -503,7 +504,7 @@ function main(pr) {
   console.log(`\nImplementation PR: ${url}`);
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 if (isMain) {
   try {
     main(process.argv[2]);

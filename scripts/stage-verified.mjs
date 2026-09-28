@@ -7,6 +7,7 @@
 //   node scripts/stage-verified.mjs          stages the repository in the current directory
 
 import { execFileSync } from 'node:child_process';
+import { isMainModule } from './is-main.mjs';
 
 /** The run's own scratch: never part of an implementation, whether or not a repo ignores it. */
 export const SCRATCH = ['work', '.adlc', 'node_modules'];
@@ -26,5 +27,5 @@ export function stageVerified(cwd) {
   execFileSync('git', ['reset', '-q', '--', ...SCRATCH], { cwd, stdio: 'pipe' });
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 if (isMain) stageVerified(process.cwd());
