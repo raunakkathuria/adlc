@@ -4,7 +4,7 @@
 // indented line matched nothing, so the station reported "nothing to file" and dropped every
 // finding it had just made — silently, which is the worst way for a fail-closed path to behave.
 // The same mismatch between an indented illustration and an anchored parser sent a sound
-// implementation back to the Planner: see the SPEC-MATCH trailers in verifier.yml.
+// implementation back to the Planner: see the SPEC-MATCH trailers in scripts/verifier-verdict.mjs.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

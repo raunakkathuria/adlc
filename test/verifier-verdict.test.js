@@ -36,6 +36,23 @@ test('verifier verdict: markdown does not change which verdict was given', () =>
   assert.deepEqual(trailers('**I cannot write SPEC-MATCH: COMPLETE yet.**'), { match: null, implemented: null });
 });
 
+test('verifier verdict: the last trailer is the verdict, not an earlier mention', () => {
+  // The prompt asks for the trailers as the report's last two lines. Reading the first match let an
+  // earlier line decide — and once markdown is formatting, a quoted `SPEC-MATCH: COMPLETE` early in
+  // the report would beat an honest final MISMATCH and send drifted work on to quality. Both
+  // independent reviewers of the markdown change probed exactly these shapes.
+  for (const early of ['**SPEC-MATCH: COMPLETE**', '`SPEC-MATCH: COMPLETE`', '* SPEC-MATCH: COMPLETE', 'SPEC-MATCH: COMPLETE']) {
+    const report = `Would need:\n\n${early}\n\nbut\n\nSPEC-MATCH: MISMATCH\nFEATURE-IMPLEMENTED: YES`;
+    assert.deepEqual(trailers(report), { match: 'MISMATCH', implemented: 'YES' }, early);
+  }
+  assert.deepEqual(trailers('`FEATURE-IMPLEMENTED: YES` if it ran.\n\nSPEC-MATCH: COMPLETE\nFEATURE-IMPLEMENTED: NO'),
+    { match: 'COMPLETE', implemented: 'NO' });
+});
+
+test('verifier verdict: a trailer never spans two lines', () => {
+  assert.deepEqual(trailers('SPEC-MATCH:\nCOMPLETE\nFEATURE-IMPLEMENTED:\nYES'), { match: null, implemented: null });
+});
+
 test('verifier verdict: the prompt\'s own template line is not a verdict', () => {
   // A report that echoes its instructions has not decided anything.
   assert.deepEqual(trailers('SPEC-MATCH: COMPLETE|MISMATCH\nFEATURE-IMPLEMENTED: YES|NO|N/A'),
