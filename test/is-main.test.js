@@ -31,6 +31,13 @@ test('main module: an empty review is still refused when the verdict reader is s
   assert.equal(run('review-verdict.mjs', empty).status, 1, 'no verdict must fail, not pass as reviewed');
 });
 
+test('main module: the gate still runs when node keeps the symlink as the main path', () => {
+  // With --preserve-symlinks-main (as a flag or in NODE_OPTIONS), import.meta.url is the symlink path,
+  // not the real one — so a check that resolved only argv[1] read "not main" and did nothing.
+  const result = spawnSync('node', ['--preserve-symlinks-main', join(linked, 'scripts', 'req-coverage.mjs')], { cwd: root, encoding: 'utf8' });
+  assert.match(result.stdout, /req-coverage: \d+ requirements/);
+});
+
 test('main module: no script decides it is the main module by comparing raw paths any more', () => {
   const OLD = 'file://${process.argv[1]}';
   const files = [
