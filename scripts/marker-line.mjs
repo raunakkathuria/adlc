@@ -25,6 +25,9 @@ const LEAD = /^[*_`]+/;
  *
  * The caller still checks for its own marker at the start, so prose that merely opens with a bold
  * label — `**Note:** Red: …` — comes back as `Note: Red: …` and is not mistaken for a citation.
+ *
+ * List bullets are not handled on purpose, and behave unevenly: `* Red: a` is read as a citation,
+ * because `*` is also emphasis, while `- Red: a` and `> Red: a` are not. No prompt asks for a bullet.
  */
 export function unwrap(line) {
   const text = String(line ?? '').trim();

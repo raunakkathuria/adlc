@@ -68,6 +68,7 @@ test('findings: a mention after the real line cannot shadow it either — only f
     '`OUT-OF-SCOPE-FINDINGS:` holds the one defect above.',
     '`OUT-OF-SCOPE-FINDINGS: […]` above lists one defect.',
     '`OUT-OF-SCOPE-FINDINGS: []` would have been empty without it.',
+    'If none, print\n\n`OUT-OF-SCOPE-FINDINGS: []`', // the prompts' own "empty array if none", echoed on its own line
   ]) {
     const report = `OUT-OF-SCOPE-FINDINGS: [{"title":"real"}]\n\n## Verdict\n\n${later}\n`;
     assert.deepEqual(payload(findingsLine(report)), [{ title: 'real' }], later);
@@ -81,7 +82,24 @@ test('findings: an echo of the prompt\'s example is not a finding, wherever it s
   const echo = 'OUT-OF-SCOPE-FINDINGS: [{"title":"...","body":"what you observed, the command"}]';
   assert.deepEqual(payload(findingsLine(`${real}\n\n${echo}\n`)), [{ title: 'real' }], 'echo after');
   assert.deepEqual(payload(findingsLine(`${echo}\n\n${real}\n`)), [{ title: 'real' }], 'echo before');
-  assert.equal(findingsLine(`${echo}\n`), undefined, 'an echo alone files nothing');
+  assert.deepEqual(payload(findingsLine(`${echo}\n`)), [], 'an echo alone files nothing');
+});
+
+test('findings: a placeholder item is dropped even beside a real one', () => {
+  // Echo detection was all-or-nothing: one "..." item next to a real one still filed an issue titled
+  // "...". A placeholder is the instruction, never a finding, so it is dropped item by item.
+  const line = 'OUT-OF-SCOPE-FINDINGS: [{"title":"...","body":"x"},{"title":"real","body":"b"}]';
+  assert.deepEqual(payload(findingsLine(line)), [{ title: 'real', body: 'b' }]);
+});
+
+test('findings: anything but an array of objects does not parse, so the CLI warns instead of crashing', () => {
+  // `[null]` passed as findings and crashed the CLI while destructuring each item, before the
+  // per-finding try. It is still found (the loud path), and the parse refuses it.
+  for (const bad of ['[null]', '["x"]', '[[]]']) {
+    const line = findingsLine(`OUT-OF-SCOPE-FINDINGS: ${bad}\n`);
+    assert.equal(line, `OUT-OF-SCOPE-FINDINGS: ${bad}`, bad);
+    assert.throws(() => payload(line), bad);
+  }
 });
 
 test('findings: a broken line is still found, so the failure is reported rather than silent', () => {

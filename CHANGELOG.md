@@ -27,39 +27,21 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
-- **Two more readers dropped a bold line, and they did it silently.** The markdown fix below (#112)
-  went where the class had bitten — the review verdict and the verifier trailers. A check of the whole
-  class found two more readers of model output with the same flaw, and a quieter failure:
-  - `scripts/file-findings.mjs`: a bold `**OUT-OF-SCOPE-FINDINGS:** […]` printed "nothing to file"
-    and dropped every finding.
-  - `scripts/red-citations.mjs`: a bold `**Red:** …` was skipped, and an empty result is success
-    there, so the proof of red vanished from the commit without a word.
-
-  Both now take the model's formatting off with one shared function, `unwrap` in
-  `scripts/marker-line.mjs`. It removes markdown only at the edges of a line that starts with it
-  and around the marker's colon, so the payload is never touched — JSON with `snake_case` and code
-  in it, or a citation ending in inline code.
-  - **The findings line read is the last one whose payload parses as findings** — the same parse the
-    CLI makes, so the two cannot disagree. Once formatting counts, more lines start with the marker —
-    a bold label over the real line, prose opening with it in code, a quoted `[…]` — and the first
-    match let any of them shadow the real line and file nothing. An echo of the prompt's example
-    (`"title":"..."`) is never read as findings: filed, it would become an issue titled "...", which
-    `main` would do when the echo came first. No such issue has been filed yet. Both independent reviewers found these before they shipped.
-  - What is left, stated rather than fixed: text quoted *after* the real line that parses as findings
-    wins (on `main`, text quoted *before* it did). The prompts put the line at the end of the report,
-    so that window is the verdict paragraph, and a steered model can print the line itself anyway.
-  - Checked on this repo's real history, not only on samples. As written, the old and new readers
-    agree on every report and commit message, 582 of 582 — which shows plain lines are unchanged, not
-    that the new rules work. Decorated four ways — bold, backticks, bold marker, code marker — every
-    one of the 47 real lines (12 findings, 35 citations) reads exactly as its plain form, 188 of 188;
-    that exercises the new formatting paths on real text. No real report has two findings lines, so
-    which-line selection rests on the unit tests.
-  - **The rule has a gate now.** `test/model-lines.test.js` is one table: every line a station's
-    report hands back to a script, fed to its reader plain, indented, in bold, in backticks and with
-    its marker in bold, must read one answer — and a prompt's template line
-    (`SPEC-MATCH: COMPLETE|MISMATCH`) must read none. Triage's first-line JSON is not in it: it is
-    parsed inline in `intake.yml`, parks when it cannot read the object, and is what #106 would
-    replace.
+- **The findings and citation readers dropped a bold line, silently.** A bold
+  `**OUT-OF-SCOPE-FINDINGS:** […]` filed nothing, and a bold `**Red:** …` left the commit without
+  its proof of red. #112 fixed the same flaw in the two verdict readers; these two now take the
+  model's formatting off with one shared function, `unwrap` in `scripts/marker-line.mjs`. It
+  removes markdown only at the edges of the line and around the marker's colon, never in the
+  payload.
+  - `scripts/file-findings.mjs` reads the last line that parses as findings, then the last empty
+    one, so neither a quoted `[]` nor a bold label or prose mention can take the real line's place.
+    Its one parse, `payloadOf`, is shared by the CLI: it drops the prompts' `"title":"..."`
+    placeholder item by item, and refuses anything but an array of objects — `[null]` used to crash
+    the CLI.
+  - `test/model-lines.test.js` feeds every line a station's report hands back to a script, in five
+    formats, to its reader and requires one answer. Triage's inline JSON is not in it (#106).
+  - Unchanged for every line these readers accepted before: old and new agree on this repo's real
+    history, 582 of 582.
 
 - **A correct approval parked a green build, because it was in bold.** The reviewer of #108's build
   wrote `**APPROVE** — …`, and `scripts/review-verdict.mjs` anchors on the start of the line, so it
