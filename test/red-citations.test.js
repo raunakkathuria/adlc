@@ -62,3 +62,10 @@ test('redCitations: a wrapped marker never costs the citation its own last chara
   assert.deepEqual(redCitations('**Red:** expected **42**'), ['Red: expected **42**']);
   assert.deepEqual(redCitations('_Red:_ snake_case_name — got x_'), ['Red: snake_case_name — got x_']);
 });
+
+test('redCitations: a `*` list bullet reads as a citation, a `-` bullet does not', () => {
+  // Documented, not designed: `*` is also emphasis, so unwrap strips it; `-` and `>` are not
+  // markdown it removes. Pinned so the difference cannot change unnoticed.
+  assert.deepEqual(redCitations('* Red: a — got y'), ['Red: a — got y']);
+  assert.deepEqual(redCitations('- Red: a — got y'), []);
+});
