@@ -53,6 +53,13 @@ test('verifier verdict: a trailer never spans two lines', () => {
   assert.deepEqual(trailers('SPEC-MATCH:\nCOMPLETE\nFEATURE-IMPLEMENTED:\nYES'), { match: null, implemented: null });
 });
 
+test('verifier verdict: any spacing within the line still reads, as it did before', () => {
+  // Narrowing `\s*` to stop a trailer crossing a line break must not also narrow what counts as a
+  // space on the line — a non-breaking space read as COMPLETE before, and CRLF endings still must.
+  assert.deepEqual(trailers('SPEC-MATCH: COMPLETE \nFEATURE-IMPLEMENTED: YES'), { match: 'COMPLETE', implemented: 'YES' });
+  assert.deepEqual(trailers('SPEC-MATCH: COMPLETE \r\nFEATURE-IMPLEMENTED: YES\r\n'), { match: 'COMPLETE', implemented: 'YES' });
+});
+
 test('verifier verdict: the prompt\'s own template line is not a verdict', () => {
   // A report that echoes its instructions has not decided anything.
   assert.deepEqual(trailers('SPEC-MATCH: COMPLETE|MISMATCH\nFEATURE-IMPLEMENTED: YES|NO|N/A'),
