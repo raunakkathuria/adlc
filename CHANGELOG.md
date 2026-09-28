@@ -43,9 +43,10 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   were the script node had started by comparing `import.meta.url` (the real path) with
   `file://${process.argv[1]}` (the path as given). Through a symlink — macOS's `/tmp` and `/var` are
   both one — the two differ: `req-coverage` then reported success without checking coverage, and
-  `review-verdict` passed an empty review. No caller in the line started a script that way yet.
-  All eleven now call `scripts/is-main.mjs`, which compares real paths, and a test starts the gate's
-  scripts through a symlink.
+  `review-verdict` passed an empty review. A folder whose name holds `#` or `%` did the same, even
+  started directly. No caller in the line started a script that way yet. All eleven now call
+  `scripts/is-main.mjs`, which compares the real paths of both sides — `--preserve-symlinks-main`
+  keeps the symlink as the module's URL — and a test starts the gate's scripts through a symlink.
 
 - **The findings and citation readers dropped a bold line, silently.** A bold
   `**OUT-OF-SCOPE-FINDINGS:** […]` filed nothing, and a bold `**Red:** …` left the commit without
