@@ -32,8 +32,8 @@ test('findings: no line at all is distinguishable from an empty one', () => {
 });
 
 test('findings: the payload is sliced at the colon, so an indent cannot skew it', () => {
-  const line = findingsLine('\t  OUT-OF-SCOPE-FINDINGS: [{"title":"tabbed"}]\n');
-  assert.deepEqual(payload(line), [{ title: 'tabbed' }]);
+  const line = findingsLine('\t  OUT-OF-SCOPE-FINDINGS: [{"title":"tabbed","body":"b"}]\n');
+  assert.deepEqual(payload(line), [{ title: 'tabbed', body: 'b' }]);
 });
 
 test('findings: emphasis on either side of the marker\'s colon still finds the line', () => {
@@ -70,18 +70,18 @@ test('findings: a mention after the real line cannot shadow it either — only f
     '`OUT-OF-SCOPE-FINDINGS: []` would have been empty without it.',
     'If none, print\n\n`OUT-OF-SCOPE-FINDINGS: []`', // the prompts' own "empty array if none", echoed on its own line
   ]) {
-    const report = `OUT-OF-SCOPE-FINDINGS: [{"title":"real"}]\n\n## Verdict\n\n${later}\n`;
-    assert.deepEqual(payload(findingsLine(report)), [{ title: 'real' }], later);
+    const report = `OUT-OF-SCOPE-FINDINGS: [{"title":"real","body":"b"}]\n\n## Verdict\n\n${later}\n`;
+    assert.deepEqual(payload(findingsLine(report)), [{ title: 'real', body: 'b' }], later);
   }
 });
 
 test('findings: an echo of the prompt\'s example is not a finding, wherever it sits', () => {
   // The prompts illustrate the line with "title":"...". Filed, an echo would become an issue titled
   // "..." that re-enters the line — before the real line on main, after it once the last line won.
-  const real = 'OUT-OF-SCOPE-FINDINGS: [{"title":"real"}]';
+  const real = 'OUT-OF-SCOPE-FINDINGS: [{"title":"real","body":"b"}]';
   const echo = 'OUT-OF-SCOPE-FINDINGS: [{"title":"...","body":"what you observed, the command"}]';
-  assert.deepEqual(payload(findingsLine(`${real}\n\n${echo}\n`)), [{ title: 'real' }], 'echo after');
-  assert.deepEqual(payload(findingsLine(`${echo}\n\n${real}\n`)), [{ title: 'real' }], 'echo before');
+  assert.deepEqual(payload(findingsLine(`${real}\n\n${echo}\n`)), [{ title: 'real', body: 'b' }], 'echo after');
+  assert.deepEqual(payload(findingsLine(`${echo}\n\n${real}\n`)), [{ title: 'real', body: 'b' }], 'echo before');
   assert.deepEqual(payload(findingsLine(`${echo}\n`)), [], 'an echo alone files nothing');
 });
 
@@ -106,4 +106,20 @@ test('findings: a broken line is still found, so the failure is reported rather 
   // With no line that parses as findings, the last line that did not parse is returned, and the CLI
   // warns that it did not parse — the loud path, not "no line at all".
   assert.equal(findingsLine('OUT-OF-SCOPE-FINDINGS: {"title":"not an array"}\n'), 'OUT-OF-SCOPE-FINDINGS: {"title":"not an array"}');
+});
+
+test('findings: a restatement without bodies cannot shadow the real line', () => {
+  // The CLI files only items with a title and a body. An item without them is not a finding, so a
+  // later restatement of titles alone — or `[{}]` — must not be the line the selector picks.
+  const real = 'OUT-OF-SCOPE-FINDINGS: [{"title":"real defect","body":"b"}]';
+  for (const later of ['`OUT-OF-SCOPE-FINDINGS: [{"title":"real defect"}]`', 'OUT-OF-SCOPE-FINDINGS: [{}]']) {
+    assert.deepEqual(payload(findingsLine(`${real}\n\n## Verdict\n\n${later}\n`)), [{ title: 'real defect', body: 'b' }], later);
+  }
+});
+
+test('findings: a broken real line stays loud even beside an empty echo', () => {
+  // A quoted `[]` must not outrank a real line that failed to parse: the "did not parse" warning is
+  // the only sign that findings existed and were lost.
+  const broken = 'OUT-OF-SCOPE-FINDINGS: [{"title":"curl","body":"sent {"q": 1}"}]';
+  assert.equal(findingsLine(`${broken}\n\nIf none, print\n\n\`OUT-OF-SCOPE-FINDINGS: []\`\n`), broken);
 });
