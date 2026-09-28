@@ -29,7 +29,10 @@ const VERDICT = /APPROVE|REQUEST CHANGES/g;
 export function reviewVerdict(report) {
   const found = new Set();
   for (const line of String(report ?? '').split('\n')) {
-    if (!/^[ \t]*(APPROVE|REQUEST CHANGES)/.test(line)) continue;
+    // Markdown before the decision is formatting, like the indent: `**APPROVE** — …` parked a green
+    // build as "no verdict", and the prompt itself shows the line in backticks. The anchor still
+    // has to land on the decision, so "**Do not APPROVE**" stays prose.
+    if (!/^[ \t]*[*_`]*(APPROVE|REQUEST CHANGES)/.test(line)) continue;
 
     // The DECISION is the field before the reason, and only that field is read. Scanning the whole
     // line for both tokens rejected legitimate reviews — including, pointedly, a review discussing
