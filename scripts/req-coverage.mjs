@@ -23,6 +23,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { isMainModule } from './is-main.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REQ_ID = /\bREQ-[A-Z]+-\d+\b/g;
@@ -84,7 +85,7 @@ export function summarise({ owed, inFlight }) {
     (inFlight.size ? `; ${inFlight.size} in flight` : '') + '.';
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 
 if (isMain) {
   const spec = await collect('openspec/specs', /^spec\.md$/, { recursive: true });

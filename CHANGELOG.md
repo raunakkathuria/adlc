@@ -39,6 +39,14 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   - `.gitignore` anchors it to `/work/`. Unanchored, it also ignored any product folder named
     `work`, which neither driver would ever have committed.
 
+- **A script started through a symlink did nothing, and exited 0.** Eleven files decided they
+  were the script node had started by comparing `import.meta.url` (the real path) with
+  `file://${process.argv[1]}` (the path as given). Through a symlink — macOS's `/tmp` and `/var` are
+  both one — the two differ: `req-coverage` then reported success without checking coverage, and
+  `review-verdict` passed an empty review. No caller in the line started a script that way yet.
+  All eleven now call `scripts/is-main.mjs`, which compares real paths, and a test starts the gate's
+  scripts through a symlink.
+
 - **The findings and citation readers dropped a bold line, silently.** A bold
   `**OUT-OF-SCOPE-FINDINGS:** […]` filed nothing, and a bold `**Red:** …` left the commit without
   its proof of red. #112 fixed the same flaw in the two verdict readers; these two now take the
