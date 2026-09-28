@@ -36,14 +36,15 @@ const FAIL_CLOSED =
  * Across the report, the LAST occurrence is the verdict, because the prompt asks for the trailers as
  * the report's last two lines. The first match used to win, so an earlier mention decided — and once
  * markdown counts, a quoted `SPEC-MATCH: COMPLETE` would beat an honest final MISMATCH. A trailer
- * never spans a line break either. A differently formatted verdict is accepted, never a different one.
+ * never spans a line break either: `[^\S\n]` is any whitespace but a newline, so a non-breaking
+ * space and CRLF still read. A differently formatted verdict is accepted, never a different one.
  */
 export function trailers(report) {
   const text = String(report ?? '').replace(/[*_`]/g, '');
   const last = (re) => [...text.matchAll(re)].at(-1)?.[1] ?? null;
   return {
-    match: last(/^[ \t]*SPEC-MATCH:[ \t]*(COMPLETE|MISMATCH)[ \t]*\r?$/gm),
-    implemented: last(/^[ \t]*FEATURE-IMPLEMENTED:[ \t]*(YES|NO|N\/A)[ \t]*\r?$/gm),
+    match: last(/^[ \t]*SPEC-MATCH:[^\S\n]*(COMPLETE|MISMATCH)[^\S\n]*$/gm),
+    implemented: last(/^[ \t]*FEATURE-IMPLEMENTED:[^\S\n]*(YES|NO|N\/A)[^\S\n]*$/gm),
   };
 }
 
