@@ -27,6 +27,27 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **Neither driver could open an implementation PR once `work/` was ignored.** Both staged with
+  `git add -A -- . ':!work' …`, and git refuses a pathspec that names an ignored path: exit 1,
+  "The following paths are ignored by one of your .gitignore files". `.gitignore` began listing
+  `work/` on 09-16 (4b423f8); the first CI build to reach the step, #108's, had a green gate and an
+  approving review and opened nothing (run 36384259133). The same failure met any adopter whose
+  ignored `node_modules/` exists.
+  - One rule now, `scripts/stage-verified.mjs`, called by `build.yml` and `local/build.mjs`: add
+    everything, then reset `work`, `.adlc` and `node_modules`. The two inline copies had drifted
+    (only CI left out `.adlc`). Tested against real git, in this repo's shape and an adopter's.
+  - `.gitignore` anchors it to `/work/`. Unanchored, it also ignored any product folder named
+    `work`, which neither driver would ever have committed.
+
+- **A script started through a symlink did nothing, and exited 0.** Eleven files decided they
+  were the script node had started by comparing `import.meta.url` (the real path) with
+  `file://${process.argv[1]}` (the path as given). Through a symlink — macOS's `/tmp` and `/var` are
+  both one — the two differ: `req-coverage` then reported success without checking coverage, and
+  `review-verdict` passed an empty review. A folder whose name holds `#` or `%` did the same, even
+  started directly. No caller in the line started a script that way yet. All eleven now call
+  `scripts/is-main.mjs`, which compares the real paths of both sides — `--preserve-symlinks-main`
+  keeps the symlink as the module's URL — and a test starts the gate's scripts through a symlink.
+
 - **The findings and citation readers dropped a bold line, silently.** A bold
   `**OUT-OF-SCOPE-FINDINGS:** […]` filed nothing, and a bold `**Red:** …` left the commit without
   its proof of red. #112 fixed the same flaw in the two verdict readers; these two now take the
