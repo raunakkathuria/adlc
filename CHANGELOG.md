@@ -36,6 +36,13 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   - The verifier's reader moved out of `verifier.yml`, unchanged first, into
     `scripts/verifier-verdict.mjs`. It routed every implementation and no test covered it. A
     shared-rules row now stops a second inline copy.
+  - **It reads the last trailer now, not the first** — the prompt asks for them as the report's last
+    two lines, and `design.md` had this down as a known gap. Once markdown counted, the first-match
+    rule would have let a quoted `` `SPEC-MATCH: COMPLETE` `` beat an honest final MISMATCH and send
+    drifted work on to quality. Both independent reviewers of this change caught it before it shipped.
+  - `verifier.yml`'s "own tools untouched" guard ran only for adopters, the gap `build.yml`'s guard
+    had first. Its verdict reader is now a script in the tree the verifier agent worked in, so it
+    guards both shapes, before the verdict is read.
   - **The same run lost the reviewer's findings.** Only the agent's final message is kept, and that
     message held just the verdict line — "the one finding above" pointed at nothing. Earlier
     reviews carried 14–22 lines. `prompts/review.md` now says the final message is the whole report.

@@ -305,3 +305,19 @@ test("spec.yml refuses a tampered tree before it runs any of the line's scripts 
       'proves scripts/ untouched, so running req-ids.mjs before it runs whatever the Planner put there',
   );
 });
+
+// The verifier's own guard had the gap build.yml's used to have: gated on `env.ADLC == '.adlc'`, so
+// when adlc verifies adlc it never ran. That mattered less while the verdict was read by inline
+// workflow code. Its reader is now scripts/verifier-verdict.mjs, in the tree the verifier agent —
+// which has Bash(node:*) and so can write files — has just worked in.
+
+test("verifier.yml checks the line's own tools in both shapes, before it reads the verdict", () => {
+  const steps = readFileSync(join(stationDir, 'verifier.yml'), 'utf8').split(/^      - name: /m).slice(1);
+  const guard = steps.findIndex((s) => s.startsWith("The line's own tools must be untouched"));
+  const parse = steps.findIndex((s) => s.startsWith('Parse the verdict'));
+  assert.ok(guard !== -1 && guard < parse, 'the guard must run before any script reads the agent\'s report');
+  assert.doesNotMatch(steps[guard].split('\n')[1], /env\.ADLC == '\.adlc'/,
+    'gated on .adlc, the guard skips the one repo where the scripts sit in the tree the agent worked in');
+  assert.match(steps[guard], /git status --porcelain -- prompts scripts local \.github/,
+    'when adlc verifies adlc, the line lives in the tree itself');
+});

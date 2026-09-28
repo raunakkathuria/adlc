@@ -167,11 +167,20 @@ jobs:
             "The app is running at \`$APP_URL\`." \
             | tee work/verifier.md
 
+      # Two shapes, as in build.yml, which had this same gap first. An adopter carries the line in
+      # .adlc/; when adlc verifies adlc the line is in the tree the agent just worked in — and the
+      # next step runs a script from it. Gated on .adlc, this guard skipped exactly that case.
       - name: The line's own tools must be untouched
-        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true' && env.ADLC == '.adlc'
+        if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
         run: |
-          if [ -n "$(git -C .adlc status --porcelain)" ]; then
-            echo "::error::The agent modified the line's own prompts or scripts (.adlc/) — refusing to continue."
+          if [ "$ADLC" = ".adlc" ]; then
+            DIRTY="$(git -C .adlc status --porcelain)"
+          else
+            DIRTY="$(git status --porcelain -- prompts scripts local .github)"
+          fi
+          if [ -n "$DIRTY" ]; then
+            echo "::error::The agent modified the line's own prompts, scripts or workflows — refusing to continue."
+            printf '%s\n' "$DIRTY"
             exit 1
           fi
 

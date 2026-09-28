@@ -31,14 +31,20 @@ const FAIL_CLOSED =
  * Leading whitespace is tolerated: the prompt illustrates these trailers indented. So is markdown —
  * `**SPEC-MATCH: COMPLETE**`, `**SPEC-MATCH:** COMPLETE`, backticks — because the review verdict
  * parked a green build over `**APPROVE**`. No trailer name or value contains `*`, `_` or a backtick,
- * so dropping them removes formatting and cannot change a value: a differently formatted verdict is
- * accepted, never a different one. The line anchor still has to land on the trailer.
+ * so dropping them removes formatting and cannot change a value on its line.
+ *
+ * Across the report, the LAST occurrence is the verdict, because the prompt asks for the trailers as
+ * the report's last two lines. The first match used to win, so an earlier mention decided — and once
+ * markdown counts, a quoted `SPEC-MATCH: COMPLETE` would beat an honest final MISMATCH. A trailer
+ * never spans a line break either. A differently formatted verdict is accepted, never a different one.
  */
 export function trailers(report) {
   const text = String(report ?? '').replace(/[*_`]/g, '');
-  const match = (text.match(/^[ \t]*SPEC-MATCH:\s*(COMPLETE|MISMATCH)\s*$/m) ?? [])[1] ?? null;
-  const implemented = (text.match(/^[ \t]*FEATURE-IMPLEMENTED:\s*(YES|NO|N\/A)\s*$/m) ?? [])[1] ?? null;
-  return { match, implemented };
+  const last = (re) => [...text.matchAll(re)].at(-1)?.[1] ?? null;
+  return {
+    match: last(/^[ \t]*SPEC-MATCH:[ \t]*(COMPLETE|MISMATCH)[ \t]*\r?$/gm),
+    implemented: last(/^[ \t]*FEATURE-IMPLEMENTED:[ \t]*(YES|NO|N\/A)[ \t]*\r?$/gm),
+  };
 }
 
 const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
