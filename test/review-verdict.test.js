@@ -64,6 +64,35 @@ test('verdict: a reason may discuss the other verdict without invalidating the d
   );
 });
 
+test('verdict: a sentence that opens with a verdict word is prose, not a second verdict', () => {
+  // From the report that parked #108's second green build (run 36394430702), verbatim except that its
+  // requirement ids are elided — req-coverage reads an id in a test file as a claim. The first line
+  // read as REQUEST CHANGES, the second as APPROVE, and two different verdicts are no verdict. The
+  // decision is the field before the dash, and here it is a sentence, not a verdict.
+  const report = [
+    'Diff is minimal and scoped exactly as tasks.md describes. Review complete.',
+    '',
+    '**REQUEST CHANGES is not warranted — findings below are minor/informational only.**',
+    '',
+    '**Finding 1** · low severity · `test/catalog.test.js` (and spec) · Missing test for an explicit spec scenario · confidence: high',
+    '',
+    'APPROVE — the change fixes the actual conditional that produced the bug, matches the amended and new requirement wording exactly.',
+  ].join('\n');
+  assert.equal(reviewVerdict(report), 'APPROVE');
+});
+
+test('verdict: the decision field must be the verdict alone', () => {
+  // A sentence is not a decision, however it opens. The cost, stated rather than hidden: a report
+  // whose ONLY verdict line puts words before the dash reads as no verdict and parks. No real review
+  // in this repo's history has done that; every one put the verdict alone before the dash.
+  for (const prose of ['REQUEST CHANGES is not warranted — minor findings only.', 'APPROVE with nits — see below.']) {
+    assert.equal(reviewVerdict(prose), null, prose);
+  }
+  for (const verdict of ['APPROVE', 'APPROVE.', 'APPROVED — fine.', '**REQUEST CHANGES** — x', '`APPROVE` — x', '**APPROVE — x**']) {
+    assert.notEqual(reviewVerdict(verdict), null, verdict);
+  }
+});
+
 test('verdict: an ambiguous DECISION field is still no decision', () => {
   // Both verdicts before the dash: the reviewer did not choose.
   assert.equal(reviewVerdict('APPROVE / REQUEST CHANGES — undecided'), null);

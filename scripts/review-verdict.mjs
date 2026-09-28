@@ -45,6 +45,12 @@ export function reviewVerdict(report) {
     // Both named BEFORE the reason — "APPROVE / REQUEST CHANGES — undecided" — is a reviewer who
     // did not choose, and a clean verdict later in the report does not retract that.
     if (named.size !== 1) return null;
+
+    // And the field must be the verdict ALONE. "**REQUEST CHANGES is not warranted — …**" opens with
+    // a verdict word and is a sentence; read as a decision it contradicted the report's real APPROVE
+    // and parked a green build (run 36394430702). Every verdict line in this repo's history put the
+    // verdict alone before the dash, so a line that does not is prose, and is skipped.
+    if (!/^(APPROVED?|REQUEST CHANGES)$/.test(decision.replace(/[*_`]/g, '').trim().replace(/[.!]+$/, ''))) continue;
     found.add([...named][0]);
   }
   return found.size === 1 ? [...found][0] : null;
