@@ -27,6 +27,24 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **Two more readers dropped a bold line, and they did it silently.** The markdown fix above went
+  where the class had bitten — the review verdict and the verifier trailers. A check of the whole
+  class found two more readers of model output with the same flaw, and a quieter failure:
+  - `scripts/file-findings.mjs`: a bold `**OUT-OF-SCOPE-FINDINGS:** […]` printed "nothing to file"
+    and dropped every finding.
+  - `scripts/red-citations.mjs`: a bold `**Red:** …` was skipped, and an empty result is success
+    there, so the proof of red vanished from the commit without a word.
+
+  Both now take the model's formatting off with one shared function, `unwrap` in
+  `scripts/marker-line.mjs`. It removes markdown only at the edges of a line that starts with it
+  and around the marker's colon, so the payload is never touched — JSON with `snake_case` and code
+  in it, or a citation ending in inline code. Over this repo's real history (7 reports with a findings
+  line, 35 citations) the old and new readers give identical output, 512 of 512.
+  - **The rule has a gate now.** `test/model-lines.test.js` is one table: every fixed-shape line a
+    prompt asks for, fed to its reader plain, indented, in bold, in backticks and with its marker in
+    bold, must read one answer — and a prompt's template line (`SPEC-MATCH: COMPLETE|MISMATCH`) must
+    read none. It is the check `design.md` kept recommending, made a test.
+
 - **A correct approval parked a green build, because it was in bold.** The reviewer of #108's build
   wrote `**APPROVE** — …`, and `scripts/review-verdict.mjs` anchors on the start of the line, so it
   read no verdict and parked (run 36370074384). The review prompt shows the line in backticks, which

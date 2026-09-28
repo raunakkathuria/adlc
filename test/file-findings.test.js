@@ -35,3 +35,13 @@ test('findings: the payload is sliced at the colon, so an indent cannot skew it'
   const line = findingsLine('\t  OUT-OF-SCOPE-FINDINGS: [{"title":"tabbed"}]\n');
   assert.deepEqual(payload(line), [{ title: 'tabbed' }]);
 });
+
+test('findings: emphasis on either side of the marker\'s colon still finds the line', () => {
+  for (const text of ['**OUT-OF-SCOPE-FINDINGS**: []', '**OUT-OF-SCOPE-FINDINGS:** []', '`OUT-OF-SCOPE-FINDINGS:` []']) {
+    assert.deepEqual(payload(findingsLine(`## Report\n\n${text}\n`)), [], text);
+  }
+});
+
+test('findings: a bold label before the marker is prose, not the findings line', () => {
+  assert.equal(findingsLine('**Note:** OUT-OF-SCOPE-FINDINGS: [] was left empty\n'), undefined);
+});
