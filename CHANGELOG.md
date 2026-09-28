@@ -27,6 +27,24 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **The findings and citation readers dropped a bold line, silently.** A bold
+  `**OUT-OF-SCOPE-FINDINGS:** […]` filed nothing, and a bold `**Red:** …` left the commit without
+  its proof of red. #112 fixed the same flaw in the two verdict readers; these two now take the
+  model's formatting off with one shared function, `unwrap` in `scripts/marker-line.mjs`. It
+  removes markdown only at the edges of the line and around the marker's colon, never in the
+  payload.
+  - `scripts/file-findings.mjs` reads the last line with findings, then the last line that did not
+    parse (so a broken line still warns), then the last empty one. A quoted `[]`, a bold label or a
+    prose mention cannot take the real line's place. Its one rule for what a finding is,
+    `payloadOf`, is shared by the CLI: an object with a title and a body, never the prompts'
+    `"title":"..."` placeholder; anything but an array of objects does not parse — `[null]` used to
+    crash the CLI.
+  - Trade-off: a quoted line that parses as findings is filed when it comes after the real line, or
+    anywhere in a run whose real answer is `[]`. A steered model could print the line itself anyway.
+  - `test/model-lines.test.js` feeds every line a station's report hands back to a script, in five
+    formats, to its reader and requires one answer. Triage's inline JSON is not in it (#106).
+  - Plain lines read as before: old and new agree on this repo's real history, 582 of 582.
+
 - **A correct approval parked a green build, because it was in bold.** The reviewer of #108's build
   wrote `**APPROVE** — …`, and `scripts/review-verdict.mjs` anchors on the start of the line, so it
   read no verdict and parked (run 36370074384). The review prompt shows the line in backticks, which
