@@ -6,7 +6,9 @@
 // a failure once: a correct approval parked a green build over `**APPROVE**`, an indented findings
 // line dropped every finding without a word, an indented COMPLETE sent sound work back to the
 // Planner. docs/design.md records the shape seven times, with the advice "check its prompt's own
-// example against its parser". This table is that check, for every reader at once.
+// example against its parser". This table is that check, for every reader of a station's report at
+// once. (Triage's first-line JSON is parsed inline in intake.yml and parks when it cannot read it;
+// issue #106 is about replacing it, so it is not here.)
 //
 // Each reader keeps its own code, because what follows the marker differs — an enum, JSON, free
 // text. The RULE is stated here, once: formatting is formatting, never a different answer.
@@ -15,13 +17,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reviewVerdict } from '../scripts/review-verdict.mjs';
 import { trailers } from '../scripts/verifier-verdict.mjs';
-import { findingsLine } from '../scripts/file-findings.mjs';
+import { findingsLine, payloadOf } from '../scripts/file-findings.mjs';
 import { redCitations } from '../scripts/red-citations.mjs';
 
-// The same cut the file-findings CLI makes: everything after the marker's colon is the JSON.
+// What the file-findings CLI would file: the line it selects, read by its own parse.
 const findings = (report) => {
   const line = findingsLine(report);
-  return line === undefined ? null : JSON.parse(line.slice(line.indexOf(':') + 1).trim());
+  return line === undefined ? null : payloadOf(line);
 };
 
 // One row per line a prompt asks for. `boldMarker` is the line with only its marker in bold, the
