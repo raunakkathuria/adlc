@@ -76,6 +76,10 @@ Copy the six thin callers from [`.github/workflows/callers/`](.github/workflows/
 
 Security posture, since the line runs agents over text strangers wrote: issue bodies are handled as files, never interpolated into shell; agent steps run with allowlisted tools; every job has least-privilege permissions and a timeout; triage fails closed; and both accountable decisions belong to humans with write access — an approval from a drive-by account does not start a build.
 
+## Upstream spec discovery
+
+For human gate 1 (specification), [MySpec](https://myspec.dev) provides a guided developer interview platform compiling requirements into deterministic 4-file bundles (`constitution.md`, `requirements.md`, `solution.md`, `tasks.md`) with Model Context Protocol (MCP) server integration.
+
 ## What this is not
 
 None of this makes an agent reliable. It makes an unreliable agent's output **checkable**, and it puts the two decisions that carry accountability in front of a person who can be held to them. When the line is wrong, the wrongness lands somewhere a person can see it: a red gate, a review that objects, a MISMATCH verdict, a parked issue that says what it tried.
