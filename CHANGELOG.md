@@ -27,6 +27,32 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **The spec station stranded #110 for three days, and asked its Planner for what it could not
+  see.** The Planner took `REQ-CAT-12`, which PR #109's delta already held, and `req-ids` refused
+  it. The guard was right; two things around it were not.
+  - **The Planner was told to check a directory that is empty in CI.** `prompts/spec.md` said the
+    other deltas are in `openspec/changes/`. In CI they live on their own `spec/*` branches, which
+    `spec.yml` fetched only after the draft, and the Planner's allowlist has no git. So the only
+    thing that knew about the clash was the guard, after the work was done. The station now fetches
+    the spec branches and writes `req-ids` output to `work/ids-in-flight.txt` before the Planner
+    runs, and names that file to it. The prompt says where the claims are and how to produce the
+    listing by hand. The guard stays, and fetches again, because a model is not a guard.
+  - **A failed step parked nothing.** The issue kept `state:spec-draft` with no `needs-human` and no
+    comment, so the dashboard said the Planner was still drafting while nothing ran. One boundary
+    step now parks any failure after the issue is claimed. It links the run, quotes the guards'
+    output when they refused the delta, and says how to re-run. The no-delta path keeps its own,
+    more specific park, and the boundary stands down only once that park has completed. Both
+    agent steps get their own timeout (the Planner 25 minutes, the spec review 8): a hang that
+    reached the job's 40 would be a cancel, which `failure()` does not see.
+  - **The park runs runner binaries only, never the line's scripts.** One failure it catches is the
+    guard finding that the Planner rewrote `.adlc/`. The first draft parked with
+    `labels.mjs add`, which in that case runs the Planner's code with the job's write token. An
+    independent security review caught it before it shipped; a test now refuses `$ADLC` in the step.
+  - **The same review found an older gap of the same shape.** When adlc builds adlc, "Validate the
+    delta" ran `scripts/req-ids.mjs` before the stray-file check — the only thing that proves
+    `scripts/` untouched — so a rewritten `req-ids.mjs` would have run. Both tamper checks now come
+    first.
+
 - **`build.yml`'s "line's own tools must be untouched" guard never ran when adlc built adlc.** The
   step was gated on `env.ADLC == '.adlc'`, and `.adlc` is only checked out for an adopter repo — so
   on this repo the guard was skipped entirely and nothing stopped an Executor rewriting a station

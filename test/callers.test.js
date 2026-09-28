@@ -247,3 +247,61 @@ test('build.yml builds the approved commit, not the branch tip', () => {
   assert.doesNotMatch(build, /checkout -B "impl\/\$SLUG" "origin\/spec\/\$SLUG"/,
     'branching from the tip is the bug: a push landing after the gate would be built unapproved');
 });
+
+// The spec station must never strand an issue, and must not ask the Planner for what it cannot see.
+//
+// #110 sat at state:spec-draft for three days with no spec PR, no comment and no needs-human. Its
+// Planner took the next catalog id, which the delta on spec/distinguish-empty-catalog-message
+// already held, and the id guard refused it. (No id is named here: req-coverage reads one in a
+// test file as a claim.) The guard was right. Two things around it were not: the Planner was
+// told to avoid ids used by "every other delta in openspec/changes/", but in CI the other deltas
+// live on their own spec/* branches, which were fetched only AFTER it drafted, and its allowlist
+// has no git; and the failed step parked nothing, so the dashboard said the Planner was still
+// drafting while nothing was running.
+
+const specSteps = () => readFileSync(join(stationDir, 'spec.yml'), 'utf8').split(/^      - name: /m).slice(1);
+
+test('spec.yml shows the Planner the ids already claimed before it drafts', () => {
+  const steps = specSteps();
+  const planner = steps.findIndex((s) => s.includes('prompts/spec.md'));
+  const listing = steps.findIndex((s) => /req-ids\.mjs" > work\/ids-in-flight\.txt/.test(s));
+  assert.ok(listing !== -1, 'the claims must be written where the Planner can read them');
+  assert.ok(listing < planner, 'a listing written after the draft is a guard, not guidance');
+  assert.match(steps[listing], /git fetch .*refs\/heads\/spec\/\*/,
+    'the other deltas are on spec/* branches; without the fetch the listing only knows the living spec');
+  assert.match(steps[planner], /work\/ids-in-flight\.txt/, 'the Planner must be told where the listing is');
+});
+
+test('spec.yml parks any failure after the claim instead of stranding the issue', () => {
+  const steps = specSteps();
+  const claim = steps.find((s) => s.startsWith('This issue is at the spec station'));
+  assert.match(claim, /id: claim/, 'the boundary needs to know whether the issue was claimed');
+  const park = steps.find((s) => /if: failure\(\) && steps\.claim\.outcome == 'success'/.test(s));
+  assert.ok(park, 'a failure after the claim must reach a park step');
+  assert.match(park, /gh issue edit "\$ISSUE" --add-label needs-human/, 'parked means needs-human');
+  assert.match(park, /gh issue comment "\$ISSUE"/, 'and a comment that says why');
+  assert.doesNotMatch(park, /\$ADLC/,
+    "one failure it catches is the Planner rewriting the line's scripts — running them then would run its code with a write token");
+  assert.match(park, /mkdir -p work/, 'a failure before the thread is fetched leaves no work/ to write the comment in');
+  assert.match(park, /steps\.pr\.outputs\.parked != 'true'/,
+    'the no-delta path already parks inline; parking twice posts two comments');
+  const untimed = steps.filter((s) => s.includes('run-station.sh') && !/timeout-minutes: \d+/.test(s))
+    .map((s) => s.split('\n')[0]);
+  assert.deepEqual(untimed, [],
+    'a hung agent otherwise hits the job timeout, which is a cancel — failure() is false and nothing parks');
+  const pr = steps.find((s) => s.startsWith('Open (or update) the spec PR'));
+  assert.match(pr, /echo "parked=true" >> "\$GITHUB_OUTPUT"/,
+    'a flag the boundary reads and nothing writes lets the no-delta path post two comments');
+});
+
+test("spec.yml refuses a tampered tree before it runs any of the line's scripts on it", () => {
+  const validate = specSteps().find((s) => s.startsWith('Validate the delta'));
+  assert.match(validate, /shell: bash/,
+    'the guards run inside `{ … } | tee`; the default shell has no pipefail, so every refusal would exit 0 and open a spec PR');
+  assert.ok(validate.indexOf('STRAY=') !== -1, 'the stray-file guard must be in the validate step');
+  assert.ok(
+    validate.indexOf('STRAY=') < validate.indexOf('req-ids.mjs'),
+    'when adlc builds adlc the scripts are in the tree the Planner wrote; the stray check is what ' +
+      'proves scripts/ untouched, so running req-ids.mjs before it runs whatever the Planner put there',
+  );
+});
