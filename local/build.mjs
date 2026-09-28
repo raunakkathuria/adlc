@@ -21,6 +21,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { redCitations } from '../scripts/red-citations.mjs';
+import { stageVerified } from '../scripts/stage-verified.mjs';
 import { reviewVerdict } from '../scripts/review-verdict.mjs';
 
 const ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
@@ -461,7 +462,7 @@ function main(pr) {
     process.exit(1);
   }
 
-  git(tree, 'add', '-A', '--', '.', ':!work', ':!node_modules');
+  stageVerified(tree); // the one staging rule, shared with build.yml
   // -F, not -m: the citations come from model output, and an over-long one would fail the commit
   // with E2BIG after a green build. A file has no argv limit, so the failure class goes away
   // rather than being guarded. work/ is already excluded from the commit.
