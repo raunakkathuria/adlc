@@ -27,6 +27,19 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **A correct approval parked a green build, because it was in bold.** The reviewer of #108's build
+  wrote `**APPROVE** — …`, and `scripts/review-verdict.mjs` anchors on the start of the line, so it
+  read no verdict and parked (run 36370074384). The review prompt shows the line in backticks, which
+  failed the same way. Both readers of a model's verdict now treat markdown as formatting, like the
+  indent: the review verdict, and the verifier's `SPEC-MATCH` / `FEATURE-IMPLEMENTED` trailers,
+  where the same miss would fail closed and send sound work back to the Planner.
+  - The verifier's reader moved out of `verifier.yml`, unchanged first, into
+    `scripts/verifier-verdict.mjs`. It routed every implementation and no test covered it. A
+    shared-rules row now stops a second inline copy.
+  - **The same run lost the reviewer's findings.** Only the agent's final message is kept, and that
+    message held just the verdict line — "the one finding above" pointed at nothing. Earlier
+    reviews carried 14–22 lines. `prompts/review.md` now says the final message is the whole report.
+
 - **The spec station stranded #110 for three days, and asked its Planner for what it could not
   see.** The Planner took `REQ-CAT-12`, which PR #109's delta already held, and `req-ids` refused
   it. The guard was right; two things around it were not.
