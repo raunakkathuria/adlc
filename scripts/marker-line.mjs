@@ -1,0 +1,32 @@
+// A fixed-shape line a station writes, with the model's formatting taken off.
+//
+// Stations are asked for lines a script reads back — `OUT-OF-SCOPE-FINDINGS: […]`,
+// `Red: <test> — …` — and a model decorates them: indents them, puts them in bold, wraps them in
+// backticks. Every decoration has cost this line a failure once, and the two readers that use this
+// failed SILENTLY: a bold findings line filed nothing, a bold citation vanished from the commit.
+// test/model-lines.test.js holds the rule for every reader at once.
+//
+// The payload between the markers is never touched. It is JSON with `snake_case` and code in it, or
+// a test name with backticks — so markdown is removed only where formatting sits: at the edges of a
+// line that starts with it, and around the marker's colon.
+
+const LEAD = /^[*_`]+/;
+
+/**
+ * The line, trimmed, with markdown the model wrapped it in removed:
+ *
+ *   `**Red: a — got y**`   → `Red: a — got y`     the whole line was wrapped
+ *   `**Red:** a — got y`   → `Red: a — got y`     only the marker was
+ *   `Red: a — got \`y\``   → unchanged            a line that does not START with markdown is left alone
+ *
+ * The caller still checks for its own marker at the start, so prose that merely opens with a bold
+ * label — `**Note:** Red: …` — comes back as `Note: Red: …` and is not mistaken for a citation.
+ */
+export function unwrap(line) {
+  const text = String(line ?? '').trim();
+  const lead = (text.match(LEAD) ?? [''])[0];
+  if (!lead) return text;
+  const rest = text.slice(lead.length);
+  if (rest.endsWith(lead)) return rest.slice(0, -lead.length).trim();
+  return rest.replace(/^([^:\s]+?)[*_`]*:[*_`]*/, '$1:').trim();
+}

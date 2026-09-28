@@ -25,18 +25,21 @@
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { parseLinks, renderLinks, issueCommentBodies } from './links.mjs';
+import { unwrap } from './marker-line.mjs';
 
 function gh(...args) {
   return execFileSync('gh', args, { encoding: 'utf8' });
 }
 
 /**
- * The findings line, wherever it sits. Leading whitespace is tolerated because prompts/verify.md
- * illustrates this line indented — and an indented line matched nothing, so the station said
- * "nothing to file" and dropped every finding it had just made, without a word.
+ * The findings line, wherever it sits, trimmed and with any markdown the model wrapped it in removed
+ * (`unwrap`). Leading whitespace is tolerated because prompts/verify.md illustrates this line
+ * indented — and an indented line matched nothing, so the station said "nothing to file" and dropped
+ * every finding it had just made, without a word. A bold line did the same. The JSON after the colon
+ * is never touched.
  */
 export function findingsLine(report) {
-  return report.split('\n').find((l) => l.trimStart().startsWith('OUT-OF-SCOPE-FINDINGS:'));
+  return report.split('\n').map(unwrap).find((l) => l.startsWith('OUT-OF-SCOPE-FINDINGS:'));
 }
 
 // The CLI sits behind isMain so the parser above can be imported and tested, the same shape as

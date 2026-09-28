@@ -44,3 +44,13 @@ test('redCitations: a report with no citations yields none rather than throwing'
   assert.deepEqual(redCitations(''), []);
   assert.deepEqual(redCitations(undefined), []);
 });
+
+test('redCitations: inline code at the end of a citation is content, not formatting', () => {
+  // Markdown is only stripped from a line that STARTS with it. A plain citation keeps its backticks.
+  assert.deepEqual(redCitations('Red: sanitize() — expected `&lt;b&gt;`, got `<b>`'),
+    ['Red: sanitize() — expected `&lt;b&gt;`, got `<b>`']);
+});
+
+test('redCitations: a bold label before the word is prose, not a citation', () => {
+  assert.deepEqual(redCitations('**Note:** Red: builds are slow today'), []);
+});
