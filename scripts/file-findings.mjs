@@ -32,18 +32,20 @@ function gh(...args) {
 }
 
 /**
- * The findings after the marker's colon — the one parse, shared by the selector and the CLI, so the
- * two cannot disagree. Anything but an array of objects throws, which the CLI reports as "did not
- * parse": `[null]` used to pass and then crash it while destructuring each item. An item titled
- * "..." is dropped — that is the prompts' own illustration, `"title":"..."`, echoed back, and filed
- * it would become an issue titled "..." that re-enters the line.
+ * The findings after the marker's colon — the one rule for what a finding is, shared by the selector
+ * and the CLI, so the two cannot disagree. Anything but an array of objects throws, which the CLI
+ * reports as "did not parse": `[null]` used to pass and then crash it while destructuring each item.
+ * Of the objects, only those with a title and a body are findings; the CLI never filed any other. An
+ * item titled "..." is dropped too — that is the prompts' own illustration, `"title":"..."`, echoed
+ * back, and filed it would become an issue titled "..." that re-enters the line.
  */
 export function payloadOf(line) {
   const findings = JSON.parse(line.slice(line.indexOf(':') + 1).trim());
   if (!Array.isArray(findings) || !findings.every((f) => f !== null && typeof f === 'object' && !Array.isArray(f))) {
     throw new Error('not an array of findings');
   }
-  return findings.filter((f) => f.title !== '...');
+  const text = (v) => typeof v === 'string' && v.trim() !== '';
+  return findings.filter((f) => text(f.title) && text(f.body) && f.title !== '...');
 }
 
 // What a candidate line holds, by that same parse.
@@ -65,16 +67,16 @@ function holds(line) {
  * Once formatting counts, more lines start with the marker: a bold label over the real line, prose
  * that opens with the marker in code, a quoted `[…]`, an echo of the prompt's example. The first
  * match let any of them shadow the real line — the lesson the verifier trailers taught. So the line
- * read is the LAST one that parses as findings, by the same parse the CLI makes. Failing that, the
- * last empty one — so a quoted `[]` (the prompts say "empty array if none") never outranks real
- * findings: this fails toward filing, and dedupe already guards duplicates. Failing that, the last
- * line that did not parse, so a broken line still reaches the "did not parse" warning instead of
- * reading as no line at all.
+ * read is the LAST one that parses as findings, by the same parse the CLI makes, so a quoted `[]`
+ * (the prompts say "empty array if none") never outranks real findings: this fails toward filing, and
+ * dedupe already guards duplicates. Failing that, the last line that did not parse — ahead of any
+ * empty one, because the "did not parse" warning is the only sign that findings existed and were
+ * lost. Only then the last empty line.
  */
 export function findingsLine(report) {
   const candidates = report.split('\n').map(unwrap).filter((l) => l.startsWith('OUT-OF-SCOPE-FINDINGS:'));
   const last = (kind) => candidates.filter((l) => holds(l) === kind).at(-1);
-  return last('findings') ?? last('empty') ?? last('broken');
+  return last('findings') ?? last('broken') ?? last('empty');
 }
 
 // The CLI sits behind isMain so the parser above can be imported and tested, the same shape as
@@ -113,7 +115,6 @@ if (isMain) {
   const sameTitle = (list, title) => list.find((i) => i.title.trim().toLowerCase() === title.trim().toLowerCase());
 
   for (const { title, body } of findings) {
-    if (!title || !body) continue;
     try {
       const open = JSON.parse(gh('issue', 'list', '--state', 'open', '--search', JSON.stringify(title), '--json', 'number,title'));
       const dupe = sameTitle(open, title);
