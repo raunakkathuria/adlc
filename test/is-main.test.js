@@ -9,14 +9,14 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { tempDir } from './temp-dir.mjs';
 
 const root = join(import.meta.dirname, '..');
 // The repository, reached through a symlink, the way an absolute path through /tmp reaches it.
-const linked = join(mkdtempSync(join(tmpdir(), 'adlc-link-')), 'repo');
+const linked = join(tempDir('adlc-link-'), 'repo');
 symlinkSync(root, linked);
 const run = (script, ...args) => spawnSync('node', [join(linked, 'scripts', script), ...args], { cwd: root, encoding: 'utf8' });
 
@@ -26,7 +26,7 @@ test('main module: the coverage gate still checks coverage when started through 
 });
 
 test('main module: an empty review is still refused when the verdict reader is started through a symlink', () => {
-  const empty = join(mkdtempSync(join(tmpdir(), 'adlc-review-')), 'review.md');
+  const empty = join(tempDir('adlc-review-'), 'review.md');
   writeFileSync(empty, '');
   assert.equal(run('review-verdict.mjs', empty).status, 1, 'no verdict must fail, not pass as reviewed');
 });

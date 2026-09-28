@@ -8,15 +8,15 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { stageVerified } from '../scripts/stage-verified.mjs';
+import { tempDir } from './temp-dir.mjs';
 
 // A repository with a committed product, then an Executor's change and every kind of scratch.
 function workspace(gitignore) {
-  const dir = mkdtempSync(join(tmpdir(), 'adlc-stage-'));
+  const dir = tempDir('adlc-stage-');
   const git = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8' }).trim();
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 't@example.com');
