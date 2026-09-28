@@ -19,6 +19,21 @@ test('verdict: an indented verdict still counts', () => {
   assert.equal(reviewVerdict('findings\n\n    APPROVE — fine.'), 'APPROVE');
 });
 
+test('verdict: markdown around the decision is formatting, not a different decision', () => {
+  // Both verbatim. The bold one parked a green build for #108 (run 36370074384) as "no verdict".
+  // The backtick one is PR #79's, from before this reader existed — and it is the very form
+  // prompts/review.md illustrates the line in.
+  assert.equal(reviewVerdict('**APPROVE** — the fix removes the actual cause (the `items.length === 0` branch conflating "empty query" with "no-results query" in one message).'), 'APPROVE');
+  assert.equal(reviewVerdict('`REQUEST CHANGES` — finding 1 is a live, undisclosed instance of the same bug.'), 'REQUEST CHANGES');
+  assert.equal(reviewVerdict('__APPROVE__ — fine.'), 'APPROVE');
+});
+
+test('verdict: markdown does not turn prose into a decision', () => {
+  for (const text of ['**Do not APPROVE** — the gate is red.', '*I would REQUEST CHANGES if the tests were missing.*']) {
+    assert.equal(reviewVerdict(text), null, text);
+  }
+});
+
 test('verdict: a grammatical variant is still a decision', () => {
   // "APPROVED" is what a reviewer plausibly writes. Parking a green build over a trailing D would
   // be a maddening failure, and the line anchor already does the real work.
