@@ -54,3 +54,11 @@ test('redCitations: inline code at the end of a citation is content, not formatt
 test('redCitations: a bold label before the word is prose, not a citation', () => {
   assert.deepEqual(redCitations('**Note:** Red: builds are slow today'), []);
 });
+
+test('redCitations: a wrapped marker never costs the citation its own last character', () => {
+  // The marker is in markdown AND the line happens to end with the same character: only the marker's
+  // markdown is formatting. Probed by the security review; each of these lost text before.
+  assert.deepEqual(redCitations('`Red:` a — got `y`'), ['Red: a — got `y`']);
+  assert.deepEqual(redCitations('**Red:** expected **42**'), ['Red: expected **42**']);
+  assert.deepEqual(redCitations('_Red:_ snake_case_name — got x_'), ['Red: snake_case_name — got x_']);
+});

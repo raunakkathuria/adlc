@@ -15,9 +15,13 @@ const LEAD = /^[*_`]+/;
 /**
  * The line, trimmed, with markdown the model wrapped it in removed:
  *
- *   `**Red: a — got y**`   → `Red: a — got y`     the whole line was wrapped
- *   `**Red:** a — got y`   → `Red: a — got y`     only the marker was
- *   `Red: a — got \`y\``   → unchanged            a line that does not START with markdown is left alone
+ *   `**Red:** a — got **y**` → `Red: a — got **y**`  only the marker was: markdown sits at its colon
+ *   `**Red: a — got y**`     → `Red: a — got y`      the whole line was
+ *   `Red: a — got \`y\``     → unchanged             a line that does not START with markdown is left alone
+ *
+ * The marker case is tried first. A wrapped marker on a line that happens to end with the same
+ * character (`**Red:** expected **42**`) is still only a wrapped marker — reading it as a wrapped
+ * line cost the citation its own last characters.
  *
  * The caller still checks for its own marker at the start, so prose that merely opens with a bold
  * label — `**Note:** Red: …` — comes back as `Note: Red: …` and is not mistaken for a citation.
@@ -27,6 +31,8 @@ export function unwrap(line) {
   const lead = (text.match(LEAD) ?? [''])[0];
   if (!lead) return text;
   const rest = text.slice(lead.length);
+  const marker = rest.match(/^([^:\s*_`]+)([*_`]*):([*_`]*)/);
+  if (marker && (marker[2] || marker[3])) return `${marker[1]}:${rest.slice(marker[0].length)}`.trim();
   if (rest.endsWith(lead)) return rest.slice(0, -lead.length).trim();
-  return rest.replace(/^([^:\s]+?)[*_`]*:[*_`]*/, '$1:').trim();
+  return rest.trim();
 }

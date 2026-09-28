@@ -31,15 +31,43 @@ function gh(...args) {
   return execFileSync('gh', args, { encoding: 'utf8' });
 }
 
+/** The findings after the marker's colon — the one parse, shared by the selector and the CLI. */
+export function payloadOf(line) {
+  return JSON.parse(line.slice(line.indexOf(':') + 1).trim());
+}
+
+// What a candidate line holds. The prompts illustrate the line with `"title":"..."`; a line of
+// nothing but that is an echo of the instruction, not a finding — filed, it would become an issue
+// titled "..." that re-enters the line.
+function holds(line) {
+  try {
+    const findings = payloadOf(line);
+    if (!Array.isArray(findings)) return 'broken';
+    return findings.length > 0 && findings.every((f) => f?.title === '...') ? 'echo' : 'findings';
+  } catch {
+    return 'broken';
+  }
+}
+
 /**
  * The findings line, wherever it sits, trimmed and with any markdown the model wrapped it in removed
  * (`unwrap`). Leading whitespace is tolerated because prompts/verify.md illustrates this line
  * indented — and an indented line matched nothing, so the station said "nothing to file" and dropped
  * every finding it had just made, without a word. A bold line did the same. The JSON after the colon
  * is never touched.
+ *
+ * Once formatting counts, more lines start with the marker: a bold label over the real line, prose
+ * that opens with the marker in code, a quoted `[…]`, an echo of the prompt's example. The first
+ * match let any of them shadow the real line — the lesson the verifier trailers taught. So the line
+ * read is the LAST one whose payload parses as findings, by the same parse the CLI makes, so the two
+ * cannot disagree. An echo of the example is never it. With no such line, the last line that did not
+ * parse is returned, so a broken line still reaches the "did not parse" warning instead of reading as
+ * no line at all.
  */
 export function findingsLine(report) {
-  return report.split('\n').map(unwrap).find((l) => l.startsWith('OUT-OF-SCOPE-FINDINGS:'));
+  const candidates = report.split('\n').map(unwrap).filter((l) => l.startsWith('OUT-OF-SCOPE-FINDINGS:'));
+  const last = (kind) => candidates.filter((l) => holds(l) === kind).at(-1);
+  return last('findings') ?? last('broken');
 }
 
 // The CLI sits behind isMain so the parser above can be imported and tested, the same shape as
@@ -59,7 +87,7 @@ if (isMain) {
 
   let findings;
   try {
-    findings = JSON.parse(line.slice(line.indexOf(':') + 1).trim());
+    findings = payloadOf(line);
     if (!Array.isArray(findings)) throw new Error('not an array');
   } catch (err) {
     console.warn(`OUT-OF-SCOPE-FINDINGS line did not parse (${err.message}); filing nothing — fail closed.`);
