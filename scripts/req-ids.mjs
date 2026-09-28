@@ -27,6 +27,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { collect } from './req-coverage.mjs';
+import { isMainModule } from './is-main.mjs';
 
 // The tree under review, not the one this file lives in: a consumer repo runs the line's scripts
 // from its .adlc/ checkout, so a script-relative root would audit the hub's spec instead of theirs.
@@ -120,7 +121,7 @@ export function auditIds({ living, deltas }) {
   return { collisions, unknown };
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 
 if (isMain) {
   const living = new Set((await collect('openspec/specs', /^spec\.md$/, { recursive: true, root: ROOT })).keys());

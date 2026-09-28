@@ -21,6 +21,7 @@
 // decided and why.
 
 import { readFileSync, appendFileSync } from 'node:fs';
+import { isMainModule } from './is-main.mjs';
 
 const FAIL_CLOSED =
   '\n\n> The report above did not end with the required trailers; the line treats that as a MISMATCH — fail closed.\n\nSPEC-MATCH: MISMATCH\nFEATURE-IMPLEMENTED: N/A\n';
@@ -48,7 +49,7 @@ export function trailers(report) {
   };
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 if (isMain) {
   const file = process.argv[2];
   if (!file) {
