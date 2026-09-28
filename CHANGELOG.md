@@ -27,6 +27,18 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **Neither driver could open an implementation PR once `work/` was ignored.** Both staged with
+  `git add -A -- . ':!work' …`, and git refuses a pathspec that names an ignored path: exit 1,
+  "The following paths are ignored by one of your .gitignore files". `.gitignore` began listing
+  `work/` on 09-16 (4b423f8); the first CI build to reach the step, #108's, had a green gate and an
+  approving review and opened nothing (run 36384259133). The same failure met any adopter whose
+  ignored `node_modules/` exists.
+  - One rule now, `scripts/stage-verified.mjs`, called by `build.yml` and `local/build.mjs`: add
+    everything, then reset `work`, `.adlc` and `node_modules`. The two inline copies had drifted
+    (only CI left out `.adlc`). Tested against real git, in this repo's shape and an adopter's.
+  - `.gitignore` anchors it to `/work/`. Unanchored, it also ignored any product folder named
+    `work`, which neither driver would ever have committed.
+
 - **The findings and citation readers dropped a bold line, silently.** A bold
   `**OUT-OF-SCOPE-FINDINGS:** […]` filed nothing, and a bold `**Red:** …` left the commit without
   its proof of red. #112 fixed the same flaw in the two verdict readers; these two now take the
