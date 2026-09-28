@@ -20,6 +20,22 @@ test('verifier verdict: indented trailers still count — the prompt shows them 
     { match: 'COMPLETE', implemented: 'NO' });
 });
 
+test('verifier verdict: markdown around a trailer is formatting, not a different verdict', () => {
+  // The review verdict parked a green build over `**APPROVE**` (run 36370074384). Here the same
+  // miss would be worse: it fails closed as MISMATCH and sends sound work back to the Planner.
+  for (const text of [
+    '**SPEC-MATCH: COMPLETE**\n**FEATURE-IMPLEMENTED: YES**',
+    '**SPEC-MATCH:** COMPLETE\n**FEATURE-IMPLEMENTED:** YES',
+    '`SPEC-MATCH: COMPLETE`\n`FEATURE-IMPLEMENTED: YES`',
+  ]) assert.deepEqual(trailers(text), { match: 'COMPLETE', implemented: 'YES' }, text);
+});
+
+test('verifier verdict: markdown does not change which verdict was given', () => {
+  assert.deepEqual(trailers('**SPEC-MATCH: MISMATCH**\n**FEATURE-IMPLEMENTED: N/A**'),
+    { match: 'MISMATCH', implemented: 'N/A' });
+  assert.deepEqual(trailers('**I cannot write SPEC-MATCH: COMPLETE yet.**'), { match: null, implemented: null });
+});
+
 test('verifier verdict: the prompt\'s own template line is not a verdict', () => {
   // A report that echoes its instructions has not decided anything.
   assert.deepEqual(trailers('SPEC-MATCH: COMPLETE|MISMATCH\nFEATURE-IMPLEMENTED: YES|NO|N/A'),

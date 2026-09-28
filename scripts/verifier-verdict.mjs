@@ -28,11 +28,14 @@ const FAIL_CLOSED =
 /**
  * The two trailers a report ends with, or null for each one it does not carry.
  *
- * Leading whitespace is tolerated: the prompt illustrates these trailers indented. Tolerating the
- * indent accepts a differently formatted verdict, never a different one.
+ * Leading whitespace is tolerated: the prompt illustrates these trailers indented. So is markdown —
+ * `**SPEC-MATCH: COMPLETE**`, `**SPEC-MATCH:** COMPLETE`, backticks — because the review verdict
+ * parked a green build over `**APPROVE**`. No trailer name or value contains `*`, `_` or a backtick,
+ * so dropping them removes formatting and cannot change a value: a differently formatted verdict is
+ * accepted, never a different one. The line anchor still has to land on the trailer.
  */
 export function trailers(report) {
-  const text = String(report ?? '');
+  const text = String(report ?? '').replace(/[*_`]/g, '');
   const match = (text.match(/^[ \t]*SPEC-MATCH:\s*(COMPLETE|MISMATCH)\s*$/m) ?? [])[1] ?? null;
   const implemented = (text.match(/^[ \t]*FEATURE-IMPLEMENTED:\s*(YES|NO|N\/A)\s*$/m) ?? [])[1] ?? null;
   return { match, implemented };
