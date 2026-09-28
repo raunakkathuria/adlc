@@ -12,9 +12,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tempDir } from './temp-dir.mjs';
 
 import {
   gate1, commitMessage, prBody, prepareImplBranch, GUARDED_PATHS, verifyScript,
@@ -182,7 +182,7 @@ test('verifyScript: a missing script or unparseable manifest reads as null, not 
 test('prepareImplBranch: the implementation is cut from the APPROVED commit and merges main', () => {
   // Not the branch tip: a revision pushed after the approval must not ride in. And it must be a
   // MERGE, not a rebase or squash — Gate 2 marks the spec PR merged by ancestry.
-  const dir = mkdtempSync(join(tmpdir(), 'adlc-impl-'));
+  const dir = tempDir('adlc-impl-');
   const git = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8' }).trim();
 
   git('init', '-q', '-b', 'main');
@@ -225,7 +225,7 @@ test('prepareImplBranch: the implementation is cut from the APPROVED commit and 
 test('prepareImplBranch: a delta that conflicts with main parks instead of guessing a resolution', () => {
   // The line never resolves a conflict on its own — a wrong guess ships as an approved delta.
   // The message asserted here is what park() puts on the issue for the human who has to fix it.
-  const dir = mkdtempSync(join(tmpdir(), 'adlc-conflict-'));
+  const dir = tempDir('adlc-conflict-');
   const git = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8' }).trim();
 
   git('init', '-q', '-b', 'main');
