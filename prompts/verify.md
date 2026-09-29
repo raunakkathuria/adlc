@@ -73,6 +73,6 @@ The last two lines of your report, exactly this shape and **flush left** — the
     SPEC-MATCH: COMPLETE|MISMATCH
     FEATURE-IMPLEMENTED: YES|NO|N/A
 
-`SPEC-MATCH: COMPLETE` only when every scenario is `satisfied`, `tasks.md` is fully ticked, and Extra is empty. `FEATURE-IMPLEMENTED: YES` only when you drove the running app and observed the behaviour work — a paper tally of the spec is not enough. `N/A` when there is nothing drivable (docs, chore).
+`SPEC-MATCH: COMPLETE` only when every scenario is `satisfied`, `tasks.md` is fully ticked, and Extra is empty. `FEATURE-IMPLEMENTED: YES` only when you drove the running app and observed the behaviour work — a paper tally of the spec is not enough. `N/A` when there is nothing drivable: docs, a chore, or a behaviour that exists only in a state the running app cannot be put in — an empty catalogue, when the app starts seeded and nothing can remove an item. For that last case, name the state and why the running app cannot reach it, and give `N/A` only when every scenario for that state is `satisfied` by a test that pins it. It is never for behaviour you could have driven and did not; that is `NO`. `NO` sends the work back to the Planner, and no revision of the spec can make an unreachable state reachable.
 
 A `MISMATCH` routes to the **Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it.
