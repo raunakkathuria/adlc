@@ -26,6 +26,12 @@ import { isMainModule } from './is-main.mjs';
 const FAIL_CLOSED =
   '\n\n> The report above did not end with the required trailers; the line treats that as a MISMATCH — fail closed.\n\nSPEC-MATCH: MISMATCH\nFEATURE-IMPLEMENTED: N/A\n';
 
+// A missing FEATURE-IMPLEMENTED used to default to N/A, which routes on to quality. N/A also means
+// "not observed in the running app, and here is why", so a report that merely dropped the line would
+// pass as a reasoned N/A with no reason. It is read as NO instead: back to the Planner, and said.
+const NO_IMPLEMENTED =
+  '\n\n> The report gave SPEC-MATCH but no FEATURE-IMPLEMENTED trailer; the line treats that as NO — fail closed.\n\nFEATURE-IMPLEMENTED: NO\n';
+
 /**
  * The two trailers a report ends with, or null for each one it does not carry.
  *
@@ -58,5 +64,6 @@ if (isMain) {
   }
   const { match, implemented } = trailers(readFileSync(file, 'utf8'));
   if (!match) appendFileSync(file, FAIL_CLOSED);
-  process.stdout.write(`match=${match ?? 'MISMATCH'}\nimplemented=${implemented ?? 'N/A'}\n`);
+  else if (!implemented) appendFileSync(file, NO_IMPLEMENTED);
+  process.stdout.write(`match=${match ?? 'MISMATCH'}\nimplemented=${implemented ?? (match ? 'NO' : 'N/A')}\n`);
 }
