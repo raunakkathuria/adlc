@@ -92,14 +92,44 @@ test('verdict: a verdict word followed by another word is a sentence, not a deci
   ]) assert.equal(reviewVerdict(prose), null, prose);
 });
 
-test('verdict: a lone verdict reads whatever follows it, as long as it is not a word', () => {
-  // Requiring the verdict alone before a dash parked lone verdicts that used another separator —
-  // both reviews of the tightening probed these, and each read APPROVE before it.
-  for (const verdict of [
-    'APPROVE', 'APPROVE.', 'APPROVED — fine.', '**REQUEST CHANGES** — x', '`APPROVE` — x', '**APPROVE — x**',
-    'APPROVE -- no blocking findings.', 'APPROVE, no blocking findings.', 'APPROVE. No blocking findings.',
-    'APPROVE (no blocking findings)', '**APPROVE**. The change is minimal.', 'APPROVE ✅', 'APPROVE; the change is minimal.',
-  ]) assert.notEqual(reviewVerdict(verdict), null, verdict);
+test('verdict: the decision field is the verdict alone, markdown and a trailing mark aside', () => {
+  // Every real review is this shape: the word, optional bold or backticks, then a dash.
+  for (const [verdict, expected] of [
+    ['APPROVE', 'APPROVE'],
+    ['APPROVE.', 'APPROVE'],
+    ['APPROVED — fine.', 'APPROVE'],
+    ['**REQUEST CHANGES** — not because the implementation is wrong.', 'REQUEST CHANGES'],
+    ['`APPROVE` — x', 'APPROVE'],
+    ['**APPROVE — x**', 'APPROVE'],
+    ['__APPROVE__ — fine.', 'APPROVE'],
+    ['APPROVE — no blocking findings.', 'APPROVE'],
+    ['APPROVE - no blocking findings.', 'APPROVE'],
+  ]) assert.equal(reviewVerdict(verdict), expected, verdict);
+});
+
+test('verdict: punctuation before the next word is still prose, not a second verdict', () => {
+  // Skipping only a verdict word followed by a letter left the same disclaimer a verdict once a
+  // period, colon, comma, or parenthesis sat in between. Beside a real approval that is two
+  // verdicts, and the build parks. Alone, the same line would open a pull request.
+  const approve = 'APPROVE — the change fixes the bug.';
+  for (const prose of [
+    'REQUEST CHANGES. This is not warranted — findings below are minor.',
+    '**REQUEST CHANGES.** Not warranted — findings are minor.',
+    'REQUEST CHANGES: not warranted — findings are minor.',
+    'REQUEST CHANGES, however, is not warranted — findings are minor.',
+    'REQUEST CHANGES; this is not warranted — findings are minor.',
+    'REQUEST CHANGES (not warranted) — findings are minor.',
+    'REQUEST CHANGES -- not warranted, findings are minor.',
+    'APPROVE. No blocking findings.',
+    'APPROVE, no blocking findings.',
+    'APPROVE (no blocking findings)',
+    '**APPROVE**. The change is minimal.',
+    'APPROVE ✅',
+    'APPROVE; the change is minimal.',
+  ]) {
+    assert.equal(reviewVerdict(prose), null, prose);
+    assert.equal(reviewVerdict(`${prose}\n${approve}`), 'APPROVE', prose);
+  }
 });
 
 test('verdict: a line that names both is undecided even when it reads like a sentence', () => {
