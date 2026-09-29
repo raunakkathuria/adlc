@@ -339,8 +339,13 @@ test('verifier.yml tells the Gate 2 reader when the verifier did not observe the
   const post = readFileSync(join(stationDir, 'verifier.yml'), 'utf8').split(/^      - name: /m)
     .find((s) => s.startsWith('Post the verdict on the implementation PR'));
   assert.match(post, /IMPLEMENTED: \$\{\{ steps\.verdict\.outputs\.implemented \}\}/, 'the step needs the verdict it is reporting');
-  assert.match(post, /"\$IMPLEMENTED" = "N\/A"/, 'and must say so when it is N/A');
-  // Only on the route to Gate 2. A report with no trailers at all gets N/A from the line's own
-  // fail-closed default, goes to the Planner, and the verifier gave no reason to point at.
-  assert.match(post, /"\$MATCH" = "COMPLETE"/, 'the banner is for the Gate 2 reader, so only when the work passes on');
+  assert.match(post, /MATCH: \$\{\{ steps\.verdict\.outputs\.match \}\}/, 'and the SPEC-MATCH it is gated on');
+  // The banner text and the condition that guards it, as one stretch. Matching the pieces apart
+  // stayed green when the printf was deleted, when && became ||, and when MATCH was wired to
+  // implemented.
+  assert.match(
+    post,
+    /if \[ "\$MATCH" = "COMPLETE" \] && \[ "\$IMPLEMENTED" = "N\/A" \]; then[\s\S]*printf '> \*\*Not observed in the running app\.\*\*/,
+    'the Gate 2 banner must be that text, printed only on COMPLETE with N/A',
+  );
 });

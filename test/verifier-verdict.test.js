@@ -1,8 +1,9 @@
 // Contract tests for the verifier's verdict trailers.
 //
-// The trailers route the work: COMPLETE goes on to quality, anything else goes back to the Planner.
-// Missing trailers fail closed as MISMATCH, so a reader too narrow about the FORM of a verdict sends
-// a sound implementation back to the spec and costs a Gate 1 round. These tests pin what counts.
+// The trailers route the work: COMPLETE with YES or N/A goes on to quality. MISMATCH, or
+// FEATURE-IMPLEMENTED: NO, goes back to the Planner. A missing SPEC-MATCH fails closed as MISMATCH;
+// a SPEC-MATCH with no readable FEATURE-IMPLEMENTED fails closed as NO. A reader too narrow about
+// the FORM of a verdict sends a sound implementation back to the spec. These tests pin what counts.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -78,6 +79,39 @@ test('verifier verdict: a trailer inside a sentence is not a verdict', () => {
 test('verifier verdict: no trailers at all is no verdict', () => {
   assert.deepEqual(trailers(''), { match: null, implemented: null });
   assert.deepEqual(trailers(undefined), { match: null, implemented: null });
+});
+
+test('verifier verdict: a reason after the value is still that verdict', () => {
+  // prompts/verify.md now asks the verifier to argue an N/A. A reason on the trailer line, the
+  // shape every other verdict in this repo uses, was not read — and a missing FEATURE-IMPLEMENTED
+  // is now NO, so "N/A — the empty catalogue is unreachable" would go back to the Planner.
+  assert.deepEqual(
+    trailers('SPEC-MATCH: COMPLETE\nFEATURE-IMPLEMENTED: N/A — the empty catalogue is unreachable'),
+    { match: 'COMPLETE', implemented: 'N/A' },
+  );
+  assert.deepEqual(
+    trailers('SPEC-MATCH: COMPLETE\nFEATURE-IMPLEMENTED: N/A - the empty catalogue is unreachable'),
+    { match: 'COMPLETE', implemented: 'N/A' },
+  );
+  assert.deepEqual(
+    trailers('SPEC-MATCH: COMPLETE — every scenario is satisfied\nFEATURE-IMPLEMENTED: YES — observed working'),
+    { match: 'COMPLETE', implemented: 'YES' },
+  );
+  assert.deepEqual(
+    trailers('SPEC-MATCH: MISMATCH\nFEATURE-IMPLEMENTED: NO — the reachable part was not driven'),
+    { match: 'MISMATCH', implemented: 'NO' },
+  );
+  // Words with no dash are not a reason. The template line and a sentence stay unread.
+  assert.deepEqual(trailers('FEATURE-IMPLEMENTED: N/A because the catalogue is seeded'), { match: null, implemented: null });
+});
+
+test('verifier verdict: a reasoned N/A is not rewritten as NO', () => {
+  const report = join(tempDir('adlc-verdict-'), 'verifier.md');
+  writeFileSync(report, 'SPEC-MATCH: COMPLETE\nFEATURE-IMPLEMENTED: N/A — the empty catalogue is unreachable\n');
+  const out = execFileSync('node', [join(import.meta.dirname, '..', 'scripts', 'verifier-verdict.mjs'), report], { encoding: 'utf8' });
+  assert.match(out, /^match=COMPLETE$/m);
+  assert.match(out, /^implemented=N\/A$/m);
+  assert.doesNotMatch(readFileSync(report, 'utf8'), /no FEATURE-IMPLEMENTED trailer/);
 });
 
 test('verifier verdict: a report with SPEC-MATCH but no FEATURE-IMPLEMENTED fails closed, as NO', () => {
