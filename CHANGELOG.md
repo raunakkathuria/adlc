@@ -27,6 +27,16 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **The verifier could never pass a behaviour the running app cannot reach.** #108's fix is the
+  page's message for an empty catalogue, and the verifier drives the running app, which starts with
+  three seeded items and has no way to remove one. `prompts/verify.md` allowed `FEATURE-IMPLEMENTED:
+  YES` only for behaviour observed there and `N/A` only for docs and chores, so the verifier said
+  `NO` — which goes back to the Planner, where no revision of the spec can make that state reachable
+  (PR #117). `N/A` now also covers a behaviour that exists only in a state the running app cannot be
+  put in: the verifier must name the state and why it is unreachable, and every scenario for it must
+  be pinned by a test. It is never for behaviour the verifier could have driven and did not. A test
+  pins the routing it relies on: `N/A` goes on to quality, only `NO` goes back.
+
 - **A second green build parked because one sentence opened with a verdict word.** #108's reviewer
   approved, and began its report with "**REQUEST CHANGES is not warranted — …**". The review reader
   took every line opening with a verdict word as a decision, so it saw two different verdicts and

@@ -321,3 +321,14 @@ test("verifier.yml checks the line's own tools in both shapes, before it reads t
   assert.match(steps[guard], /git status --porcelain -- prompts scripts local \.github/,
     'when adlc verifies adlc, the line lives in the tree itself');
 });
+
+// prompts/verify.md gives N/A for a behaviour the running app cannot be put in, as well as for docs
+// and chores. That only helps if the routing agrees: N/A goes on to quality, and only NO goes back.
+
+test('verifier.yml sends N/A on to quality, and only NO back to the Planner', () => {
+  const verifier = readFileSync(join(stationDir, 'verifier.yml'), 'utf8');
+  assert.match(verifier, /steps\.verdict\.outputs\.match == 'COMPLETE' && steps\.verdict\.outputs\.implemented != 'NO'/,
+    'COMPLETE with YES or N/A must reach quality');
+  assert.match(verifier, /steps\.verdict\.outputs\.match == 'MISMATCH' \|\| steps\.verdict\.outputs\.implemented == 'NO'/,
+    'only MISMATCH or NO goes back to the Planner');
+});
