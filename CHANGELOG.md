@@ -27,6 +27,22 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **A second green build parked because one sentence opened with a verdict word.** #108's reviewer
+  approved, and began its report with "**REQUEST CHANGES is not warranted — …**". The review reader
+  took every line opening with a verdict word as a decision, so it saw two different verdicts and
+  parked (run 36394430702). #112 made this reachable by letting a verdict wrapped in `**` count, and
+  chose not to tighten the decision field, citing "APPROVE with nits — …" — a shape no real review
+  had produced. That reasoning was wrong: now a verdict word followed by another word is a
+  sentence, and is skipped. A lone verdict still reads whatever follows it — a dash, other
+  punctuation, an emoji, the end of the line — and a line naming both is still undecided.
+  - On all 17 real reviews in this repo's history, 16 read the same and the one that parked now
+    reads `APPROVE`. The cost, which no real review has hit: a report whose only verdict line is a
+    sentence — "APPROVE with nits — …" — parks.
+  - `prompts/review.md` states that shape, and tells the reviewer not to begin any other line with
+    either word. An echo of its wording is never an approval: the sentence opens with no verdict
+    word, and a fragment of it names both at once, which is undecided. Both drivers check only
+    that a verdict exists, so nothing else routes on it.
+
 - **Neither driver could open an implementation PR once `work/` was ignored.** Both staged with
   `git add -A -- . ':!work' …`, and git refuses a pathspec that names an ignored path: exit 1,
   "The following paths are ignored by one of your .gitignore files". `.gitignore` began listing

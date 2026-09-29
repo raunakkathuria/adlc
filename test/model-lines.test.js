@@ -36,7 +36,9 @@ const LINES = [
     plain: 'APPROVE — the change meets the spec',
     boldMarker: '**APPROVE** — the change meets the spec',
     value: 'APPROVE',
-    template: '`APPROVE` or `REQUEST CHANGES`, and why.',
+    // prompts/review.md's wording, echoed back: it opens with no verdict word, and a fragment of it
+    // names both at once, which is undecided — neither is ever an approval.
+    template: 'the verdict — `APPROVE` or `REQUEST CHANGES` — with nothing before it',
   },
   {
     name: 'the SPEC-MATCH trailer (prompts/verify.md)',
