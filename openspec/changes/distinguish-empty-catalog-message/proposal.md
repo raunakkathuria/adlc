@@ -8,6 +8,8 @@ Issue #108: `loadItems()` renders the same `Nothing matches "{q}".` message whet
 
 When the item list loads with no search query and no other filter narrowing it, and the catalogue itself holds zero items, the page states this exactly: `The catalogue is empty.`, in place of the item cards — instead of claiming nothing matched an empty search. A search that genuinely matches nothing — a non-empty query with no hits — keeps today's `Nothing matches "{q}".` wording unchanged, and so does a zero-result narrowed by any other filter (see Out of scope). The live-region announcement's existing `Showing 0 items.` wording for an empty catalogue is unaffected; this only fixes the message shown among the item cards.
 
+A query of only whitespace counts as no query: the page already trims the field before searching, so this pins existing behaviour (raised by the verifier) rather than adding any.
+
 ## Out of scope
 
 - No change to `REQ-CAT-3` search semantics, or to the `Nothing matches "{q}".` wording for an actual no-match search.
