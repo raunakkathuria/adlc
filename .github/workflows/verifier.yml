@@ -184,9 +184,9 @@ jobs:
             exit 1
           fi
 
-      # The trailers are the machine-readable verdict. Missing trailers fail closed: treated
-      # as MISMATCH with a note, because an agent that lost its output contract proved nothing.
-      # The one reader of them is scripts/verifier-verdict.mjs, where the rule is tested.
+      # The trailers are the machine-readable verdict. A missing SPEC-MATCH fails closed as
+      # MISMATCH; a SPEC-MATCH with no readable FEATURE-IMPLEMENTED fails closed as NO. An agent
+      # that lost its output contract proved nothing. The one reader is scripts/verifier-verdict.mjs.
       - name: Parse the verdict
         if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
         id: verdict

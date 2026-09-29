@@ -5,20 +5,20 @@
 //     SPEC-MATCH: COMPLETE|MISMATCH
 //     FEATURE-IMPLEMENTED: YES|NO|N/A
 //
-// and verifier.yml routes the work on them: COMPLETE goes on to quality, anything else goes back to
-// the Planner. Missing trailers fail closed as MISMATCH, because an agent that lost its output
-// contract proved nothing — which means a reader too narrow about FORM sends a sound implementation
-// back to the spec. It has happened: an indented COMPLETE read as no verdict, appended a MISMATCH,
-// burnt a loop-cap attempt, and cost a Gate 1 round.
+// and verifier.yml routes the work on them: COMPLETE with YES or N/A goes on to quality; MISMATCH,
+// or FEATURE-IMPLEMENTED: NO, goes back to the Planner. A missing SPEC-MATCH fails closed as
+// MISMATCH. A SPEC-MATCH with no readable FEATURE-IMPLEMENTED fails closed as NO. A reader too
+// narrow about FORM sends a sound implementation back to the spec. It has happened: an indented
+// COMPLETE read as no verdict, appended a MISMATCH, burnt a loop-cap attempt, and cost a Gate 1 round.
 //
 // It lived inline in verifier.yml with no test. It is here, beside review-verdict.mjs, so the rule
 // is tested with plain data the way every other decision in scripts/ is.
 //
 //   node scripts/verifier-verdict.mjs <report-file>
 //
-// Prints `match=` and `implemented=` lines for $GITHUB_OUTPUT. When SPEC-MATCH is missing it also
-// appends the fail-closed trailers to the report, so the comment posted on the PR says what the line
-// decided and why.
+// Prints `match=` and `implemented=` lines for $GITHUB_OUTPUT. When SPEC-MATCH is missing it appends
+// the MISMATCH trailers; when SPEC-MATCH is present and FEATURE-IMPLEMENTED is not readable it
+// appends FEATURE-IMPLEMENTED: NO. The comment posted on the PR says what the line decided and why.
 
 import { readFileSync, appendFileSync } from 'node:fs';
 import { isMainModule } from './is-main.mjs';
@@ -45,13 +45,19 @@ const NO_IMPLEMENTED =
  * markdown counts, a quoted `SPEC-MATCH: COMPLETE` would beat an honest final MISMATCH. A trailer
  * never spans a line break either: `[^\S\n]` is any whitespace but a newline, so a non-breaking
  * space and CRLF still read. A differently formatted verdict is accepted, never a different one.
+ *
+ * A reason may follow the value after a dash (`—`, `–`, or ` - `). The value is what is read.
+ * "N/A — the empty catalogue is unreachable" is N/A. Words with no dash are not a reason, so the
+ * prompt's own template line (`YES|NO|N/A`) and a sentence still are not trailers.
  */
+const AFTER_VALUE = String.raw`(?:[^\S\n]*(?:—|–| - )[^\n]*)?[^\S\n]*$`;
+
 export function trailers(report) {
   const text = String(report ?? '').replace(/[*_`]/g, '');
   const last = (re) => [...text.matchAll(re)].at(-1)?.[1] ?? null;
   return {
-    match: last(/^[ \t]*SPEC-MATCH:[^\S\n]*(COMPLETE|MISMATCH)[^\S\n]*$/gm),
-    implemented: last(/^[ \t]*FEATURE-IMPLEMENTED:[^\S\n]*(YES|NO|N\/A)[^\S\n]*$/gm),
+    match: last(new RegExp(`^[ \\t]*SPEC-MATCH:[^\\S\\n]*(COMPLETE|MISMATCH)${AFTER_VALUE}`, 'gm')),
+    implemented: last(new RegExp(`^[ \\t]*FEATURE-IMPLEMENTED:[^\\S\\n]*(YES|NO|N\\/A)${AFTER_VALUE}`, 'gm')),
   };
 }
 

@@ -38,9 +38,11 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   in the change; every scenario for the state must be pinned by a test; and every reachable part of
   the change must still be driven. It is never for behaviour the verifier could have driven.
   - Two deterministic guards come with it. A report that gives `SPEC-MATCH` but no
-    `FEATURE-IMPLEMENTED` used to default to `N/A` and pass; it now reads as `NO`, and says so. And
-    when the verdict is `N/A`, the comment on the implementation PR opens with a fixed line saying
-    the change was not observed in the running app, so Gate 2 does not read "passed" as "seen".
+    `FEATURE-IMPLEMENTED` used to default to `N/A` and pass; it now reads as `NO`, and says so. A
+    reason after the value (`FEATURE-IMPLEMENTED: N/A — …`) still reads as that value, so arguing
+    the `N/A` on the trailer line does not send the work back. And when the verdict is `N/A`, the
+    comment on the implementation PR opens with a fixed line saying the change was not observed in
+    the running app, so Gate 2 does not read "passed" as "seen".
   - A test pins the routing all of this relies on: `N/A` goes on to quality, only `NO` goes back.
 
 - **A second green build parked because one sentence opened with a verdict word.** #108's reviewer
