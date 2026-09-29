@@ -64,6 +64,49 @@ test('verdict: a reason may discuss the other verdict without invalidating the d
   );
 });
 
+test('verdict: a sentence that opens with a verdict word is prose, not a second verdict', () => {
+  // From the report that parked #108's second green build (run 36394430702), verbatim except that its
+  // requirement ids are elided — req-coverage reads an id in a test file as a claim. The first line
+  // read as REQUEST CHANGES, the second as APPROVE, and two different verdicts are no verdict. The
+  // decision is the field before the dash, and here it is a sentence, not a verdict.
+  const report = [
+    'Diff is minimal and scoped exactly as tasks.md describes. Review complete.',
+    '',
+    '**REQUEST CHANGES is not warranted — findings below are minor/informational only.**',
+    '',
+    '**Finding 1** · low severity · `test/catalog.test.js` (and spec) · Missing test for an explicit spec scenario · confidence: high',
+    '',
+    'APPROVE — the change fixes the actual conditional that produced the bug, matches the amended and new requirement wording exactly.',
+  ].join('\n');
+  assert.equal(reviewVerdict(report), 'APPROVE');
+});
+
+test('verdict: a verdict word followed by another word is a sentence, not a decision', () => {
+  // The cost, stated rather than hidden: a report whose ONLY verdict line is a sentence — the verdict
+  // followed by a word, like "APPROVE with nits" — reads as no verdict and parks. No real review in
+  // this repo's history has done that.
+  for (const prose of [
+    'REQUEST CHANGES is not warranted — minor findings only.',
+    'APPROVE with nits — see below.',
+    'REQUEST CHANGES because the test never fails.',
+  ]) assert.equal(reviewVerdict(prose), null, prose);
+});
+
+test('verdict: a lone verdict reads whatever follows it, as long as it is not a word', () => {
+  // Requiring the verdict alone before a dash parked lone verdicts that used another separator —
+  // both reviews of the tightening probed these, and each read APPROVE before it.
+  for (const verdict of [
+    'APPROVE', 'APPROVE.', 'APPROVED — fine.', '**REQUEST CHANGES** — x', '`APPROVE` — x', '**APPROVE — x**',
+    'APPROVE -- no blocking findings.', 'APPROVE, no blocking findings.', 'APPROVE. No blocking findings.',
+    'APPROVE (no blocking findings)', '**APPROVE**. The change is minimal.', 'APPROVE ✅', 'APPROVE; the change is minimal.',
+  ]) assert.notEqual(reviewVerdict(verdict), null, verdict);
+});
+
+test('verdict: a line that names both is undecided even when it reads like a sentence', () => {
+  // The sentence rule runs after the undecided rule, so this still poisons the clean line after it.
+  assert.equal(reviewVerdict('APPROVE or REQUEST CHANGES — undecided\nAPPROVE — final'), null);
+});
+
 test('verdict: an ambiguous DECISION field is still no decision', () => {
   // Both verdicts before the dash: the reviewer did not choose.
   assert.equal(reviewVerdict('APPROVE / REQUEST CHANGES — undecided'), null);
