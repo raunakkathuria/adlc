@@ -332,3 +332,15 @@ test('verifier.yml sends N/A on to quality, and only NO back to the Planner', ()
   assert.match(verifier, /steps\.verdict\.outputs\.match == 'MISMATCH' \|\| steps\.verdict\.outputs\.implemented == 'NO'/,
     'only MISMATCH or NO goes back to the Planner');
 });
+
+test('verifier.yml tells the Gate 2 reader when the verifier did not observe the change', () => {
+  // N/A is not "seen working". Without a fixed line saying so, a person reading "passed to quality"
+  // at Gate 2 could take it for an observed result.
+  const post = readFileSync(join(stationDir, 'verifier.yml'), 'utf8').split(/^      - name: /m)
+    .find((s) => s.startsWith('Post the verdict on the implementation PR'));
+  assert.match(post, /IMPLEMENTED: \$\{\{ steps\.verdict\.outputs\.implemented \}\}/, 'the step needs the verdict it is reporting');
+  assert.match(post, /"\$IMPLEMENTED" = "N\/A"/, 'and must say so when it is N/A');
+  // Only on the route to Gate 2. A report with no trailers at all gets N/A from the line's own
+  // fail-closed default, goes to the Planner, and the verifier gave no reason to point at.
+  assert.match(post, /"\$MATCH" = "COMPLETE"/, 'the banner is for the Gate 2 reader, so only when the work passes on');
+});
