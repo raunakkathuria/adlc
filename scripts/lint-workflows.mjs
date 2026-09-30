@@ -12,6 +12,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { isMainModule } from './is-main.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -43,7 +44,7 @@ export function runBlocks(yaml) {
   return blocks;
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 
 if (isMain) {
   const dir = '.github/workflows';

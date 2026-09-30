@@ -18,6 +18,7 @@
 // a new lane on the board.
 
 import { execFileSync } from 'node:child_process';
+import { isMainModule } from './is-main.mjs';
 
 export const LABELS = {
   'state:triaging': ['0e8a16', 'the line is classifying and validating this issue'],
@@ -74,7 +75,7 @@ function setExclusive(issue, next, prefix, alsoRemove = [], alsoPrefixes = []) {
   gh(...args);
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 const [cmd, ...rest] = isMain ? process.argv.slice(2) : [];
 
 if (cmd === 'ensure') {

@@ -21,16 +21,22 @@
 // chore delta changes no behaviour — so an empty result is success, not failure.
 
 import { readFileSync } from 'node:fs';
+import { unwrap } from './marker-line.mjs';
+import { isMainModule } from './is-main.mjs';
 
-/** The citation lines in a build report, trimmed, in the order the Executor wrote them. */
+/**
+ * The citation lines in a build report, trimmed, in the order the Executor wrote them. A bold or
+ * backticked citation is still a citation, and reaches the commit without the markdown: an empty
+ * result is success here, so a citation this missed would vanish without a word.
+ */
 export function redCitations(report) {
   return String(report ?? '')
     .split('\n')
-    .map((line) => line.trim())
+    .map(unwrap)
     .filter((line) => /^(Red|Characterization):/.test(line));
 }
 
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 if (isMain) {
   const file = process.argv[2];
   if (!file) {
