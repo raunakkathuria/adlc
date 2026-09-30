@@ -29,6 +29,14 @@
     background: var(--surface); color: var(--ink);
   }
   input[type=search] { width: 100%; }
+  input[type=text] {
+    padding: .5rem .7rem; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--surface); color: var(--ink); width: 9rem;
+  }
+  input[aria-invalid=true] { border-color: var(--bad); }
+  .filters { display: flex; gap: .5rem; }
+  .filters input[type=search] { flex: 1; min-width: 0; }
+  .field-error { color: var(--bad); font-size: .8rem; margin: .35rem 0 0; }
   input[type=number] { width: 4.5rem; text-align: right; }
   button {
     padding: .5rem .9rem; border: 1px solid var(--accent); border-radius: 7px;
@@ -70,7 +78,11 @@
   <h1>Storefront</h1>
   <p class="sub">Search the catalogue, then order what you need. Stock updates as orders are placed.</p>
 
-  <input type="search" id="q" aria-label="Search the catalogue" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
+  <div class="filters">
+    <input type="search" id="q" aria-label="Search the catalogue" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
+    <input type="text" id="max-price" inputmode="decimal" aria-label="Maximum price" placeholder="Max price (£)" autocomplete="off">
+  </div>
+  <div id="price-error" class="field-error"></div>
 
   <h2>Catalogue</h2>
   <div id="items"></div>
@@ -118,11 +130,38 @@ function note(message, kind, { notSent = false } = {}) {
   el('note').innerHTML = message ? `<p class="note ${kind}">${message}</p>` : '';
 }
 
-function summaryText(q, count) {
-  if (!q) return count === 1 ? 'Showing 1 item.' : `Showing ${count} items.`;
-  if (count === 0) return `Nothing matches “${escapeHtml(q)}”.`;
-  return count === 1 ? `1 item matches “${escapeHtml(q)}”.` : `${count} items match “${escapeHtml(q)}”.`;
+// `ceiling` is cents, or null for none. The amount is the page's own formatting, never typed text.
+function summaryText(q, count, ceiling) {
+  const cap = ceiling === null ? '' : ` at ${money(ceiling)} or less`;
+  if (!q) return count === 1 ? `Showing 1 item${cap}.` : `Showing ${count} items${cap}.`;
+  if (count === 0) return `Nothing matches “${escapeHtml(q)}”${cap}.`;
+  return count === 1 ? `1 item matches “${escapeHtml(q)}”${cap}.` : `${count} items match “${escapeHtml(q)}”${cap}.`;
 }
+
+function emptyText(q, ceiling) {
+  if (ceiling === null) return q ? `Nothing matches “${escapeHtml(q)}”.` : 'The catalogue is empty.';
+  return q ? summaryText(q, 0, ceiling) : `Nothing costs ${money(ceiling)} or less.`;
+}
+
+// What the maximum-price field holds: nothing, a price (in cents), a price still being typed,
+// or something that cannot be a price. Whole pounds take at most 13 digits so the cents stay
+// below 2^53 and money() shows them exactly. Cents come from the digits, never from a float.
+const PRICE_REFUSAL = 'Enter a maximum price such as 10 or 10.50.';
+
+function readPrice(text) {
+  const raw = text.trim();
+  if (raw === '') return { state: 'empty' };
+  if (/^[0-9]{0,13}\.$/.test(raw)) return { state: 'incomplete' };
+  const m = /^(?:([0-9]{1,13})(?:\.([0-9]{1,2}))?|\.([0-9]{1,2}))$/.exec(raw);
+  if (!m) return { state: 'refused' };
+  const pence = m[2] ?? m[3] ?? '';
+  const tens = pence.length === 1 ? Number(pence) * 10 : Number(pence || 0);
+  return { state: 'price', cents: Number(m[1] ?? 0) * 100 + tens };
+}
+
+// What the page's most recent item-list request carried; an incomplete or refused field
+// leaves it alone, so a typo never widens the list.
+let appliedCeiling = null;
 
 const CATALOGUE_FAILED = 'Could not load the catalogue. Check your connection.';
 const HISTORY_FAILED = 'Could not load your orders. Check your connection.';
@@ -144,7 +183,14 @@ const nextRequestSeq = () => ++requestSeq;
 async function loadItems({ announce = true, query, seq } = {}) {
   const mySeq = seq ?? nextRequestSeq();
   const q = (query ?? el('q').value).trim();
-  const { ok, body: items } = await api('/items' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  const price = readPrice(el('max-price').value);
+  if (price.state === 'price') appliedCeiling = price.cents;
+  else if (price.state === 'empty') appliedCeiling = null;
+  const ceiling = appliedCeiling;
+  const params = [];
+  if (q) params.push('q=' + encodeURIComponent(q));
+  if (ceiling !== null) params.push('max_price=' + ceiling);
+  const { ok, body: items } = await api('/items' + (params.length ? '?' + params.join('&') : ''));
 
   if (mySeq !== requestSeq) return; // superseded by a newer request; discard
 
@@ -159,10 +205,8 @@ async function loadItems({ announce = true, query, seq } = {}) {
   }
 
   if (items.length === 0) {
-    // No query means nothing narrowed the list, so the catalogue itself is empty (REQ-CAT-12).
-    el('items').innerHTML = q
-      ? `<p class="empty">Nothing matches “${escapeHtml(q)}”.</p>`
-      : `<p class="empty">The catalogue is empty.</p>`;
+    // No query and no ceiling means nothing narrowed the list, so the catalogue itself is empty.
+    el('items').innerHTML = `<p class="empty">${emptyText(q, ceiling)}</p>`;
   } else {
     el('items').innerHTML = `<ul class="cards" role="list">` + items.map((item) => `
       <li class="card">
@@ -180,7 +224,7 @@ async function loadItems({ announce = true, query, seq } = {}) {
     }
   }
 
-  if (announce) el('summary').innerHTML = summaryText(q, items.length);
+  if (announce) el('summary').innerHTML = summaryText(q, items.length, ceiling);
 }
 
 async function loadOrders() {
@@ -232,6 +276,27 @@ el('q').addEventListener('input', () => {
     if (!notSentShowing) note('');
   }
   return loadItems();
+});
+
+// Refusing issues no request, so a response already in flight is still the latest and is shown;
+// showing it never touches the message here, which only a change of the field clears.
+function showRefusal(refused) {
+  el('price-error').innerHTML = refused ? PRICE_REFUSAL : '';
+  const field = el('max-price');
+  if (refused) {
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', 'price-error');
+  } else {
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('aria-describedby');
+  }
+}
+
+el('max-price').addEventListener('input', () => {
+  const { state } = readPrice(el('max-price').value);
+  showRefusal(state === 'refused');
+  if (state === 'refused') el('summary').innerHTML = PRICE_REFUSAL;
+  if (state === 'price' || state === 'empty') return loadItems();
 });
 loadItems();
 loadOrders();
