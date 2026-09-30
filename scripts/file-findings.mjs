@@ -25,23 +25,64 @@
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { parseLinks, renderLinks, issueCommentBodies } from './links.mjs';
+import { unwrap } from './marker-line.mjs';
+import { isMainModule } from './is-main.mjs';
 
 function gh(...args) {
   return execFileSync('gh', args, { encoding: 'utf8' });
 }
 
 /**
- * The findings line, wherever it sits. Leading whitespace is tolerated because prompts/verify.md
- * illustrates this line indented — and an indented line matched nothing, so the station said
- * "nothing to file" and dropped every finding it had just made, without a word.
+ * The findings after the marker's colon — the one rule for what a finding is, shared by the selector
+ * and the CLI, so the two cannot disagree. Anything but an array of objects throws, which the CLI
+ * reports as "did not parse": `[null]` used to pass and then crash it while destructuring each item.
+ * Of the objects, only those with a title and a body are findings; the CLI never filed any other. An
+ * item titled "..." is dropped too — that is the prompts' own illustration, `"title":"..."`, echoed
+ * back, and filed it would become an issue titled "..." that re-enters the line.
+ */
+export function payloadOf(line) {
+  const findings = JSON.parse(line.slice(line.indexOf(':') + 1).trim());
+  if (!Array.isArray(findings) || !findings.every((f) => f !== null && typeof f === 'object' && !Array.isArray(f))) {
+    throw new Error('not an array of findings');
+  }
+  const text = (v) => typeof v === 'string' && v.trim() !== '';
+  return findings.filter((f) => text(f.title) && text(f.body) && f.title !== '...');
+}
+
+// What a candidate line holds, by that same parse.
+function holds(line) {
+  try {
+    return payloadOf(line).length > 0 ? 'findings' : 'empty';
+  } catch {
+    return 'broken';
+  }
+}
+
+/**
+ * The findings line, wherever it sits, trimmed and with any markdown the model wrapped it in removed
+ * (`unwrap`). Leading whitespace is tolerated because prompts/verify.md illustrates this line
+ * indented — and an indented line matched nothing, so the station said "nothing to file" and dropped
+ * every finding it had just made, without a word. A bold line did the same. The JSON after the colon
+ * is never touched.
+ *
+ * Once formatting counts, more lines start with the marker: a bold label over the real line, prose
+ * that opens with the marker in code, a quoted `[…]`, an echo of the prompt's example. The first
+ * match let any of them shadow the real line — the lesson the verifier trailers taught. So the line
+ * read is the LAST one that parses as findings, by the same parse the CLI makes, so a quoted `[]`
+ * (the prompts say "empty array if none") never outranks real findings: this fails toward filing, and
+ * dedupe already guards duplicates. Failing that, the last line that did not parse — ahead of any
+ * empty one, because the "did not parse" warning is the only sign that findings existed and were
+ * lost. Only then the last empty line.
  */
 export function findingsLine(report) {
-  return report.split('\n').find((l) => l.trimStart().startsWith('OUT-OF-SCOPE-FINDINGS:'));
+  const candidates = report.split('\n').map(unwrap).filter((l) => l.startsWith('OUT-OF-SCOPE-FINDINGS:'));
+  const last = (kind) => candidates.filter((l) => holds(l) === kind).at(-1);
+  return last('findings') ?? last('broken') ?? last('empty');
 }
 
 // The CLI sits behind isMain so the parser above can be imported and tested, the same shape as
 // links.mjs, req-coverage.mjs and req-ids.mjs.
-const isMain = import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = isMainModule(import.meta.url);
 
 if (isMain) {
   const [reportFile, parentIssue] = process.argv.slice(2);
@@ -56,8 +97,7 @@ if (isMain) {
 
   let findings;
   try {
-    findings = JSON.parse(line.slice(line.indexOf(':') + 1).trim());
-    if (!Array.isArray(findings)) throw new Error('not an array');
+    findings = payloadOf(line);
   } catch (err) {
     console.warn(`OUT-OF-SCOPE-FINDINGS line did not parse (${err.message}); filing nothing — fail closed.`);
     process.exit(0);
@@ -76,7 +116,6 @@ if (isMain) {
   const sameTitle = (list, title) => list.find((i) => i.title.trim().toLowerCase() === title.trim().toLowerCase());
 
   for (const { title, body } of findings) {
-    if (!title || !body) continue;
     try {
       const open = JSON.parse(gh('issue', 'list', '--state', 'open', '--search', JSON.stringify(title), '--json', 'number,title'));
       const dupe = sameTitle(open, title);

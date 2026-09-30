@@ -44,3 +44,28 @@ test('redCitations: a report with no citations yields none rather than throwing'
   assert.deepEqual(redCitations(''), []);
   assert.deepEqual(redCitations(undefined), []);
 });
+
+test('redCitations: inline code at the end of a citation is content, not formatting', () => {
+  // Markdown is only stripped from a line that STARTS with it. A plain citation keeps its backticks.
+  assert.deepEqual(redCitations('Red: sanitize() — expected `&lt;b&gt;`, got `<b>`'),
+    ['Red: sanitize() — expected `&lt;b&gt;`, got `<b>`']);
+});
+
+test('redCitations: a bold label before the word is prose, not a citation', () => {
+  assert.deepEqual(redCitations('**Note:** Red: builds are slow today'), []);
+});
+
+test('redCitations: a wrapped marker never costs the citation its own last character', () => {
+  // The marker is in markdown AND the line happens to end with the same character: only the marker's
+  // markdown is formatting. Probed by the security review; each of these lost text before.
+  assert.deepEqual(redCitations('`Red:` a — got `y`'), ['Red: a — got `y`']);
+  assert.deepEqual(redCitations('**Red:** expected **42**'), ['Red: expected **42**']);
+  assert.deepEqual(redCitations('_Red:_ snake_case_name — got x_'), ['Red: snake_case_name — got x_']);
+});
+
+test('redCitations: a `*` list bullet reads as a citation, a `-` bullet does not', () => {
+  // Documented, not designed: `*` is also emphasis, so unwrap strips it; `-` and `>` are not
+  // markdown it removes. Pinned so the difference cannot change unnoticed.
+  assert.deepEqual(redCitations('* Red: a — got y'), ['Red: a — got y']);
+  assert.deepEqual(redCitations('- Red: a — got y'), []);
+});

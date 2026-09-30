@@ -141,6 +141,7 @@ jobs:
 
       - name: This issue is at the spec station
         if: steps.runner.outputs.on == 'true'
+        id: claim
         run: node "$ADLC/scripts/labels.mjs" state "$ISSUE" spec-draft
 
       # A revision continues the existing spec branch (the verifier's findings are in the issue
@@ -173,8 +174,23 @@ jobs:
         if: steps.runner.outputs.on == 'true'
         run: npm install -g @anthropic-ai/claude-code @fission-ai/openspec
 
+      # The Planner takes "the next free number", and the deltas it must not collide with are on
+      # their own spec/* branches — not in this checkout, and its allowlist has no git. So the
+      # claims are handed to it as data, from the same script the guard below enforces. Without
+      # this only the guard knew, after the draft was written: #110 took REQ-CAT-12 from a delta
+      # it could not see and was refused. Best effort — no listing still leaves the guard.
+      - name: The ids other changes have claimed, for the Planner to read
+        if: steps.runner.outputs.on == 'true'
+        run: |
+          git fetch -q origin '+refs/heads/spec/*:refs/remotes/origin/spec/*' || true
+          node "$ADLC/scripts/req-ids.mjs" > work/ids-in-flight.txt 2>&1 || true
+          cat work/ids-in-flight.txt
+
       - name: Draft the delta (the Planner)
         if: steps.runner.outputs.on == 'true'
+        # Inside the job's 40: a hang that reaches the job timeout is a cancel, failure() is false,
+        # and the park below never runs. A step timeout is a failure it catches.
+        timeout-minutes: 25
         shell: bash # pipefail: a crashed agent must fail this step, not be hidden by tee
         env:
           ADLC_API_KEY: ${{ secrets.ADLC_API_KEY }}
@@ -186,25 +202,26 @@ jobs:
             "Read,Grep,Glob,Edit,Write,Bash(openspec:*)" \
             'The issue is `work/issue.md` (the thread may carry a verifier report — a revision addresses it).' \
             "The slug is \`$SLUG\` — the delta lives at \`openspec/changes/$SLUG/\`." \
+            'The requirement ids that every change in flight claims are listed in `work/ids-in-flight.txt`.' \
             | tee work/plan.md
 
       # Deterministic guards: the delta must validate, the Planner may only have touched its
       # own change directory, and the line's own prompts/scripts must be untouched. Anything
-      # else is a station overstepping — fail loudly.
+      # else is a station overstepping — fail loudly. The output is kept in work/validate.log
+      # because the park below quotes it on the issue.
       - name: Validate the delta
         if: steps.runner.outputs.on == 'true'
+        id: validate
+        shell: bash # pipefail: a refusal inside the group must still fail the step through tee
         run: |
+          {
+          # Both tamper checks come first, before any of the line's scripts run on this tree: when
+          # adlc builds adlc the scripts ARE in the tree the Planner wrote, and only the stray
+          # check proves scripts/ untouched.
           if [ "$ADLC" = ".adlc" ] && [ -n "$(git -C .adlc status --porcelain)" ]; then
             echo "::error::The agent modified the line's own prompts or scripts (.adlc/) — refusing to continue."
             exit 1
           fi
-          openspec validate "$SLUG"
-          # Ids are allocated by a model that cannot see the other deltas in flight, so the
-          # allocation is checked deterministically here — before the spec PR exists. The other
-          # deltas are on their own spec branches and nowhere in this tree, so fetch them first:
-          # without this the guard only ever compares against the living spec.
-          git fetch -q origin '+refs/heads/spec/*:refs/remotes/origin/spec/*' || true
-          node "$ADLC/scripts/req-ids.mjs"
           # -uall matters: without it git collapses a wholly-untracked directory into one entry
           # ("?? openspec/changes/"), which never matches the filter below — so the change's own
           # files read as strays. openspec/changes/ is untracked on main by design, so the first
@@ -215,6 +232,13 @@ jobs:
             echo "$STRAY"
             exit 1
           fi
+          openspec validate "$SLUG"
+          # The Planner was shown the claims before it drafted, but a model is not a guard, so the
+          # allocation is checked deterministically here — before the spec PR exists. Fetch again:
+          # another delta may have been pushed while the Planner was drafting.
+          git fetch -q origin '+refs/heads/spec/*:refs/remotes/origin/spec/*' || true
+          node "$ADLC/scripts/req-ids.mjs"
+          } 2>&1 | tee work/validate.log
 
       - name: Open (or update) the spec PR — Gate 1 is an approving review on it
         if: steps.runner.outputs.on == 'true'
@@ -233,6 +257,7 @@ jobs:
           if [ "$(git rev-list --count "origin/$BASE..HEAD" 2>/dev/null || echo 0)" = "0" ]; then
             node "$ADLC/scripts/labels.mjs" add "$ISSUE" needs-human
             gh issue comment "$ISSUE" --body "The Planner produced no delta commit for \`$SLUG\`, so there is nothing to open a spec PR from — parked for a human to read the run log."
+            echo "parked=true" >> "$GITHUB_OUTPUT" # set after both calls succeed, so a lost park is retried below
             exit 1
           fi
           git push -u origin "spec/$SLUG"
@@ -253,6 +278,7 @@ jobs:
       # Gate 1, they do not block it.
       - name: Spec review — two lenses, before a human decides
         if: steps.runner.outputs.on == 'true'
+        timeout-minutes: 8 # with the Planner's 25, inside the job's 40 — see the Planner step
         shell: bash # pipefail
         env:
           ADLC_API_KEY: ${{ secrets.ADLC_API_KEY }}
@@ -276,6 +302,33 @@ jobs:
             openspec_change="openspec/changes/$SLUG" \
             --note "Spec delta proposed: $PR_URL — waiting at **Gate 1** for an approving review."
           node "$ADLC/scripts/labels.mjs" state "$ISSUE" gate-1
+
+      # One boundary for every failure once the issue is claimed. Without it a failed step left
+      # the issue at state:spec-draft with no needs-human and no comment — #110 sat there three
+      # days while the dashboard said the Planner was still drafting. The no-delta path above
+      # parks with a more specific message, so this one stands down when that park completed.
+      #
+      # Runner binaries only — nothing under $ADLC. One failure this catches is the guard finding
+      # that the Planner rewrote the line's own scripts; running labels.mjs then would run the
+      # Planner's code with this job's write token. intake's `labels.mjs ensure` has already
+      # created needs-human, so a plain `gh issue edit` is all the park needs.
+      - name: Anything unhandled after the claim parks — never strand the issue
+        if: failure() && steps.claim.outcome == 'success' && steps.pr.outputs.parked != 'true'
+        env:
+          GUARDS_REFUSED: ${{ steps.validate.outcome == 'failure' }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          mkdir -p work # a failure before the thread was fetched leaves no work/
+          { printf 'The spec station failed, so this issue is parked for a human rather than left at `state:spec-draft`. Run log: %s\n' "$RUN_URL"
+            if [ "$GUARDS_REFUSED" = "true" ] && [ -s work/validate.log ]; then
+              printf '\nThe Planner drafted a delta and the deterministic guards refused it:\n\n```\n'
+              tail -c 20000 work/validate.log
+              printf '\n```\n'
+            fi
+            printf '\nOnce the cause is fixed, remove `needs-human` and re-run: `gh workflow run spec.yml -f issue_number=%s -f slug=%s`\n' "$ISSUE" "$SLUG"
+          } > work/park.md
+          gh issue comment "$ISSUE" --body-file work/park.md # first: the comment must survive a missing label
+          gh issue edit "$ISSUE" --add-label needs-human
 
       # The Planner's draft and both review lenses, kept whether or not the run succeeded.
       - name: Keep the evidence

@@ -24,6 +24,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SHARED_RULES = [
   { name: 'the review verdict', shape: '(APPROVE|REQUEST CHANGES)', owner: 'scripts/review-verdict.mjs' },
   { name: 'the proof-of-red citations', shape: '(Red|Characterization)', owner: 'scripts/red-citations.mjs' },
+  { name: 'the verifier trailers', shape: '(COMPLETE|MISMATCH)', owner: 'scripts/verifier-verdict.mjs' },
 ];
 
 // Everywhere a driver could inline a copy instead of calling the owner.
