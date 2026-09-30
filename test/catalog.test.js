@@ -401,6 +401,65 @@ test('REQ-CAT-7: clearing the query announces zero items when the catalogue hold
     assert.equal(element('summary').innerHTML, 'Showing 0 items.');
   }));
 
+test('REQ-CAT-12: a genuinely empty catalogue says so rather than claiming an empty search matched nothing', () =>
+  withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, fakeItemsFetch(base, []));
+    await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+
+    element('q').value = '';
+    await sandbox.loadItems();
+    assert.match(element('items').innerHTML, />The catalogue is empty\.</);
+    assert.doesNotMatch(element('items').innerHTML, /Nothing matches/);
+  }));
+
+test('REQ-CAT-12: a whitespace-only query against an empty catalogue is the same as no query', () =>
+  withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, fakeItemsFetch(base, []));
+    await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+
+    element('q').value = '   ';
+    await sandbox.loadItems();
+    assert.match(element('items').innerHTML, />The catalogue is empty\.</);
+    assert.doesNotMatch(element('items').innerHTML, /Nothing matches/);
+  }));
+
+test('REQ-CAT-6: a non-empty query that matches nothing still shows the no-results message, not the empty-catalogue one', () =>
+  withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, fakeItemsFetch(base, []));
+    await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+
+    element('q').value = 'mug';
+    await sandbox.loadItems();
+    assert.match(element('items').innerHTML, />Nothing matches “mug”\.</);
+    assert.doesNotMatch(element('items').innerHTML, /The catalogue is empty/);
+  }));
+
+test('REQ-CAT-12: the live region still announces zero items for an empty catalogue', () =>
+  withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, fakeItemsFetch(base, []));
+    await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+
+    assert.equal(element('summary').innerHTML, 'Showing 0 items.');
+  }));
+
+test('REQ-CAT-9: neither the empty-catalogue message nor the no-results message renders as a list item', () =>
+  withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, fakeItemsFetch(base, []));
+    await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+
+    for (const query of ['', 'mug']) {
+      element('q').value = query;
+      await sandbox.loadItems();
+      assert.doesNotMatch(element('items').innerHTML, /<li[\s>]/);
+      assert.match(element('items').innerHTML, /class="empty"/, 'an empty state is shown');
+    }
+  }));
+
 test('REQ-CAT-7: a second search outcome replaces the summary rather than appending to it', () =>
   withServer(async ({ base }) => {
     const script = await loadPageScript(base);

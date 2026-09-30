@@ -339,8 +339,8 @@ jobs:
         run: |
           # Stage everything the gate just verified — except the run's own scratch. (The
           # working tree IS what npm run verify passed; under-staging would ship a PR that
-          # differs from what was verified.)
-          git add -A -- . ':!work' ':!.adlc' ':!node_modules'
+          # differs from what was verified.) One rule for both drivers: scripts/stage-verified.mjs.
+          node "$ADLC/scripts/stage-verified.mjs"
           # -F, not -m: the citations are model output, so an over-long one would fail the commit
           # with E2BIG after a green build. A file has no argv limit. It also drops the leading
           # whitespace the old inline heredoc baked into every commit message.
