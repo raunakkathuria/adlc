@@ -321,3 +321,31 @@ test("verifier.yml checks the line's own tools in both shapes, before it reads t
   assert.match(steps[guard], /git status --porcelain -- prompts scripts local \.github/,
     'when adlc verifies adlc, the line lives in the tree itself');
 });
+
+// prompts/verify.md gives N/A for a behaviour the running app cannot be put in, as well as for docs
+// and chores. That only helps if the routing agrees: N/A goes on to quality, and only NO goes back.
+
+test('verifier.yml sends N/A on to quality, and only NO back to the Planner', () => {
+  const verifier = readFileSync(join(stationDir, 'verifier.yml'), 'utf8');
+  assert.match(verifier, /steps\.verdict\.outputs\.match == 'COMPLETE' && steps\.verdict\.outputs\.implemented != 'NO'/,
+    'COMPLETE with YES or N/A must reach quality');
+  assert.match(verifier, /steps\.verdict\.outputs\.match == 'MISMATCH' \|\| steps\.verdict\.outputs\.implemented == 'NO'/,
+    'only MISMATCH or NO goes back to the Planner');
+});
+
+test('verifier.yml tells the Gate 2 reader when the verifier did not observe the change', () => {
+  // N/A is not "seen working". Without a fixed line saying so, a person reading "passed to quality"
+  // at Gate 2 could take it for an observed result.
+  const post = readFileSync(join(stationDir, 'verifier.yml'), 'utf8').split(/^      - name: /m)
+    .find((s) => s.startsWith('Post the verdict on the implementation PR'));
+  assert.match(post, /IMPLEMENTED: \$\{\{ steps\.verdict\.outputs\.implemented \}\}/, 'the step needs the verdict it is reporting');
+  assert.match(post, /MATCH: \$\{\{ steps\.verdict\.outputs\.match \}\}/, 'and the SPEC-MATCH it is gated on');
+  // The banner text and the condition that guards it, as one stretch. Matching the pieces apart
+  // stayed green when the printf was deleted, when && became ||, and when MATCH was wired to
+  // implemented.
+  assert.match(
+    post,
+    /if \[ "\$MATCH" = "COMPLETE" \] && \[ "\$IMPLEMENTED" = "N\/A" \]; then[\s\S]*printf '> \*\*Not observed in the running app\.\*\*/,
+    'the Gate 2 banner must be that text, printed only on COMPLETE with N/A',
+  );
+});

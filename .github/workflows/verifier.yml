@@ -184,20 +184,28 @@ jobs:
             exit 1
           fi
 
-      # The trailers are the machine-readable verdict. Missing trailers fail closed: treated
-      # as MISMATCH with a note, because an agent that lost its output contract proved nothing.
-      # The one reader of them is scripts/verifier-verdict.mjs, where the rule is tested.
+      # The trailers are the machine-readable verdict. A missing SPEC-MATCH fails closed as
+      # MISMATCH; a SPEC-MATCH with no readable FEATURE-IMPLEMENTED fails closed as NO. An agent
+      # that lost its output contract proved nothing. The one reader is scripts/verifier-verdict.mjs.
       - name: Parse the verdict
         if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
         id: verdict
         run: node "$ADLC/scripts/verifier-verdict.mjs" work/verifier.md >> "$GITHUB_OUTPUT"
 
+      # N/A is not "seen working": it is docs, a chore, or a state the running app cannot be put in.
+      # Say so in a fixed line, so the person at Gate 2 does not read "passed" as "observed" — only
+      # when the work passes on: a report with no trailers gets N/A from the fail-closed default.
       - name: Post the verdict on the implementation PR
         if: steps.runner.outputs.on == 'true' && steps.links.outputs.ok == 'true'
         env:
           IMPL: ${{ steps.links.outputs.impl }}
+          MATCH: ${{ steps.verdict.outputs.match }}
+          IMPLEMENTED: ${{ steps.verdict.outputs.implemented }}
         run: |
           { printf '## Verifier — independent, spec-first\n\n'
+            if [ "$MATCH" = "COMPLETE" ] && [ "$IMPLEMENTED" = "N/A" ]; then
+              printf '> **Not observed in the running app.** The verifier gave `FEATURE-IMPLEMENTED: N/A` — its reason is in the report below.\n\n'
+            fi
             tail -c 60000 work/verifier.md
           } > work/verdict-comment.md
           gh pr comment "$IMPL" --body-file work/verdict-comment.md
