@@ -163,10 +163,10 @@ async function loadItems({ announce = true, query, seq } = {}) {
       <li class="card">
         <div class="grow">
           <div class="name">${escapeHtml(item.name)}</div>
-          <div class="meta">${escapeHtml(item.sku)} · ${money(item.price)} · ${escapeHtml(item.stock)} in stock</div>
+          <div class="meta">${escapeHtml(item.sku)} · ${money(item.price)} · <span id="stock-${escapeHtml(item.sku)}">${escapeHtml(item.stock)} in stock</span></div>
         </div>
         <input type="number" min="1" max="${Math.min(20, item.stock)}" value="1" id="qty-${escapeHtml(item.sku)}" aria-label="Quantity of ${escapeHtml(item.name)}">
-        <button data-sku="${escapeHtml(item.sku)}" aria-label="Order ${escapeHtml(item.name)}"${item.stock === 0 ? ' disabled' : ''}>Order</button>
+        <button data-sku="${escapeHtml(item.sku)}" aria-label="Order ${escapeHtml(item.name)}"${item.stock === 0 ? ` disabled aria-describedby="stock-${escapeHtml(item.sku)}"` : ''}>Order</button>
       </li>
     `).join('') + `</ul>`;
 
