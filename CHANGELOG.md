@@ -50,12 +50,17 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   took every line opening with a verdict word as a decision, so it saw two different verdicts and
   parked (run 36394430702). #112 made this reachable by letting a verdict wrapped in `**` count, and
   chose not to tighten the decision field, citing "APPROVE with nits — …" — a shape no real review
-  had produced. That reasoning was wrong: now a verdict word followed by another word is a
-  sentence, and is skipped. A lone verdict still reads whatever follows it — a dash, other
-  punctuation, an emoji, the end of the line — and a line naming both is still undecided.
+  had produced. That reasoning was wrong. Skipping only a verdict word followed by a letter left
+  the same sentence a verdict once a period or colon sat in between: "REQUEST CHANGES. Not
+  warranted — …" beside a real approval is two verdicts, and the build parks; the same line alone
+  opened a pull request. The field before the dash (`—`, `–`, or ` - `), with markdown removed,
+  must now be exactly `APPROVE`, `APPROVED`, or `REQUEST CHANGES`. A trailing mark on the word
+  alone (`APPROVE.`) still counts. Anything else there is prose and is skipped. A line naming
+  both is still undecided. A colon is not a dash, so it does not end the field.
   - On all 17 real reviews in this repo's history, 16 read the same and the one that parked now
-    reads `APPROVE`. The cost, which no real review has hit: a report whose only verdict line is a
-    sentence — "APPROVE with nits — …" — parks.
+    reads `APPROVE`. The cost, which no real review has hit: a report whose only verdict line is
+    not that shape — "APPROVE with nits — …", "APPROVE. No blocking findings.", "APPROVE ✅" —
+    parks.
   - `prompts/review.md` states that shape, and tells the reviewer not to begin any other line with
     either word. An echo of its wording is never an approval: the sentence opens with no verdict
     word, and a fragment of it names both at once, which is undecided. Both drivers check only

@@ -101,7 +101,7 @@ parks rather than opening a PR if the reviewer produces no verdict.
 ## A reviewer that indents a restatement of the options poisons its own verdict
 
 - **Ships now:** `scripts/review-verdict.mjs` reads the decision field — the text
-  before the first dash or colon — so a reason may freely discuss the other
+  before the first dash (`—`, `–`, or ` - `) — so a reason may freely discuss the other
   verdict. But a line that *begins* with a verdict and names both before the
   dash is read as undecided, and an **indented** restatement such as
   `    APPROVE or REQUEST CHANGES — the required shape` does begin with one.
