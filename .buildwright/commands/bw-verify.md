@@ -1,14 +1,16 @@
 ---
 name: bw-verify
-version: 0.0.19
-description: Run quick quality checks (typecheck, lint, test, build). For full checks including security and AI review, use /bw-ship.
+description: Run the project's typecheck, lint, test, and build gates. Use for quick validation before review or shipping.
+metadata:
+  author: raunakkathuria
+  version: "0.0.21"
 ---
 
 Running quick verification...
 
 ## 1. Discover Project Commands
 
-Follow the Tech Discovery Protocol (see Command Discovery in CLAUDE.md):
+Follow the Command Discovery protocol in AGENTS.md:
 
 1. Read `.buildwright/steering/tech.md` if it exists — if "Project Commands" has real commands, use them.
 2. Otherwise auto-detect from project files: `package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `Makefile`, etc.

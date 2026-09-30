@@ -27,6 +27,130 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **The verifier could never pass a behaviour the running app cannot reach.** #108's fix is the
+  page's message for an empty catalogue, and the verifier drives the running app, which starts with
+  three seeded items and has no way to remove one. `prompts/verify.md` allowed `FEATURE-IMPLEMENTED:
+  YES` only for behaviour observed there and `N/A` only for docs and chores, so the verifier said
+  `NO` (PR #117; the same report also found a real gap, a whitespace-only query, which the Planner
+  has since specified). `NO` goes back to the Planner, and no revision of that spec can make the
+  state reachable. `N/A` now also covers a behaviour that exists only in a state the running app
+  cannot be put in. The verifier must establish that from the spec and the API, not from a comment
+  in the change; every scenario for the state must be pinned by a test; and every reachable part of
+  the change must still be driven. It is never for behaviour the verifier could have driven.
+  - Two deterministic guards come with it. A report that gives `SPEC-MATCH` but no
+    `FEATURE-IMPLEMENTED` used to default to `N/A` and pass; it now reads as `NO`, and says so. A
+    reason after the value (`FEATURE-IMPLEMENTED: N/A — …`) still reads as that value, so arguing
+    the `N/A` on the trailer line does not send the work back. And when the verdict is `N/A`, the
+    comment on the implementation PR opens with a fixed line saying the change was not observed in
+    the running app, so Gate 2 does not read "passed" as "seen".
+  - A test pins the routing all of this relies on: `N/A` goes on to quality, only `NO` goes back.
+
+- **A second green build parked because one sentence opened with a verdict word.** #108's reviewer
+  approved, and began its report with "**REQUEST CHANGES is not warranted — …**". The review reader
+  took every line opening with a verdict word as a decision, so it saw two different verdicts and
+  parked (run 36394430702). #112 made this reachable by letting a verdict wrapped in `**` count, and
+  chose not to tighten the decision field, citing "APPROVE with nits — …" — a shape no real review
+  had produced. That reasoning was wrong. Skipping only a verdict word followed by a letter left
+  the same sentence a verdict once a period or colon sat in between: "REQUEST CHANGES. Not
+  warranted — …" beside a real approval is two verdicts, and the build parks; the same line alone
+  opened a pull request. The field before the dash (`—`, `–`, or ` - `), with markdown removed,
+  must now be exactly `APPROVE`, `APPROVED`, or `REQUEST CHANGES`. A trailing mark on the word
+  alone (`APPROVE.`) still counts. Anything else there is prose and is skipped. A line naming
+  both is still undecided. A colon is not a dash, so it does not end the field.
+  - On all 17 real reviews in this repo's history, 16 read the same and the one that parked now
+    reads `APPROVE`. The cost, which no real review has hit: a report whose only verdict line is
+    not that shape — "APPROVE with nits — …", "APPROVE. No blocking findings.", "APPROVE ✅" —
+    parks.
+  - `prompts/review.md` states that shape, and tells the reviewer not to begin any other line with
+    either word. An echo of its wording is never an approval: the sentence opens with no verdict
+    word, and a fragment of it names both at once, which is undecided. Both drivers check only
+    that a verdict exists, so nothing else routes on it.
+
+- **Neither driver could open an implementation PR once `work/` was ignored.** Both staged with
+  `git add -A -- . ':!work' …`, and git refuses a pathspec that names an ignored path: exit 1,
+  "The following paths are ignored by one of your .gitignore files". `.gitignore` began listing
+  `work/` on 09-16 (4b423f8); the first CI build to reach the step, #108's, had a green gate and an
+  approving review and opened nothing (run 36384259133). The same failure met any adopter whose
+  ignored `node_modules/` exists.
+  - One rule now, `scripts/stage-verified.mjs`, called by `build.yml` and `local/build.mjs`: add
+    everything, then reset `work`, `.adlc` and `node_modules`. The two inline copies had drifted
+    (only CI left out `.adlc`). Tested against real git, in this repo's shape and an adopter's.
+  - `.gitignore` anchors it to `/work/`. Unanchored, it also ignored any product folder named
+    `work`, which neither driver would ever have committed.
+
+- **A script started through a symlink did nothing, and exited 0.** Eleven files decided they
+  were the script node had started by comparing `import.meta.url` (the real path) with
+  `file://${process.argv[1]}` (the path as given). Through a symlink — macOS's `/tmp` and `/var` are
+  both one — the two differ: `req-coverage` then reported success without checking coverage, and
+  `review-verdict` passed an empty review. A folder whose name holds `#` or `%` did the same, even
+  started directly. No caller in the line started a script that way yet. All eleven now call
+  `scripts/is-main.mjs`, which compares the real paths of both sides — `--preserve-symlinks-main`
+  keeps the symlink as the module's URL — and a test starts the gate's scripts through a symlink.
+
+- **The findings and citation readers dropped a bold line, silently.** A bold
+  `**OUT-OF-SCOPE-FINDINGS:** […]` filed nothing, and a bold `**Red:** …` left the commit without
+  its proof of red. #112 fixed the same flaw in the two verdict readers; these two now take the
+  model's formatting off with one shared function, `unwrap` in `scripts/marker-line.mjs`. It
+  removes markdown only at the edges of the line and around the marker's colon, never in the
+  payload.
+  - `scripts/file-findings.mjs` reads the last line with findings, then the last line that did not
+    parse (so a broken line still warns), then the last empty one. A quoted `[]`, a bold label or a
+    prose mention cannot take the real line's place. Its one rule for what a finding is,
+    `payloadOf`, is shared by the CLI: an object with a title and a body, never the prompts'
+    `"title":"..."` placeholder; anything but an array of objects does not parse — `[null]` used to
+    crash the CLI.
+  - Trade-off: a quoted line that parses as findings is filed when it comes after the real line, or
+    anywhere in a run whose real answer is `[]`. A steered model could print the line itself anyway.
+  - `test/model-lines.test.js` feeds every line a station's report hands back to a script, in five
+    formats, to its reader and requires one answer. Triage's inline JSON is not in it (#106).
+  - Plain lines read as before: old and new agree on this repo's real history, 582 of 582.
+
+- **A correct approval parked a green build, because it was in bold.** The reviewer of #108's build
+  wrote `**APPROVE** — …`, and `scripts/review-verdict.mjs` anchors on the start of the line, so it
+  read no verdict and parked (run 36370074384). The review prompt shows the line in backticks, which
+  failed the same way. Both readers of a model's verdict now treat markdown as formatting, like the
+  indent: the review verdict, and the verifier's `SPEC-MATCH` / `FEATURE-IMPLEMENTED` trailers,
+  where the same miss would fail closed and send sound work back to the Planner.
+  - The verifier's reader moved out of `verifier.yml`, unchanged first, into
+    `scripts/verifier-verdict.mjs`. It routed every implementation and no test covered it. A
+    shared-rules row now stops a second inline copy.
+  - **It reads the last trailer now, not the first** — the prompt asks for them as the report's last
+    two lines, and `design.md` had this down as a known gap. Once markdown counted, the first-match
+    rule would have let a quoted `` `SPEC-MATCH: COMPLETE` `` beat an honest final MISMATCH and send
+    drifted work on to quality. Both independent reviewers of this change caught it before it shipped.
+  - `verifier.yml`'s "own tools untouched" guard ran only for adopters, the gap `build.yml`'s guard
+    had first. Its verdict reader is now a script in the tree the verifier agent worked in, so it
+    guards both shapes, before the verdict is read.
+  - **The same run lost the reviewer's findings.** Only the agent's final message is kept, and that
+    message held just the verdict line — "the one finding above" pointed at nothing. Earlier
+    reviews carried 14–22 lines. `prompts/review.md` now says the final message is the whole report.
+
+- **The spec station stranded #110 for three days, and asked its Planner for what it could not
+  see.** The Planner took `REQ-CAT-12`, which PR #109's delta already held, and `req-ids` refused
+  it. The guard was right; two things around it were not.
+  - **The Planner was told to check a directory that is empty in CI.** `prompts/spec.md` said the
+    other deltas are in `openspec/changes/`. In CI they live on their own `spec/*` branches, which
+    `spec.yml` fetched only after the draft, and the Planner's allowlist has no git. So the only
+    thing that knew about the clash was the guard, after the work was done. The station now fetches
+    the spec branches and writes `req-ids` output to `work/ids-in-flight.txt` before the Planner
+    runs, and names that file to it. The prompt says where the claims are and how to produce the
+    listing by hand. The guard stays, and fetches again, because a model is not a guard.
+  - **A failed step parked nothing.** The issue kept `state:spec-draft` with no `needs-human` and no
+    comment, so the dashboard said the Planner was still drafting while nothing ran. One boundary
+    step now parks any failure after the issue is claimed. It links the run, quotes the guards'
+    output when they refused the delta, and says how to re-run. The no-delta path keeps its own,
+    more specific park, and the boundary stands down only once that park has completed. Both
+    agent steps get their own timeout (the Planner 25 minutes, the spec review 8): a hang that
+    reached the job's 40 would be a cancel, which `failure()` does not see.
+  - **The park runs runner binaries only, never the line's scripts.** One failure it catches is the
+    guard finding that the Planner rewrote `.adlc/`. The first draft parked with
+    `labels.mjs add`, which in that case runs the Planner's code with the job's write token. An
+    independent security review caught it before it shipped; a test now refuses `$ADLC` in the step.
+  - **The same review found an older gap of the same shape.** When adlc builds adlc, "Validate the
+    delta" ran `scripts/req-ids.mjs` before the stray-file check — the only thing that proves
+    `scripts/` untouched — so a rewritten `req-ids.mjs` would have run. Both tamper checks now come
+    first.
+
 - **`build.yml`'s "line's own tools must be untouched" guard never ran when adlc built adlc.** The
   step was gated on `env.ADLC == '.adlc'`, and `.adlc` is only checked out for an adopter repo — so
   on this repo the guard was skipped entirely and nothing stopped an Executor rewriting a station
