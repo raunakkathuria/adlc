@@ -333,6 +333,23 @@ test('verifier.yml sends N/A on to quality, and only NO back to the Planner', ()
     'only MISMATCH or NO goes back to the Planner');
 });
 
+test('quality explore does not schedule itself or start intake', () => {
+  // A nightly explore filed findings and dispatched intake, so each morning's quality run
+  // opened a new line of work. Explore stays available on demand. It must not be on a timer,
+  // and a finding with no source issue must not be handed to intake.
+  const station = readFileSync(join(stationDir, 'quality.yml'), 'utf8');
+  const caller = readFileSync(join(callerDir, 'quality.yml'), 'utf8');
+  assert.doesNotMatch(station, /^\s*schedule:/m, 'the station must not run on a schedule');
+  assert.doesNotMatch(caller, /^\s*schedule:/m, 'an adopting caller must not run it on a schedule either');
+  const file = station.split(/^      - name: /m).find((s) => s.startsWith('File the out-of-scope findings'));
+  assert.ok(file, 'explore still files what it found');
+  assert.match(
+    file,
+    /if \[ -n "\$ISSUE" \]; then[\s\S]*gh workflow run intake\.yml/,
+    'intake is dispatched only for a finding that came from a source issue',
+  );
+});
+
 test('verifier.yml tells the Gate 2 reader when the verifier did not observe the change', () => {
   // N/A is not "seen working". Without a fixed line saying so, a person reading "passed to quality"
   // at Gate 2 could take it for an observed result.
