@@ -2,7 +2,7 @@
 
 ### Requirement: REQ-ORD-7 — order outcome is announced to assistive technology
 
-The page's order-outcome region SHALL be exposed as an ARIA live region (for example, `role="status"` or an equivalent `aria-live` announcement), so that assistive technology announces its content automatically whenever it changes, without the user needing to move focus to it. A successful order's confirmation message SHALL echo the ordered item's name alongside its `sku`, `qty`, and `total` — the same `{name} ({sku})` grouping the order history already uses (`REQ-ORD-10`) — so a shopper who does not recognize a SKU can still tell what they ordered without leaving the confirmation. Both that name and that SKU SHALL be inert text: no part of either SHALL be interpreted as markup, inserted as a page element, or run as script — the same guarantee already required for the search query (`REQ-CAT-6`), for the item card's own display of that name and SKU (`REQ-CAT-10`), for the Order button's accessible name and `data-sku` attribute (`REQ-ORD-8`), and for the order-history entry (`REQ-ORD-10`). Once shown, a confirmation or a rejection SHALL NOT outlive the search it was placed beside. When the trimmed search query changes, the region SHALL be emptied of that message, so a stale order result is never read as current beside results it has nothing to do with. The trim is the one the page already applies before searching. A change that leaves the trimmed query the same — typing or deleting only whitespace — is not a change, and the message stays. A not-sent message (`REQ-ORD-11`) is not cleared by a search change: emptying it would leave the shopper with no sign the order may not exist, and the order history cannot record an order that never arrived. This is the same notion of a search as `REQ-CAT-7` — a change to the query the shopper types — and not the listing refresh an order itself triggers, nor the catalogue's retry of the same query. Both of those SHALL leave the outcome in place. Emptying the region writes no text into it; the region's text content is empty. The query an order was placed under is the trimmed text of the search field at the moment the Order button is operated, not the query of the results still on screen. A confirmation or a rejection that arrives when the trimmed field differs from that value is not written into the region, because it would sit beside a different search. The scenarios below that write a confirmation or a rejection into the live region apply only when the trimmed field at arrival still holds that value. What counts is the comparison at the moment of arrival: if the shopper changed the query and changed it back while the order was in flight, the field matches again, and the outcome is shown as usual. A withheld confirmation or rejection never replaces a not-sent message already showing. Withholding a late rejection is a decided cost: the history does not record a rejection, so the shopper is not told, and that is accepted so a rejection for one search is not read as current beside another. The item-list refresh for the superseded query is still discarded (`REQ-CAT-8`), so the cards may still show the stock from before the order until the next search. The order history list is reloaded anyway, and a successful order appears there. A not-sent message that arrives after the query changed is written in and announced. It stays across later search changes until another order outcome replaces it.
+The page's order-outcome region SHALL be exposed as an ARIA live region (for example, `role="status"` or an equivalent `aria-live` announcement), so that assistive technology announces its content automatically whenever it changes, without the user needing to move focus to it. A successful order's confirmation message SHALL echo the ordered item's name alongside its `sku`, `qty`, and `total` — the same `{name} ({sku})` grouping the order history already uses (`REQ-ORD-10`) — so a shopper who does not recognize a SKU can still tell what they ordered without leaving the confirmation. Both that name and that SKU SHALL be inert text: no part of either SHALL be interpreted as markup, inserted as a page element, or run as script — the same guarantee already required for the search query (`REQ-CAT-6`), for the item card's own display of that name and SKU (`REQ-CAT-10`), for the Order button's accessible name and `data-sku` attribute (`REQ-ORD-8`), and for the order-history entry (`REQ-ORD-10`). Once shown, a confirmation or a rejection SHALL NOT outlive the search it was placed beside. When the trimmed search query changes, the region SHALL be emptied of that message, so a stale order result is never read as current beside results it has nothing to do with. The trim is the one the page already applies before searching. A change that leaves the trimmed query the same — typing or deleting only whitespace — is not a change, and the message stays. A not-sent message (`REQ-ORD-11`) is not cleared by a search change: emptying it would leave the shopper with no sign the order may not exist, and the order history cannot record an order that never arrived. This is the same notion of a search as `REQ-CAT-7` — a change to the query the shopper types — and not the listing refresh an order itself triggers, nor the catalogue's retry of the same query, nor a change to the maximum price (`REQ-CAT-13`). All three of those SHALL leave a showing outcome in place, and a maximum-price change SHALL NOT withhold an outcome that arrives while the trimmed search field is unchanged. Emptying the region writes no text into it; the region's text content is empty. The query an order was placed under is the trimmed text of the search field at the moment the Order button is operated, not the query of the results still on screen. A confirmation or a rejection that arrives when the trimmed field differs from that value is not written into the region, because it would sit beside a different search. The scenarios below that write a confirmation or a rejection into the live region apply only when the trimmed field at arrival still holds that value. What counts is the comparison at the moment of arrival: if the shopper changed the query and changed it back while the order was in flight, the field matches again, and the outcome is shown as usual. Each order is compared with the trimmed field captured at its own click. An outcome that matches is written into the region and replaces whatever that region holds. A withheld confirmation or rejection never replaces a not-sent message already showing. A withheld rejection records nothing (`REQ-ORD-4`): the history list is reloaded and does not gain an entry for it. A withheld confirmation's order does appear in that reloaded list. The item-list refresh for the superseded query is discarded (`REQ-CAT-8`), so the cards stay as they were until a later search. A not-sent message that arrives after the query changed is written in and announced. It stays across later search changes until another order outcome replaces it.
 
 #### Scenario: success is announced
 
@@ -82,13 +82,21 @@ The page's order-outcome region SHALL be exposed as an ARIA live region (for exa
 - **WHEN** the page has just loaded and performs its automatic search with an empty query, and no order has been placed
 - **THEN** the live region is unchanged, still present in the page's markup and empty
 
-#### Scenario: a confirmation or rejection that arrives after the query changed is not shown
+#### Scenario: a confirmation that arrives after the query changed is not shown
 
-- **WHEN** an order is placed, the shopper changes the trimmed search query while that order is still in flight, and a confirmation or a rejection then arrives
-- **THEN** that confirmation or rejection is not written into the live region
+- **WHEN** an order is placed, the shopper changes the trimmed search query while that order is still in flight, and a confirmation then arrives
+- **THEN** that confirmation is not written into the live region
 - **AND** the region's text stays as the clearing left it
 - **AND** the order history list is reloaded and shows that order
-- **AND** the item-list refresh for the superseded query is discarded (`REQ-CAT-8`), so the cards may still show the stock from before the order
+- **AND** the item-list refresh for the superseded query is discarded (`REQ-CAT-8`), so the cards stay as they were
+
+#### Scenario: a rejection that arrives after the query changed is not shown
+
+- **WHEN** an order is placed, the shopper changes the trimmed search query while that order is still in flight, and a rejection then arrives
+- **THEN** that rejection is not written into the live region
+- **AND** the region's text stays as the clearing left it
+- **AND** the order history list is reloaded and does not gain an entry for that rejection (`REQ-ORD-4`)
+- **AND** the cards stay as they were
 
 #### Scenario: a query that changed and changed back does not withhold the outcome
 
@@ -108,8 +116,23 @@ The page's order-outcome region SHALL be exposed as an ARIA live region (for exa
 
 #### Scenario: the query is the field at the click, not the results still showing
 
-- **WHEN** the search field has been changed to `mugs`, that search has not yet returned, the cards still show the previous results, and the shopper operates an Order button
-- **THEN** the query that order was placed under is the trimmed field value `mugs`
+- **WHEN** the search field has been changed to `mugs`, that search has not yet returned, the cards still show the previous results, the shopper operates an Order button, and the trimmed field still says `mugs` when the confirmation arrives
+- **THEN** the confirmation is written into the live region
+
+#### Scenario: changing the maximum price does not clear a showing outcome
+
+- **WHEN** a confirmation or a rejection is shown and the shopper changes the maximum price without changing the trimmed search field
+- **THEN** that outcome stays in the live region
+
+#### Scenario: changing the maximum price does not withhold an in-flight outcome
+
+- **WHEN** an order is in flight, the shopper changes the maximum price without changing the trimmed search field, and a confirmation then arrives
+- **THEN** the confirmation is written into the live region
+
+#### Scenario: a matching late outcome replaces whatever the region holds
+
+- **WHEN** one order is placed under `mug`, the shopper changes the trimmed field to `book` and places a second order whose confirmation is shown, then changes the field back to `mug` before the first confirmation arrives
+- **THEN** the first confirmation is written into the live region and replaces the second
 
 #### Scenario: a not-sent message survives further searches
 
