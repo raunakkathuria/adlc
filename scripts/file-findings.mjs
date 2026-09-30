@@ -14,10 +14,10 @@
 //
 //   node scripts/file-findings.mjs <report-file> <parent-issue>
 //
-// Pass `-` as <parent-issue> for a run with no source issue (the nightly explore): findings
-// file at depth 1 with no origin link. Every filed-or-reopened issue prints as
-// "Filed <url>" so the workflow can dispatch intake for it (bot-created events start no
-// workflows on their own).
+// Pass `-` as <parent-issue> for an explore with no source issue. Those print as
+// "Parked <url>" and are labelled needs-human: the workflow dispatches intake only for
+// "Filed", and bot-created events start no workflows on their own. A finding from a
+// source issue still prints "Filed <url>".
 //
 // Needs `gh` and GH_TOKEN. Filing is advisory: a failure to file one finding warns and
 // continues — the report that produced it is already posted.
@@ -47,6 +47,16 @@ export function payloadOf(line) {
   }
   const text = (v) => typeof v === 'string' && v.trim() !== '';
   return findings.filter((f) => text(f.title) && text(f.body) && f.title !== '...');
+}
+
+/**
+ * What the workflow should do with a filed issue. `Filed` is the word quality.yml greps for
+ * before it dispatches intake. An explore has no parent issue (`-`): it is parked, and that
+ * word does not match, so a scheduled or manual look at the whole product cannot open a line
+ * of work on its own. A finding that came from a source issue still says `Filed`.
+ */
+export function reportVerb(parentIssue) {
+  return parentIssue === '-' ? 'Parked' : 'Filed';
 }
 
 // What a candidate line holds, by that same parse.
@@ -111,7 +121,7 @@ if (isMain) {
     const links = parseLinks([parent.body ?? '', ...issueCommentBodies(parentIssue)].join('\n'));
     depth = Number(links.depth ?? 0) + 1;
   }
-  const foundBy = parentUrl ? `while working ${parentUrl}` : 'on a scheduled exploration of the default branch';
+  const foundBy = parentUrl ? `while working ${parentUrl}` : 'on an exploration of the default branch';
 
   const sameTitle = (list, title) => list.find((i) => i.title.trim().toLowerCase() === title.trim().toLowerCase());
 
@@ -127,14 +137,18 @@ if (isMain) {
       const closed = JSON.parse(gh('issue', 'list', '--state', 'closed', '--label', 'resolution:not-reproducible', '--search', JSON.stringify(title), '--json', 'number,title,url'));
       const recurrence = sameTitle(closed, title);
       if (recurrence) {
-        gh('issue', 'reopen', String(recurrence.number), '--comment', `Reopened: seen again ${foundBy} after being closed as not reproducible — a recurrence is evidence.\n\n${body}`);
-        console.log(`Filed ${recurrence.url}`);
+        const reopen = ['issue', 'reopen', String(recurrence.number), '--comment', `Reopened: seen again ${foundBy} after being closed as not reproducible — a recurrence is evidence.\n\n${body}`];
+        gh(...reopen);
+        if (parentIssue === '-') gh('issue', 'edit', String(recurrence.number), '--add-label', 'needs-human');
+        console.log(`${reportVerb(parentIssue)} ${recurrence.url}`);
         continue;
       }
       const trailer = renderLinks(parentUrl ? { origin_issue: parentUrl, depth: String(depth) } : { depth: String(depth) });
       const issueBody = `${body}\n\nFound by the line ${foundBy}.\n\n${trailer}`;
-      const url = gh('issue', 'create', '--title', title, '--body', issueBody, '--label', 'origin:adlc').trim();
-      console.log(`Filed ${url}`);
+      const create = ['issue', 'create', '--title', title, '--body', issueBody, '--label', 'origin:adlc'];
+      if (parentIssue === '-') create.push('--label', 'needs-human');
+      const url = gh(...create).trim();
+      console.log(`${reportVerb(parentIssue)} ${url}`);
     } catch (err) {
       console.warn(`Could not file "${title}": ${err.message} — continuing.`);
     }
