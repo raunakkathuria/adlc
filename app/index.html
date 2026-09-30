@@ -121,7 +121,12 @@ function onRetry(id) {
   el(id)?.addEventListener('click', () => { loadItems(); loadOrders(); });
 }
 
-function note(message, kind) {
+// A not-sent message is the only sign the order may not exist (REQ-ORD-11), so a new search
+// leaves it alone; every other outcome is cleared when the trimmed query changes (REQ-ORD-7).
+let notSentShowing = false;
+
+function note(message, kind, { notSent = false } = {}) {
+  notSentShowing = notSent;
   el('note').innerHTML = message ? `<p class="note ${kind}">${message}</p>` : '';
 }
 
@@ -236,6 +241,7 @@ async function loadOrders() {
 
 async function order(sku) {
   const query = el('q').value;
+  const placedUnder = query.trim();
   const seq = nextRequestSeq(); // reserve the refresh's place in line right away, not once it fires
   const qty = Number(el('qty-' + sku).value);
   const { ok, status, body } = await api('/orders', {
@@ -244,8 +250,12 @@ async function order(sku) {
     body: JSON.stringify({ sku, qty }),
   });
 
+  // An outcome for a different search than the one it now sits beside is not shown; a not-sent
+  // message is, because nothing else tells the shopper the order may not exist.
   if (!ok) {
-    note(ORDER_FAILED, 'bad');
+    note(ORDER_FAILED, 'bad', { notSent: true });
+  } else if (el('q').value.trim() !== placedUnder) {
+    // withheld: the order is in the history, the region stays as the clearing left it
   } else if (status === 201) {
     note(`Order #${escapeHtml(body.id)} placed — ${escapeHtml(body.qty)} × ${escapeHtml(body.name)} (${escapeHtml(body.sku)}) for ${money(body.total)}.`, 'good');
   } else {
@@ -257,7 +267,16 @@ async function order(sku) {
   await loadOrders();
 }
 
-el('q').addEventListener('input', () => loadItems());
+let appliedQuery = '';
+
+el('q').addEventListener('input', () => {
+  const trimmed = el('q').value.trim();
+  if (trimmed !== appliedQuery) {
+    appliedQuery = trimmed;
+    if (!notSentShowing) note('');
+  }
+  return loadItems();
+});
 
 // Refusing issues no request, so a response already in flight is still the latest and is shown;
 // showing it never touches the message here, which only a change of the field clears.
