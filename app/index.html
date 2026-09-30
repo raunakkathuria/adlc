@@ -154,7 +154,10 @@ async function loadItems({ announce = true, query, seq } = {}) {
   }
 
   if (items.length === 0) {
-    el('items').innerHTML = `<p class="empty">Nothing matches “${escapeHtml(q)}”.</p>`;
+    // No query means nothing narrowed the list, so the catalogue itself is empty (REQ-CAT-12).
+    el('items').innerHTML = q
+      ? `<p class="empty">Nothing matches “${escapeHtml(q)}”.</p>`
+      : `<p class="empty">The catalogue is empty.</p>`;
   } else {
     el('items').innerHTML = `<ul class="cards" role="list">` + items.map((item) => `
       <li class="card">
