@@ -123,6 +123,11 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
       element('q').value = query;
       await sandbox.loadItems();
     },
+    // the shopper typing: sets the box and fires the page's own input listener
+    type: async (query) => {
+      element('q').value = query;
+      await element('q').listeners.input();
+    },
     getElementById: element,
   };
 }
@@ -877,3 +882,218 @@ test('REQ-ORD-11: a history reply that parses but is not a list is a failure too
     assert.match(page.getElementById('orders').innerHTML, /could not load your orders/i);
   });
 });
+
+// REQ-ORD-7 — an order's confirmation or rejection does not outlive the search it was placed beside.
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+/** A POST /api/orders that waits for `release()`, then answers as the real server would. */
+function heldOrderFetch(base) {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const fetchImpl = async (path, options) => {
+    if (path === '/api/orders' && options?.method === 'POST') await gate;
+    return fetch(base + path, options);
+  };
+  return { fetch: fetchImpl, release: () => release() };
+}
+
+/** A POST that never reaches the server: it fails once released. */
+function heldUnsentFetch(base) {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const fetchImpl = async (path, options) => {
+    if (path === '/api/orders' && options?.method === 'POST') {
+      await gate;
+      throw new TypeError('Failed to fetch');
+    }
+    return fetch(base + path, options);
+  };
+  return { fetch: fetchImpl, release: () => release() };
+}
+
+/** Items requests can be frozen, so the test can look at the page while a search is pending. */
+function freezableItemsFetch(base) {
+  const state = { frozen: false, waiting: [] };
+  const fetchImpl = async (path, options) => {
+    if (state.frozen && path.startsWith('/api/items')) await new Promise((r) => state.waiting.push(r));
+    return fetch(base + path, options);
+  };
+  return { fetch: fetchImpl, state, thaw: () => { state.frozen = false; state.waiting.splice(0).forEach((r) => r()); } };
+}
+
+test("REQ-ORD-7: changing the search clears an order's confirmation, before the new results arrive", () =>
+  withServer(async ({ base }) => {
+    const items = freezableItemsFetch(base);
+    const page = await loadClientPage(base, { fetch: items.fetch });
+    await page.order('MUG-1', 2);
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+
+    items.state.frozen = true;
+    const typing = page.type('book');
+    await flush();
+    assert.equal(page.noteHtml(), '', 'emptied while the items request is still pending');
+    items.thaw();
+    await typing;
+    assert.equal(page.noteHtml(), '');
+  }));
+
+test("REQ-ORD-7: changing the search clears an order's rejection", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 21);
+    assert.match(page.noteHtml(), /Rejected/);
+    await page.type('book');
+    assert.equal(page.noteHtml(), '');
+  }));
+
+test('REQ-ORD-7: changing the search does not clear a not-sent message', () =>
+  withServer(async ({ base }) => {
+    let live = true;
+    const page = await loadClientPage(base, {
+      fetch: (path, options) => (live || path === '/' ? fetch(base + path, options) : Promise.reject(new TypeError('Failed to fetch'))),
+    });
+    live = false;
+    await page.order('MUG-1', 1);
+    assert.match(page.noteHtml(), /was not sent/i);
+    await page.type('book');
+    assert.match(page.noteHtml(), /was not sent/i);
+  }));
+
+test('REQ-ORD-7: whitespace that leaves the trimmed query unchanged does not clear the message', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.type('mug');
+    await page.order('MUG-1', 2);
+    await page.type('mug  ');
+    await page.type(' mug');
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+  }));
+
+test("REQ-ORD-7: the order's own refresh does not clear its outcome", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.type('mug');
+    await page.order('MUG-1', 2);
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+    await page.order('MUG-1', 21);
+    assert.match(page.noteHtml(), /Rejected/);
+  }));
+
+test('REQ-ORD-7: retrying the catalogue load does not clear the outcome', () =>
+  withServer(async ({ base }) => {
+    let itemsDown = false;
+    const page = await loadClientPage(base, {
+      fetch: (path, options) =>
+        itemsDown && path.startsWith('/api/items') ? Promise.reject(new TypeError('Failed to fetch')) : fetch(base + path, options),
+    });
+    await page.order('MUG-1', 2);
+    itemsDown = true;
+    await page.search('');
+    assert.match(page.getElementById('items').innerHTML, /Could not load the catalogue/);
+    itemsDown = false;
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+    await page.getElementById('retry-items').click();
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+  }));
+
+test("REQ-ORD-7: the page's first automatic search leaves the region empty", () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    assert.match(page.noteMarkup, LIVE_REGION);
+    assert.equal(page.noteHtml(), '');
+  }));
+
+test('REQ-ORD-7: a confirmation that arrives after the query changed is not shown, and the order is still recorded', () =>
+  withServer(async ({ base }) => {
+    const held = heldOrderFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    await page.type('mug');
+    const ordering = page.order('MUG-1', 2);
+    await flush();
+    await page.type('book');
+    held.release();
+    await ordering;
+    assert.equal(page.noteHtml(), '');
+    assert.match(page.getElementById('orders').innerHTML, /2 × Enamel Mug \(MUG-1\)/);
+    assert.match(page.itemsHtml(), /BOOK-1/, 'the superseded refresh did not overwrite the book results');
+    assert.doesNotMatch(page.itemsHtml(), /MUG-1/);
+  }));
+
+test('REQ-ORD-7: a rejection that arrives after the query changed is not shown', () =>
+  withServer(async ({ base }) => {
+    const held = heldOrderFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    await page.type('mug');
+    const ordering = page.order('MUG-1', 21);
+    await flush();
+    await page.type('book');
+    held.release();
+    await ordering;
+    assert.equal(page.noteHtml(), '');
+  }));
+
+test('REQ-ORD-7: a query that changed and changed back does not withhold the outcome', () =>
+  withServer(async ({ base }) => {
+    const held = heldOrderFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    await page.type('mug');
+    const ordering = page.order('MUG-1', 2);
+    await flush();
+    await page.type('book');
+    await page.type('mug');
+    held.release();
+    await ordering;
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+  }));
+
+test('REQ-ORD-7: a withheld outcome does not replace a not-sent message', () =>
+  withServer(async ({ base }) => {
+    let unsent = true;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const page = await loadClientPage(base, {
+      fetch: async (path, options) => {
+        if (path === '/api/orders' && options?.method === 'POST') {
+          if (unsent) throw new TypeError('Failed to fetch');
+          await gate;
+        }
+        return fetch(base + path, options);
+      },
+    });
+    await page.order('MUG-1', 1);
+    assert.match(page.noteHtml(), /was not sent/i);
+
+    unsent = false;
+    const ordering = page.order('MUG-1', 2);
+    await flush();
+    await page.type('book');
+    release();
+    await ordering;
+    assert.match(page.noteHtml(), /was not sent/i);
+  }));
+
+test('REQ-ORD-7: a not-sent message that arrives after the query changed is shown, and a later search does not clear it', () =>
+  withServer(async ({ base }) => {
+    const held = heldUnsentFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    await page.type('mug');
+    const ordering = page.order('MUG-1', 1);
+    await flush();
+    await page.type('book');
+    held.release();
+    await ordering;
+    assert.match(page.noteHtml(), /was not sent/i);
+    await page.type('cup');
+    assert.match(page.noteHtml(), /was not sent/i);
+  }));
+
+test('REQ-ORD-7: a later order after a clear is announced normally', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 2);
+    await page.type('book');
+    assert.equal(page.noteHtml(), '');
+    await page.order('BOOK-1', 1);
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+  }));
