@@ -7,7 +7,7 @@ The catalogue page SHALL carry a **maximum price** field with its own accessible
 After trimming, the field is in exactly one of three states:
 
 - **A price.** One or more digits, optionally followed by a `.` and one or two digits (`10`, `10.5`, `10.50`, `0`, `0.29`), or a `.` followed by one or two digits (`.5`, `.50`). Leading zeros are decimal, not another base (`010` is ten pounds). The page converts that amount to cents from its digits — whole pounds times 100, plus the pence — and narrows the list as `GET /api/items?max_price={cents}` does (`REQ-CAT-4`). At most 13 digits may stand before the decimal point. `0` is a ceiling of zero cents.
-- **Incomplete.** A lone `.`, or one or more digits followed by a `.` with nothing after it (`10.`). The shopper is still typing. The page SHALL NOT announce an error, SHALL NOT mark the field invalid, and SHALL NOT send a request. The list and the summary stay as they were.
+- **Incomplete.** A lone `.`, or one or more digits followed by a `.` with nothing after it (`10.`). The shopper is still typing. The page SHALL NOT announce an error, SHALL NOT mark the field invalid, and SHALL NOT send a request. The list and the summary stay as they were. While the field is incomplete, a search-box change, the refresh after an order (`REQ-ORD-1`), and the load-failure retry (`REQ-CAT-11`) still request the list, and those requests carry the **last applied ceiling** — the ceiling (or none) that the page's most recent request for the item list carried. An incomplete field therefore changes nothing until it becomes a price, empty, or refused.
 - **Refused.** Anything else, including a leading `-` or `+`, scientific notation, a third decimal place, a currency symbol, a thousands separator, or 14 or more digits before the decimal point. The page SHALL show the exact message `Enter a maximum price such as 10 or 10.50.` in an element next to the field, announce that same sentence through the search-results live region (`REQ-CAT-7`), set `aria-invalid="true"` on the field, and point `aria-describedby` at the element that shows the message. No request is sent. The items on display stay as they were. A response already in flight for the item list is discarded on arrival, as `REQ-CAT-8` discards a superseded response, so it cannot redraw the list or clear the refusal. The field is never silently treated as no ceiling.
 
 The message next to the field is not the live region. A later announcement may replace the live region's text; it SHALL NOT remove the message or the `aria-invalid` / `aria-describedby` state. That state clears only when the field becomes empty, incomplete, or a price. While the field is refused, a search-box change, the refresh after an order (`REQ-ORD-1`), and the load-failure retry (`REQ-CAT-11`) still request the list, and those requests omit `max_price`.
@@ -86,6 +86,13 @@ While a price is applied, the page states the ceiling, formatted as the page for
 - **THEN** the page announces no error and sends no request
 - **AND** the items on display, and the summary, are unchanged
 - **AND** the field is not `aria-invalid`
+
+#### Scenario: other actions while the field is incomplete keep the last applied ceiling
+
+- **WHEN** a ceiling of `10` is applied, the shopper edits the field to `10.`, and then changes the search box, places an order, or operates the load-failure retry
+- **THEN** that request carries `max_price=1000`, and the summary and empty-state wording state `£10.00`
+- **AND** the field stays not `aria-invalid`, with no message
+- **AND** if no request has yet carried a ceiling, or the most recent request omitted it (for example while the field was refused), that request omits `max_price`
 
 #### Scenario: a value that is not a price is refused on the page
 

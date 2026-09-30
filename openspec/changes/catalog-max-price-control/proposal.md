@@ -14,6 +14,7 @@ The issue left the field's unit open. This delta decides it: the shopper types *
 - It narrows the list live, together with the search box (both must hold — `REQ-CAT-4`'s composition), and the order-triggered refresh keeps whatever ceiling is applied.
 - A trailing decimal point (`10.`) or a lone `.` is still being typed. That is not a refusal: no error is announced, no request is sent, and the list stays as it was. A value that cannot become a price — `abc`, `-1`, `1e3`, `10.505`, `£10`, `1,000`, or more than 13 digits before the decimal point — is refused on the page with the exact words `Enter a maximum price such as 10 or 10.50.` The field is `aria-invalid` and described by that message. No request is sent for that edit, and a response already in flight is discarded so it cannot clear the refusal or redraw the list. The field is never silently ignored.
 - While the field holds a refused value, changing the search, refreshing after an order, or retrying a failed load still requests the list, and that request omits `max_price`. The message stays on the field until the shopper clears it, leaves it incomplete, or replaces it with a valid price.
+- While the field is incomplete (`10.`), changing the search, refreshing after an order, or retrying still requests the list, carrying the **last applied ceiling** — whatever the page's most recent list request carried. Typing `10.` changes nothing until it becomes a price, empty, or refused. (The verifier found this case unspecified.)
 - When a ceiling of `10` is applied and nothing remains, the item area shows exactly `Nothing costs £10.00 or less.` and the live region reads exactly `Showing 0 items at £10.00 or less.` With a query `{q}` and nothing remaining, both the item area and the live region read exactly `Nothing matches “{q}” at £10.00 or less.` A zero result under a ceiling is never `The catalogue is empty.` The amount in every one of these messages is the ceiling, formatted as the page formats prices.
 - Stale-response discarding (`REQ-CAT-8`) and the load-failure message (`REQ-CAT-11`) cover a ceiling change like any other request.
 
@@ -27,3 +28,7 @@ The new requirement is `REQ-CAT-13`. `REQ-CAT-6`, `REQ-CAT-7`, `REQ-CAT-8`, `REQ
 - Currencies other than the page's existing `£`.
 - Rewriting the no-ceiling scenarios of `REQ-CAT-6`, `REQ-CAT-7`, and `REQ-CAT-12`. Their wording when no ceiling is applied stays as shipped. This delta says, in each, that `REQ-CAT-13` decides the wording while a ceiling is applied.
 - The known limitation recorded in `REQ-CAT-11` (post-order refresh failure) is unchanged.
+
+## Open question for Gate 1
+
+An incomplete field (`10.`) plus a search change: keep the last applied ceiling (this delta's choice — the list never widens because of a half-typed character), or omit it like a refused field does? One line: *keep* or *omit*.
