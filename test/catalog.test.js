@@ -20,13 +20,20 @@ function createElementStub() {
   let value = '';
   let innerHTML = '';
   const history = [];
+  const listeners = {};
+  const attrs = new Map();
   return {
     get value() { return value; },
     set value(v) { value = v; },
     get innerHTML() { return innerHTML; },
     set innerHTML(v) { innerHTML = v; history.push(v); },
     get history() { return history; },
-    addEventListener() {},
+    addEventListener(type, fn) { (listeners[type] ??= []).push(fn); },
+    /** Dispatch an event the way the browser would; resolves when the handlers' work has settled. */
+    fire(type) { return Promise.all((listeners[type] ?? []).map((fn) => fn())); },
+    getAttribute(name) { return attrs.has(name) ? attrs.get(name) : null; },
+    setAttribute(name, v) { attrs.set(name, String(v)); },
+    removeAttribute(name) { attrs.delete(name); },
     querySelectorAll() { return []; },
   };
 }
@@ -724,3 +731,364 @@ test('REQ-CAT-11: a failure that arrived too late changes nothing', async () => 
       'a superseded failure must be discarded exactly like a superseded success (REQ-CAT-8)');
   });
 });
+
+// REQ-CAT-13 — the maximum price control on the catalogue page (#110).
+//
+// Driven the way the browser drives it: set the field's value, fire its `input` event.
+
+const PRICE_REFUSAL = 'Enter a maximum price such as 10 or 10.50.';
+
+/** The page with its automatic load settled, and a log of every item-list request it made. */
+async function pricePage(base, wrap = (f) => f) {
+  const script = await loadPageScript(base);
+  const requests = [];
+  const real = passThroughFetch(base);
+  const { sandbox, element } = createSandbox(script, wrap((path, options) => {
+    if (path.startsWith('/api/items')) requests.push(path);
+    return real(path, options);
+  }));
+  await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+  requests.length = 0;
+  const enter = (id, value) => { element(id).value = value; return element(id).fire('input'); };
+  const price = (value) => enter('max-price', value);
+  const search = (value) => enter('q', value);
+  return { sandbox, element, requests, price, search };
+}
+
+const refusalShown = (element) => ({
+  message: element('price-error').innerHTML,
+  invalid: element('max-price').getAttribute('aria-invalid'),
+  describedby: element('max-price').getAttribute('aria-describedby'),
+});
+
+test('REQ-CAT-13: the maximum price field has an accessible name independent of any placeholder', () =>
+  withServer(async ({ base }) => {
+    const html = await (await fetch(base + '/')).text();
+    const input = html.match(/<input[^>]*\bid="max-price"[^>]*>/)[0];
+    assert.match(input, /\baria-label="Maximum price"/);
+  }));
+
+test('REQ-CAT-13: a price narrows the list, and an item priced exactly at the ceiling is shown', () =>
+  withServer(async ({ base }) => {
+    const { element, requests, price } = await pricePage(base);
+    await price('10');
+    assert.deepEqual(requests, ['/api/items?max_price=1000']);
+    assert.match(element('items').innerHTML, /Pocket Notebook/);
+    assert.match(element('items').innerHTML, /Fineliner Pen/);
+    assert.doesNotMatch(element('items').innerHTML, /Enamel Mug/);
+
+    await price('8');
+    assert.match(element('items').innerHTML, /Pocket Notebook/);
+  }));
+
+test('REQ-CAT-13: pounds and pence convert to cents from the digits', () =>
+  withServer(async ({ base }) => {
+    const { requests, price } = await pricePage(base);
+    const cases = {
+      '10': 1000, '10.5': 1050, '10.50': 1050, '19.99': 1999, '1.15': 115, '0.29': 29,
+      '0': 0, '.5': 50, '.50': 50, '010': 1000, ' 10 ': 1000, '\u00a010': 1000,
+      '9999999999999.99': 999999999999999,
+    };
+    for (const [typed, cents] of Object.entries(cases)) {
+      requests.length = 0;
+      await price(typed);
+      assert.deepEqual(requests, ['/api/items?max_price=' + cents], `typing ${JSON.stringify(typed)}`);
+    }
+  }));
+
+test('REQ-CAT-13: clearing the field, or leaving only whitespace, removes the ceiling', () =>
+  withServer(async ({ base }) => {
+    const { element, requests, price } = await pricePage(base);
+    await price('10');
+    requests.length = 0;
+    await price('');
+    assert.deepEqual(requests, ['/api/items']);
+    assert.equal(element('summary').innerHTML, 'Showing 3 items.');
+    await price('10');
+    requests.length = 0;
+    await price('  ');
+    assert.deepEqual(requests, ['/api/items']);
+  }));
+
+test('REQ-CAT-13: the ceiling and the search apply together', () =>
+  withServer(async ({ base }) => {
+    const { element, requests, price, search } = await pricePage(base);
+    await price('10');
+    requests.length = 0;
+    await search('e'); // Mug, Notebook, Pen — the mug is over the ceiling
+    assert.deepEqual(requests, ['/api/items?q=e&max_price=1000']);
+    assert.equal(element('summary').innerHTML, '2 items match “e” at £10.00 or less.');
+    assert.doesNotMatch(element('items').innerHTML, /Enamel Mug/);
+  }));
+
+test('REQ-CAT-13: the summary states the ceiling', () =>
+  withServer(async ({ base }) => {
+    const { element, price, search } = await pricePage(base);
+    await price('10');
+    assert.equal(element('summary').innerHTML, 'Showing 2 items at £10.00 or less.');
+    await price('3.50');
+    assert.equal(element('summary').innerHTML, 'Showing 1 item at £3.50 or less.');
+    await search('pen');
+    assert.equal(element('summary').innerHTML, '1 item matches “pen” at £3.50 or less.');
+  }));
+
+test('REQ-CAT-13: a ceiling that excludes everything says so, never that the catalogue is empty', () =>
+  withServer(async ({ base }) => {
+    const { element, price } = await pricePage(base);
+    await price('1');
+    assert.match(element('items').innerHTML, />Nothing costs £1\.00 or less\.</);
+    assert.doesNotMatch(element('items').innerHTML, /catalogue is empty/);
+    assert.equal(element('summary').innerHTML, 'Showing 0 items at £1.00 or less.');
+  }));
+
+test('REQ-CAT-13: a ceiling and a query that match nothing together show the query as inert text', () =>
+  withServer(async ({ base }) => {
+    const { element, price, search } = await pricePage(base);
+    await price('10');
+    await search('<b>mug</b>');
+    const said = 'Nothing matches “&lt;b&gt;mug&lt;/b&gt;” at £10.00 or less.';
+    assert.match(element('items').innerHTML, new RegExp('>' + said.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '<'));
+    assert.equal(element('summary').innerHTML, said);
+  }));
+
+test('REQ-CAT-13: a whitespace-only search with a ceiling is no query', () =>
+  withServer(async ({ base }) => {
+    const { element, price, search } = await pricePage(base);
+    await price('1');
+    await search('   ');
+    assert.match(element('items').innerHTML, />Nothing costs £1\.00 or less\.</);
+    assert.equal(element('summary').innerHTML, 'Showing 0 items at £1.00 or less.');
+  }));
+
+test('REQ-CAT-13: a half-typed decimal sends no request, announces nothing, and is not invalid', () =>
+  withServer(async ({ base }) => {
+    const { element, requests, price } = await pricePage(base);
+    const before = element('summary').history.length;
+    for (const typed of ['10.', '.']) {
+      await price(typed);
+      assert.deepEqual(requests, []);
+      assert.equal(element('summary').history.length, before);
+      assert.equal(element('max-price').getAttribute('aria-invalid'), null);
+      assert.equal(element('price-error').innerHTML, '');
+    }
+  }));
+
+test('REQ-CAT-13: a value that is not a price is refused on the page, with no request', () =>
+  withServer(async ({ base }) => {
+    const { element, requests, price } = await pricePage(base);
+    const itemsBefore = element('items').innerHTML;
+    for (const typed of ['abc', '-1', '+1', '1e3', '10.505', '£10', '1,000', '٣', '１０', '12345678901234', '0012345678901234.5']) {
+      await price(typed);
+      assert.deepEqual(refusalShown(element), { message: PRICE_REFUSAL, invalid: 'true', describedby: 'price-error' }, typed);
+      assert.equal(element('summary').innerHTML, PRICE_REFUSAL, typed);
+    }
+    assert.deepEqual(requests, []);
+    assert.equal(element('items').innerHTML, itemsBefore);
+  }));
+
+test('REQ-CAT-13: retyping a refused value announces the refusal again', () =>
+  withServer(async ({ base }) => {
+    const { element, price } = await pricePage(base);
+    await price('abc');
+    const writes = element('summary').history.length;
+    await price('abcd');
+    assert.equal(element('summary').history.length, writes + 1);
+    assert.equal(element('summary').innerHTML, PRICE_REFUSAL);
+  }));
+
+test('REQ-CAT-13: editing a refusal back to a half-typed decimal clears the field message only', () =>
+  withServer(async ({ base }) => {
+    const { element, requests, price } = await pricePage(base);
+    await price('abc');
+    await price('10.');
+    assert.deepEqual(requests, []);
+    assert.deepEqual(refusalShown(element), { message: '', invalid: null, describedby: null });
+    assert.equal(element('summary').innerHTML, PRICE_REFUSAL);
+  }));
+
+test('REQ-CAT-13: correcting a refused value resumes filtering', () =>
+  withServer(async ({ base }) => {
+    for (const fix of ['10', '']) {
+      await withServer(async ({ base }) => {
+        const { element, requests, price } = await pricePage(base);
+        await price('abc');
+        await price(fix);
+        assert.deepEqual(refusalShown(element), { message: '', invalid: null, describedby: null });
+        assert.deepEqual(requests, [fix ? '/api/items?max_price=1000' : '/api/items']);
+      });
+    }
+  }));
+
+test('REQ-CAT-13: a refusal does not drop the automatic load', () =>
+  withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const gate = deferred();
+    const { sandbox, element } = createSandbox(script, async (path, options) => {
+      await gate.promise;
+      return fetch(base + path, options);
+    });
+    const load = sandbox.loadItems();
+    element('max-price').value = 'abc';
+    await element('max-price').fire('input');
+    assert.equal(element('summary').innerHTML, PRICE_REFUSAL);
+
+    gate.resolve();
+    await load;
+    assert.match(element('items').innerHTML, /Enamel Mug/);
+    assert.equal(element('summary').innerHTML, 'Showing 3 items.');
+    assert.deepEqual(refusalShown(element), { message: PRICE_REFUSAL, invalid: 'true', describedby: 'price-error' });
+  }));
+
+test('REQ-CAT-13: a refusal does not freeze stock after an order', () =>
+  withServer(async ({ base }) => {
+    const gate = deferred();
+    let hold = false;
+    const { sandbox, element, price } = await pricePage(base, (real) => async (path, options) => {
+      if (hold && path.startsWith('/api/items')) await gate.promise;
+      return real(path, options);
+    });
+    element('qty-MUG-1').value = '2';
+    hold = true;
+    const ordering = sandbox.order('MUG-1');
+    await new Promise((r) => setTimeout(r, 50)); // the POST has landed; the refresh is in flight
+    await price('abc');
+    const writes = element('summary').history.length;
+    gate.resolve();
+    await ordering;
+
+    assert.match(element('items').innerHTML, /45 in stock/);
+    assert.equal(element('summary').history.length, writes);
+    assert.deepEqual(refusalShown(element), { message: PRICE_REFUSAL, invalid: 'true', describedby: 'price-error' });
+  }));
+
+test('REQ-CAT-13: while the field is incomplete or refused, other requests carry the last applied ceiling', () =>
+  withServer(async ({ base }) => {
+    for (const typed of ['10.', 'abc']) {
+      await withServer(async ({ base }) => {
+        const { sandbox, element, requests, price, search } = await pricePage(base);
+        await price('10');
+        await price(typed);
+        requests.length = 0;
+
+        await search('pen');
+        assert.deepEqual(requests, ['/api/items?q=pen&max_price=1000'], typed);
+        assert.equal(element('summary').innerHTML, '1 item matches “pen” at £10.00 or less.');
+
+        element('qty-PEN-1').value = '1';
+        requests.length = 0;
+        const before = element('summary').history.length;
+        await sandbox.order('PEN-1');
+        assert.deepEqual(requests, ['/api/items?q=pen&max_price=1000'], typed);
+        assert.equal(element('summary').history.length, before);
+
+        const expected = typed === 'abc' ? { message: PRICE_REFUSAL, invalid: 'true', describedby: 'price-error' }
+          : { message: '', invalid: null, describedby: null };
+        assert.deepEqual(refusalShown(element), expected);
+      });
+    }
+  }));
+
+test('REQ-CAT-13: with no ceiling ever applied, a refused field leaves max_price off other requests', () =>
+  withServer(async ({ base }) => {
+    const { sandbox, element, requests, price, search } = await pricePage(base);
+    await price('abc');
+    await search('pen');
+    assert.deepEqual(requests, ['/api/items?q=pen']);
+    element('qty-PEN-1').value = '1';
+    requests.length = 0;
+    await sandbox.order('PEN-1');
+    assert.deepEqual(requests, ['/api/items?q=pen']);
+  }));
+
+test('REQ-CAT-13: an order placed while the field is refused keeps the ceiling and the refusal sentence', () =>
+  withServer(async ({ base }) => {
+    const { sandbox, element, requests, price } = await pricePage(base);
+    await price('10');
+    await price('abc');
+    element('qty-PEN-1').value = '1';
+    requests.length = 0;
+    await sandbox.order('PEN-1');
+    assert.deepEqual(requests, ['/api/items?max_price=1000']);
+    assert.doesNotMatch(element('items').innerHTML, /Enamel Mug/);
+    assert.equal(element('summary').innerHTML, PRICE_REFUSAL);
+    assert.deepEqual(refusalShown(element), { message: PRICE_REFUSAL, invalid: 'true', describedby: 'price-error' });
+  }));
+
+test('REQ-CAT-13: a search change during a refusal that matches nothing uses the ceiling wording', () =>
+  withServer(async ({ base }) => {
+    const { element, price, search } = await pricePage(base);
+    await price('10');
+    await price('abc');
+    await search('mug'); // the mug costs 12.50 — over the last applied ceiling
+    assert.equal(element('summary').innerHTML, 'Nothing matches “mug” at £10.00 or less.');
+    assert.match(element('items').innerHTML, />Nothing matches “mug” at £10\.00 or less\.</);
+    assert.equal(element('price-error').innerHTML, PRICE_REFUSAL);
+  }));
+
+test('REQ-CAT-13: the retry after a failed load carries the last applied ceiling', () =>
+  withServer(async ({ base }) => {
+    let failing = false;
+    const { sandbox, element, requests, price } = await pricePage(base, (real) => (path, options) =>
+      failing && path.startsWith('/api/items') ? Promise.reject(new TypeError('Failed to fetch')) : real(path, options));
+    await price('10');
+    await price('abc');
+    failing = true;
+    await sandbox.loadItems();
+    assert.match(element('items').innerHTML, /could not load the catalogue/i);
+    assert.doesNotMatch(element('items').innerHTML, /Nothing costs/);
+    failing = false;
+    requests.length = 0;
+    await sandbox.loadItems(); // what the retry button runs
+    assert.deepEqual(requests, ['/api/items?max_price=1000']);
+  }));
+
+test('REQ-CAT-13: a stale response from an earlier ceiling is discarded', () =>
+  withServer(async ({ base }) => {
+    const slow = deferred();
+    let slowNext = false;
+    const { element, price } = await pricePage(base, (real) => async (path, options) => {
+      if (slowNext && path === '/api/items?max_price=1000') { slowNext = false; await slow.promise; }
+      return real(path, options);
+    });
+    slowNext = true;
+    const stale = price('10');
+    await price('3.50');
+    slow.resolve();
+    await stale;
+    assert.equal(element('summary').innerHTML, 'Showing 1 item at £3.50 or less.');
+    assert.doesNotMatch(element('items').innerHTML, /Pocket Notebook/);
+  }));
+
+test('REQ-CAT-13: an order refresh keeps the ceiling without re-announcing', () =>
+  withServer(async ({ base }) => {
+    const { sandbox, element, requests, price } = await pricePage(base);
+    await price('10');
+    element('qty-PEN-1').value = '1';
+    requests.length = 0;
+    const before = element('summary').history.length;
+    await sandbox.order('PEN-1');
+    assert.deepEqual(requests, ['/api/items?max_price=1000']);
+    assert.equal(element('summary').history.length, before);
+  }));
+
+test('REQ-CAT-9: a ceiling that leaves nothing shows the ceiling message in place of the list, not as a list item', () =>
+  withServer(async ({ base }) => {
+    const { element, price } = await pricePage(base);
+    await price('1');
+    assert.doesNotMatch(element('items').innerHTML, /<li[\s>]/);
+    assert.match(element('items').innerHTML, /class="empty"/);
+  }));
+
+test('REQ-CAT-12: a zero result under a ceiling is not an empty catalogue, and no ceiling still is', () =>
+  withServer(async ({ base }) => {
+    const script = await loadPageScript(base);
+    const { sandbox, element } = createSandbox(script, fakeItemsFetch(base, []));
+    await Promise.all([sandbox.loadItems(), sandbox.loadOrders()]);
+    assert.match(element('items').innerHTML, />The catalogue is empty\.</);
+    assert.equal(element('summary').innerHTML, 'Showing 0 items.');
+
+    element('max-price').value = '10';
+    await element('max-price').fire('input');
+    assert.doesNotMatch(element('items').innerHTML, /catalogue is empty/);
+    assert.match(element('items').innerHTML, />Nothing costs £10\.00 or less\.</);
+  }));
