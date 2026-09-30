@@ -305,6 +305,91 @@ test('REQ-ORD-13: an item that drops to zero stock is disabled on the next rende
     assert.equal(orderButtonDisabled(page.itemsHtml(), 'PEN-1'), true, 'expected the refreshed PEN-1 Order button to be disabled');
   }));
 
+// Disabled-reason description — the button points (aria-describedby) at its card's own stock text.
+
+/** The text a button's aria-describedby resolves to in the rendered items markup, or undefined. */
+function buttonDescription(itemsHtml, sku) {
+  const id = parseAttrs(orderButtonMarkup(itemsHtml, sku).match(/<button[^>]*>/)[0])['aria-describedby'];
+  if (id === undefined) return undefined;
+  for (const m of itemsHtml.matchAll(/<span[^>]*>([^<]*)<\/span>/g)) {
+    if (parseAttrs(m[0].match(/<[^>]*>/)[0]).id === id) return decodeHtmlEntities(m[1]);
+  }
+  return undefined;
+}
+
+test("REQ-ORD-13: a zero-stock item's Order button is described by its stock text", () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    assert.equal(await stock('PEN-1'), 0, 'precondition: PEN-1 sold out');
+    const page = await loadClientPage(base);
+    assert.equal(buttonDescription(page.itemsHtml(), 'PEN-1'), '0 in stock');
+  }));
+
+test("REQ-ORD-13: the description is the stock text, not the card's whole meta line", () =>
+  withServer(async ({ base, post }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    const page = await loadClientPage(base);
+    const description = buttonDescription(page.itemsHtml(), 'PEN-1');
+    assert.equal(description, '0 in stock');
+    assert.ok(!description.includes('PEN-1') && !description.includes('3.50'), 'no SKU or price in the reason');
+  }));
+
+test('REQ-ORD-13: an item with 1 or more in stock has no disabled-reason description', () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 7 });
+    assert.equal(await stock('PEN-1'), 1, 'precondition: PEN-1 at exactly 1');
+    const page = await loadClientPage(base);
+    const html = page.itemsHtml();
+    assert.doesNotMatch(orderButtonMarkup(html, 'PEN-1'), /aria-describedby/);
+    assert.doesNotMatch(orderButtonMarkup(html, 'MUG-1'), /aria-describedby/);
+  }));
+
+test("REQ-ORD-13: each out-of-stock item's description is its own stock text", () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    // MUG-1 holds 47 and one order is capped at 20 units, so three orders sell it out.
+    await post('/api/orders', { sku: 'MUG-1', qty: 20 });
+    await post('/api/orders', { sku: 'MUG-1', qty: 20 });
+    await post('/api/orders', { sku: 'MUG-1', qty: 7 });
+    assert.equal(await stock('PEN-1'), 0);
+    assert.equal(await stock('MUG-1'), 0, 'precondition: two items sold out');
+    const page = await loadClientPage(base);
+    const html = page.itemsHtml();
+    const pen = parseAttrs(orderButtonMarkup(html, 'PEN-1').match(/<button[^>]*>/)[0])['aria-describedby'];
+    const mug = parseAttrs(orderButtonMarkup(html, 'MUG-1').match(/<button[^>]*>/)[0])['aria-describedby'];
+    assert.ok(pen && mug && pen !== mug, 'each button points at a distinct element');
+    assert.equal(buttonDescription(html, 'PEN-1'), '0 in stock');
+    assert.equal(buttonDescription(html, 'MUG-1'), '0 in stock');
+  }));
+
+test('REQ-ORD-13: the description composes with search', () =>
+  withServer(async ({ base, post }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    const page = await loadClientPage(base);
+    await page.search('Pen');
+    const html = page.itemsHtml();
+    assert.equal(orderButtonMarkup(html, 'MUG-1'), undefined, 'search narrowed MUG-1 out');
+    assert.equal(buttonDescription(html, 'PEN-1'), '0 in stock');
+  }));
+
+test('REQ-ORD-13: an item that drops to zero stock gains the description on the next render', () =>
+  withServer(async ({ base, stock }) => {
+    const page = await loadClientPage(base);
+    assert.equal(buttonDescription(page.itemsHtml(), 'PEN-1'), undefined, 'precondition: no description before');
+    await page.order('PEN-1', 8);
+    assert.equal(await stock('PEN-1'), 0);
+    assert.equal(buttonDescription(page.itemsHtml(), 'PEN-1'), '0 in stock');
+  }));
+
+test("REQ-ORD-13, REQ-ORD-8: the description leaves the button's accessible name as \"Order {name}\"", () =>
+  withServer(async ({ base, post }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    const page = await loadClientPage(base);
+    const button = orderButtonMarkup(page.itemsHtml(), 'PEN-1');
+    assert.match(button, /aria-describedby=/, 'precondition: the description is present');
+    assert.equal(parseAttrs(button.match(/<button[^>]*>/)[0])['aria-label'], 'Order Fineliner Pen');
+  }));
+
 // "the hint does not change what the server accepts" — a client that ignores the disabled state
 // still meets REQ-ORD-2's stock check on the server. The existing REQ-ORD-2 test orders *over*
 // stock; this one orders from *zero* stock, the case the hint is about.

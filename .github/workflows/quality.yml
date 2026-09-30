@@ -7,14 +7,13 @@
 #
 # Verify mode (pr_number + issue_number): dispatched by the verifier after SPEC-MATCH: COMPLETE;
 # checks the implementation head, reports on the PR, then hands the issue to Gate 2.
-# Explore mode (no pr_number): the nightly schedule and manual runs — the whole product on the
-# default branch, findings filed as issues that re-enter the line.
+# Explore mode (no pr_number): a manual run of the whole product on the default branch.
+# What it files is parked. It does not start intake, and it is not on a schedule — a nightly
+# explore was opening a new line of work every morning.
 
 name: quality
 
 on:
-  schedule:
-    - cron: "0 5 * * *" # nightly explore of the default branch
   workflow_dispatch:
     inputs:
       pr_number:
@@ -220,15 +219,18 @@ jobs:
           fi
           cat work/quality-report.md >> "$GITHUB_STEP_SUMMARY"
 
-      # Explore runs have no source issue: findings file at depth 1 with no origin link.
+      # A finding from a source issue re-enters the line. An explore has none: file-findings
+      # prints "Parked" for those, and this step dispatches intake only when there is one.
       - name: File the out-of-scope findings — the line feeding itself
         if: steps.runner.outputs.on == 'true'
         run: |
           node "$ADLC/scripts/file-findings.mjs" work/quality.md "${ISSUE:--}" | tee work/filed.txt
-          grep -o 'Filed https[^ ]*' work/filed.txt | awk '{print $2}' | while read -r URL; do
-            gh workflow run intake.yml -f issue_number="${URL##*/}" \
-              || echo "::warning::Could not dispatch intake for $URL"
-          done
+          if [ -n "$ISSUE" ]; then
+            grep -o 'Filed https[^ ]*' work/filed.txt | awk '{print $2}' | while read -r URL; do
+              gh workflow run intake.yml -f issue_number="${URL##*/}" \
+                || echo "::warning::Could not dispatch intake for $URL"
+            done
+          fi
 
       # The thresholds vote BEFORE the issue advances: a red quality run must not hand the
       # issue to Gate 2 as if nothing happened.
