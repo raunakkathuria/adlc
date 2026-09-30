@@ -27,6 +27,24 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **The verifier could never pass a behaviour the running app cannot reach.** #108's fix is the
+  page's message for an empty catalogue, and the verifier drives the running app, which starts with
+  three seeded items and has no way to remove one. `prompts/verify.md` allowed `FEATURE-IMPLEMENTED:
+  YES` only for behaviour observed there and `N/A` only for docs and chores, so the verifier said
+  `NO` (PR #117; the same report also found a real gap, a whitespace-only query, which the Planner
+  has since specified). `NO` goes back to the Planner, and no revision of that spec can make the
+  state reachable. `N/A` now also covers a behaviour that exists only in a state the running app
+  cannot be put in. The verifier must establish that from the spec and the API, not from a comment
+  in the change; every scenario for the state must be pinned by a test; and every reachable part of
+  the change must still be driven. It is never for behaviour the verifier could have driven.
+  - Two deterministic guards come with it. A report that gives `SPEC-MATCH` but no
+    `FEATURE-IMPLEMENTED` used to default to `N/A` and pass; it now reads as `NO`, and says so. A
+    reason after the value (`FEATURE-IMPLEMENTED: N/A — …`) still reads as that value, so arguing
+    the `N/A` on the trailer line does not send the work back. And when the verdict is `N/A`, the
+    comment on the implementation PR opens with a fixed line saying the change was not observed in
+    the running app, so Gate 2 does not read "passed" as "seen".
+  - A test pins the routing all of this relies on: `N/A` goes on to quality, only `NO` goes back.
+
 - **A second green build parked because one sentence opened with a verdict word.** #108's reviewer
   approved, and began its report with "**REQUEST CHANGES is not warranted — …**". The review reader
   took every line opening with a verdict word as a decision, so it saw two different verdicts and
