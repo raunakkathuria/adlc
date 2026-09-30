@@ -2,19 +2,28 @@
 
 ### Requirement: REQ-CAT-13 — the catalogue page lets a shopper set a maximum price
 
-The catalogue page SHALL carry a **maximum price** field with its own accessible name that does not depend on its placeholder (as `REQ-CAT-5` requires of the search field). The shopper enters a price in pounds. The page trims leading and trailing whitespace before it reads the field, as it already trims the search box. An empty field, or one that is empty after trimming, means no ceiling.
+The catalogue page SHALL carry a **maximum price** field whose accessible name is exactly `Maximum price`. That name does not depend on its placeholder (as `REQ-CAT-5` requires of the search field). The shopper enters a price in pounds. Before reading the field, the page removes the same leading and trailing whitespace it removes from the search box, including a non-breaking space. An empty field, or one that is empty after that, means no ceiling. Only the ASCII digits `0`–`9` count as digits. Any other digit character is refused.
 
-After trimming, the field is in exactly one of three states:
+After that trim, the field is in exactly one of three states:
 
-- **A price.** One or more digits, optionally followed by a `.` and one or two digits (`10`, `10.5`, `10.50`, `0`, `0.29`), or a `.` followed by one or two digits (`.5`, `.50`). Leading zeros are decimal, not another base (`010` is ten pounds). The page converts that amount to cents from its digits — whole pounds times 100, plus the pence — and narrows the list as `GET /api/items?max_price={cents}` does (`REQ-CAT-4`). At most 13 digits may stand before the decimal point. `0` is a ceiling of zero cents.
-- **Incomplete.** A lone `.`, or one or more digits followed by a `.` with nothing after it (`10.`). The shopper is still typing. The page SHALL NOT announce an error, SHALL NOT mark the field invalid, and SHALL NOT send a request. The list and the summary stay as they were. While the field is incomplete, a search-box change, the refresh after an order (`REQ-ORD-1`), and the load-failure retry (`REQ-CAT-11`) still request the list, and those requests carry the **last applied ceiling** — the ceiling (or none) that the page's most recent request for the item list carried. An incomplete field therefore changes nothing until it becomes a price, empty, or refused.
-- **Refused.** Anything else, including a leading `-` or `+`, scientific notation, a third decimal place, a currency symbol, a thousands separator, or 14 or more digits before the decimal point. The page SHALL show the exact message `Enter a maximum price such as 10 or 10.50.` in an element next to the field, announce that same sentence through the search-results live region (`REQ-CAT-7`), set `aria-invalid="true"` on the field, and point `aria-describedby` at the element that shows the message. No request is sent. The items on display stay as they were. A response already in flight for the item list is discarded on arrival, as `REQ-CAT-8` discards a superseded response, so it cannot redraw the list or clear the refusal. The field is never silently treated as no ceiling.
+- **A price.** One or more ASCII digits, optionally followed by a `.` and one or two ASCII digits (`10`, `10.5`, `10.50`, `0`, `0.29`), or a `.` followed by one or two ASCII digits (`.5`, `.50`). Leading zeros are decimal (`010` is ten pounds) and they count toward the length limit below. The page requests `max_price` as this many cents, and narrows the list as `GET /api/items?max_price={cents}` does (`REQ-CAT-4`):
+  - no decimal point: the digits are whole pounds, and the cents are that number times 100 (`10` is `1000`);
+  - one digit after the point: that digit is tenths of a pound, so it contributes that digit times 10 pence (`10.5` is `1050`, `.5` is `50`);
+  - two digits after the point: those digits are pence (`10.50` is `1050`, `0.29` is `29`).
+  At most 13 digits may stand before the decimal point, counting leading zeros, so the cent value is at most `999999999999999` and the page can show it as pounds and two pence digits without rounding. Fourteen or more digits before the point is refused. `0` is a ceiling of zero cents.
+- **Incomplete.** A lone `.`, or one or more digits followed by a `.` with nothing after it (`10.`). The shopper is still typing. The page SHALL NOT announce an error, SHALL NOT mark the field invalid, and SHALL NOT send a request. The list and the summary stay as they were. While the field is incomplete, a search-box change, the refresh after an order (`REQ-ORD-1`), and the load-failure retry (`REQ-CAT-11`) still request the list, and those requests carry the **last applied ceiling** — the ceiling, or none, that the page's most recent request for the item list carried. An incomplete field therefore changes nothing about the ceiling until it becomes a price, empty, or refused. Becoming incomplete clears any refusal message next to the field and clears `aria-invalid` at once. The live region keeps the sentence it already holds, including a refusal sentence, until the next announcement.
+- **Refused.** Anything else, including a leading `-` or `+`, scientific notation, a third decimal place, a currency symbol, a thousands separator, a digit that is not ASCII `0`–`9`, or 14 or more digits before the decimal point. The page SHALL show the exact message `Enter a maximum price such as 10 or 10.50.` in an element next to the field, announce that same sentence through the search-results live region (`REQ-CAT-7`), set `aria-invalid="true"` on the field, and point `aria-describedby` at the element that shows the message. No request is sent for that edit. The items on display and the summary stay as they were until a response that was already in flight, or a later request, arrives. An in-flight response is still the most recently issued request, because the refusal issued none, so it is shown when it arrives — including the automatic load and an order refresh — and showing it SHALL NOT clear the refusal message or the field's `aria-invalid` / `aria-describedby` state. The field is never silently treated as no ceiling.
 
-The message next to the field is not the live region. A later announcement may replace the live region's text; it SHALL NOT remove the message or the `aria-invalid` / `aria-describedby` state. That state clears only when the field becomes empty, incomplete, or a price. While the field is refused, a search-box change, the refresh after an order (`REQ-ORD-1`), and the load-failure retry (`REQ-CAT-11`) still request the list, and those requests omit `max_price`.
+The message next to the field is not the live region. A later announcement may replace the live region's text; it SHALL NOT remove the message or the `aria-invalid` / `aria-describedby` state while the field stays refused. That state clears only when the field becomes empty, incomplete, or a price. While the field is refused, a search-box change, the refresh after an order (`REQ-ORD-1`), and the load-failure retry (`REQ-CAT-11`) still request the list, and those requests carry the last applied ceiling, the same rule as an incomplete field. If no list request has carried a ceiling yet, they omit `max_price`. An order refresh does not re-announce the summary (`REQ-CAT-7`), so after a refusal the summary keeps the wording of that last ceiling and the refreshed list matches it.
 
 The ceiling and the search query (`REQ-CAT-3`) apply together: the list holds only items that satisfy both. Any request the page issues while the field holds a price — a change to either field, the automatic load, or the refresh after an order — carries that ceiling, and is a request like any other for `REQ-CAT-8` and `REQ-CAT-11`.
 
 While a price is applied, the page states the ceiling, formatted as the page formats prices (`£10.00`), wherever it reports the outcome. `REQ-CAT-6`, `REQ-CAT-7`, and `REQ-CAT-12` describe the wording when no ceiling is applied. With one applied, the wording is as below. Only the page's own formatted amount appears in these messages — the text typed in the price field is never inserted as markup — and the search query, where shown, keeps the inert-text guarantee of `REQ-CAT-6`.
+
+#### Scenario: the field has an accessible name
+
+- **WHEN** the catalogue page is shown
+- **THEN** the maximum price field's accessible name is exactly `Maximum price`
 
 #### Scenario: the field narrows the list
 
@@ -25,6 +34,11 @@ While a price is applied, the page states the ceiling, formatted as the page for
 
 - **WHEN** the shopper enters `10.50`, `19.99`, `1.15`, `0.29`, or `0`
 - **THEN** the page requests `max_price=1050`, `1999`, `115`, `29`, or `0` respectively
+
+#### Scenario: one digit after the point is a tenth of a pound
+
+- **WHEN** the shopper enters `10.5`
+- **THEN** the page requests `max_price=1050`
 
 #### Scenario: a leading decimal point is pence only
 
@@ -38,7 +52,7 @@ While a price is applied, the page states the ceiling, formatted as the page for
 
 #### Scenario: surrounding whitespace is trimmed
 
-- **WHEN** the shopper enters ` 10 `
+- **WHEN** the shopper enters ` 10 `, or a non-breaking space before `10`
 - **THEN** the page requests `max_price=1000`, the same as for `10`
 
 #### Scenario: whitespace alone is no ceiling
@@ -92,26 +106,47 @@ While a price is applied, the page states the ceiling, formatted as the page for
 - **WHEN** a ceiling of `10` is applied, the shopper edits the field to `10.`, and then changes the search box, places an order, or operates the load-failure retry
 - **THEN** that request carries `max_price=1000`, and the summary and empty-state wording state `£10.00`
 - **AND** the field stays not `aria-invalid`, with no message
-- **AND** if no request has yet carried a ceiling, or the most recent request omitted it (for example while the field was refused), that request omits `max_price`
+- **AND** if no list request has carried a ceiling yet, that request omits `max_price`
+
+#### Scenario: editing a refusal back to a half-typed decimal clears the field message only
+
+- **WHEN** the field holds `abc` and the shopper changes it to `10.`
+- **THEN** the message next to the field is gone, the field is not `aria-invalid`, and no request is sent
+- **AND** the live region still holds `Enter a maximum price such as 10 or 10.50.` until a later announcement replaces it
 
 #### Scenario: a value that is not a price is refused on the page
 
-- **WHEN** the shopper enters `abc`, `-1`, `1e3`, `10.505`, `£10`, `1,000`, or a number with 14 digits before the decimal point
+- **WHEN** the shopper enters `abc`, `-1`, `1e3`, `10.505`, `£10`, `1,000`, a digit that is not ASCII `0`–`9`, or a number with 14 digits before the decimal point
 - **THEN** the page shows the exact message `Enter a maximum price such as 10 or 10.50.` next to the field and announces that same sentence
 - **AND** the field is `aria-invalid="true"` and its `aria-describedby` references the element that shows the message
 - **AND** no request for the item list is sent, and the items on display are unchanged
 
-#### Scenario: a refusal discards an in-flight response
+#### Scenario: a refusal does not drop the automatic load
 
-- **WHEN** the shopper replaces a price with `abc` while a request for that price is still in flight
-- **THEN** no new request is sent, and the refusal is shown and announced as above
-- **AND** the in-flight response is discarded on arrival and does not redraw the list or clear the refusal
+- **WHEN** the shopper enters `abc` while the page's automatic load is still in flight
+- **THEN** the refusal is shown and announced, and no further request is sent for that edit
+- **AND** when the load arrives it is shown, so the catalogue area is not left empty
+- **AND** the message next to the field, and the field's `aria-invalid` state, remain
 
-#### Scenario: other actions while the field is refused omit the ceiling
+#### Scenario: a refusal does not freeze stock after an order
 
-- **WHEN** the field holds `abc` and the shopper changes the search box, places an order, or operates the load-failure retry
-- **THEN** that request omits `max_price`
+- **WHEN** the shopper enters `abc` while the refresh after an order is still in flight
+- **THEN** when that refresh arrives the list shows the updated stock
+- **AND** the summary is not re-announced (`REQ-CAT-7`)
+- **AND** the message next to the field, and the field's `aria-invalid` state, remain
+
+#### Scenario: other actions while the field is refused keep the last applied ceiling
+
+- **WHEN** a ceiling of `10` is applied, the shopper enters `abc`, and then changes the search box, places an order, or operates the load-failure retry
+- **THEN** that request carries `max_price=1000`
 - **AND** the message next to the field, and the field's `aria-invalid` state, stay until the field is cleared, left incomplete, or replaced by a price
+- **AND** if no list request has carried a ceiling yet, that request omits `max_price`
+
+#### Scenario: an order placed while the field is refused keeps the summary and the list together
+
+- **WHEN** a ceiling of `10` is applied, the shopper enters `abc`, and then places an order
+- **THEN** the refresh carries `max_price=1000` and the list holds only items at or under that ceiling
+- **AND** the summary still states `£10.00` and is not re-announced (`REQ-CAT-7`)
 
 #### Scenario: correcting a refused value resumes filtering
 
@@ -132,7 +167,7 @@ While a price is applied, the page states the ceiling, formatted as the page for
 
 - **WHEN** the item list cannot be loaded while a ceiling is applied
 - **THEN** the page shows the load-failure message with its retry control (`REQ-CAT-11`), not `Nothing costs £10.00 or less.`
-- **AND** operating the retry control requests the list with the ceiling still in the field
+- **AND** operating the retry control requests the list with the last applied ceiling — the price in the field when the field holds a price, and the ceiling the most recent list request carried when the field is incomplete or refused
 
 #### Scenario: no ceiling behaves as today
 
@@ -227,7 +262,7 @@ The catalogue page SHALL expose a short, visually-hidden summary of the current 
 
 ### Requirement: REQ-CAT-8 — a stale search response never overwrites a newer one
 
-When the search query changes again before an in-flight request for an earlier query has returned, the catalogue page SHALL discard that earlier response when it eventually arrives: only the results for the most recently issued query are ever shown or announced (`REQ-CAT-7`), regardless of the order in which responses arrive over the network. This requirement governs **every** request the page issues to load the item list, not only requests triggered by typing — including the listing refresh triggered by placing an order (`REQ-ORD-1`) and a request that carries a maximum price (`REQ-CAT-13`). An order-triggered refresh is a request for the item list like any other: if a newer query is issued (by typing) before it resolves, its response is discarded on arrival exactly as a stale typed-query response would be, and rendering the list never reverts to an earlier query's results. Setting the maximum-price field to a refused value issues no request and still discards any in-flight item-list response, so that late response cannot clear the refusal or redraw the list (`REQ-CAT-13`).
+When the search query changes again before an in-flight request for an earlier query has returned, the catalogue page SHALL discard that earlier response when it eventually arrives: only the results for the most recently issued query are ever shown or announced (`REQ-CAT-7`), regardless of the order in which responses arrive over the network. This requirement governs **every** request the page issues to load the item list, not only requests triggered by typing — including the listing refresh triggered by placing an order (`REQ-ORD-1`) and a request that carries a maximum price (`REQ-CAT-13`). An order-triggered refresh is a request for the item list like any other: if a newer request is issued (by typing a query, or by setting a price) before it resolves, its response is discarded on arrival exactly as a stale typed-query response would be, and rendering the list never reverts to an earlier request's results. "The most recently issued query" in this requirement means the item-list request most recently issued, including one that differs only in its maximum price. Setting the maximum-price field to a refused or incomplete value issues no request, so an in-flight response is still that latest request and is shown when it arrives. Showing it does not clear a refusal on the field (`REQ-CAT-13`).
 
 #### Scenario: an out-of-order response is discarded
 
