@@ -2,7 +2,7 @@
 
 ### Requirement: REQ-ORD-7 — order outcome is announced to assistive technology
 
-The page's order-outcome region SHALL be exposed as an ARIA live region (for example, `role="status"` or an equivalent `aria-live` announcement), so that assistive technology announces its content automatically whenever it changes, without the user needing to move focus to it. A successful order's confirmation message SHALL echo the ordered item's name alongside its `sku`, `qty`, and `total` — the same `{name} ({sku})` grouping the order history already uses (`REQ-ORD-10`) — so a shopper who does not recognize a SKU can still tell what they ordered without leaving the confirmation. Both that name and that SKU SHALL be inert text: no part of either SHALL be interpreted as markup, inserted as a page element, or run as script — the same guarantee already required for the search query (`REQ-CAT-6`), for the item card's own display of that name and SKU (`REQ-CAT-10`), for the Order button's accessible name and `data-sku` attribute (`REQ-ORD-8`), and for the order-history entry (`REQ-ORD-10`). Once shown, an outcome message SHALL NOT outlive the search it was placed beside: when the shopper changes the search query, the region SHALL be emptied, so that a stale order result is never read as current beside results it has nothing to do with. This is the same notion of a search as `REQ-CAT-7` — a change to the query the shopper types — and not the listing refresh an order itself triggers, which SHALL leave the outcome in place. Emptying the region announces nothing.
+The page's order-outcome region SHALL be exposed as an ARIA live region (for example, `role="status"` or an equivalent `aria-live` announcement), so that assistive technology announces its content automatically whenever it changes, without the user needing to move focus to it. A successful order's confirmation message SHALL echo the ordered item's name alongside its `sku`, `qty`, and `total` — the same `{name} ({sku})` grouping the order history already uses (`REQ-ORD-10`) — so a shopper who does not recognize a SKU can still tell what they ordered without leaving the confirmation. Both that name and that SKU SHALL be inert text: no part of either SHALL be interpreted as markup, inserted as a page element, or run as script — the same guarantee already required for the search query (`REQ-CAT-6`), for the item card's own display of that name and SKU (`REQ-CAT-10`), for the Order button's accessible name and `data-sku` attribute (`REQ-ORD-8`), and for the order-history entry (`REQ-ORD-10`). Once shown, a confirmation or a rejection SHALL NOT outlive the search it was placed beside. When the trimmed search query changes, the region SHALL be emptied of that message, so a stale order result is never read as current beside results it has nothing to do with. The trim is the one the page already applies before searching. A change that leaves the trimmed query the same — typing or deleting only whitespace — is not a change, and the message stays. A not-sent message (`REQ-ORD-11`) is not cleared by a search change: emptying it would leave the shopper with no sign the order may not exist, and the order history cannot record an order that never arrived. This is the same notion of a search as `REQ-CAT-7` — a change to the query the shopper types — and not the listing refresh an order itself triggers, nor the catalogue's retry of the same query. Both of those SHALL leave the outcome in place. Emptying the region writes no text into it; the region's text content is empty. A confirmation or a rejection that arrives after the trimmed query has already changed is not written into the region, because it would sit beside the new search. The item-list refresh for that superseded query is still discarded (`REQ-CAT-8`). A successful order is still recorded in the order history. A not-sent message that arrives after the query changed is written in and announced, and a later search change does not clear it.
 
 #### Scenario: success is announced
 
@@ -47,30 +47,54 @@ The page's order-outcome region SHALL be exposed as an ARIA live region (for exa
 
 #### Scenario: changing the search clears an order's confirmation
 
-- **WHEN** an order has been accepted and its confirmation is shown in the live region, and the shopper then changes the search query — by typing, deleting, or clearing it
-- **THEN** the live region's content is emptied as soon as the query changes, without waiting for the new search's results to arrive
-- **AND** nothing is announced as a result of emptying it
+- **WHEN** an order has been accepted and its confirmation is shown in the live region, and the shopper then changes the trimmed search query — by typing, deleting, or clearing it
+- **THEN** the live region's text content is emptied as soon as the trimmed query changes, while the request for the new results is still pending
+- **AND** the clearing writes no text into the region
 
-#### Scenario: changing the search clears a rejection or a not-sent message
+#### Scenario: changing the search clears a rejection
 
-- **WHEN** an order's rejection message (`REQ-ORD-9`) or its not-sent message (`REQ-ORD-11`) is shown, and the shopper then changes the search query
-- **THEN** the live region's content is emptied, exactly as for a confirmation
+- **WHEN** an order's rejection message (`REQ-ORD-9`) is shown, and the shopper then changes the trimmed search query
+- **THEN** the live region's text content is emptied, exactly as for a confirmation
+- **AND** the clearing writes no text into the region
+
+#### Scenario: changing the search does not clear a not-sent message
+
+- **WHEN** an order's not-sent message (`REQ-ORD-11`) is shown, and the shopper then changes the trimmed search query
+- **THEN** that not-sent message stays in the live region
+
+#### Scenario: whitespace that does not change the trimmed query leaves the message
+
+- **WHEN** a confirmation is shown and the shopper types or deletes only whitespace, so the trimmed query is unchanged
+- **THEN** the confirmation stays in the live region
 
 #### Scenario: the order's own refresh does not clear its outcome
 
 - **WHEN** an order is placed, accepted or rejected, and the item list refreshes afterward under the same query that was already applied (`REQ-CAT-7`)
 - **THEN** the outcome message stays in the live region, unaffected by that refresh
 
+#### Scenario: retrying the catalogue load does not clear the outcome
+
+- **WHEN** an order outcome is shown and the shopper operates the catalogue's retry control, which reloads the same query
+- **THEN** the outcome stays in the live region
+
 #### Scenario: the page's first search does not disturb an outcome
 
 - **WHEN** the page has just loaded and performs its automatic search with an empty query, and no order has been placed
 - **THEN** the live region is unchanged, still present in the page's markup and empty
 
-#### Scenario: an outcome that arrives after the query changed is shown
+#### Scenario: a confirmation or rejection that arrives after the query changed is not shown
 
-- **WHEN** an order is placed, the shopper changes the search query while the order is still in flight, and the order's outcome then arrives
-- **THEN** that outcome is written into the live region and announced, because it is the latest outcome and has not yet been shown beside any other search
-- **AND** it is cleared by the next change to the query, like any other outcome
+- **WHEN** an order is placed, the shopper changes the trimmed search query while that order is still in flight, and a confirmation or a rejection then arrives
+- **THEN** that confirmation or rejection is not written into the live region
+- **AND** the region's text stays as the clearing left it
+- **AND** a confirmation's order is still recorded in the order history
+- **AND** the item-list refresh for the superseded query is discarded (`REQ-CAT-8`)
+
+#### Scenario: a not-sent message that arrives after the query changed is shown
+
+- **WHEN** an order is placed, the shopper changes the trimmed search query while that order is still in flight, and the order was not sent (`REQ-ORD-11`)
+- **THEN** that not-sent message is written into the live region and announced
+- **AND** a later change of the trimmed query does not clear it
 
 #### Scenario: a later order after a clear is announced normally
 

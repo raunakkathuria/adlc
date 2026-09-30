@@ -1,10 +1,10 @@
 ## 1. Tests first
 
-- [ ] 1.1 Add tests through the API/page harness naming `REQ-ORD-7` for each new scenario: cleared on query change (confirmation, rejection, not-sent), not cleared by the order's own refresh, first automatic search leaves the region empty, late-arriving outcome shown, later order announced after a clear. Watch them fail.
+- [ ] 1.1 Add tests through the API/page harness naming `REQ-ORD-7` for each new scenario: a confirmation and a rejection are cleared when the trimmed query changes, and the region's text is already empty while the new items request is still pending; a not-sent message is not cleared; whitespace that leaves the trimmed query unchanged does not clear; the order's own refresh does not clear; the catalogue retry does not clear; the first automatic search leaves the region empty; a confirmation or rejection that arrives after the query changed is not written in, and the successful order is still in the history; a not-sent message that arrives after the query changed is written in and is not cleared by a later search; a later order after a clear is announced. Watch them fail.
 
 ## 2. Implementation
 
-- [ ] 2.1 Empty the order-outcome region when the query changes, and only then.
+- [ ] 2.1 Empty the order-outcome region when the trimmed query changes, except when it holds a not-sent message, and do not write an outcome that arrives after that change unless the order was not sent.
 
 ## 3. Verification
 
