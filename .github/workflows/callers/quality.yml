@@ -1,8 +1,6 @@
 # Caller: quality — copy into your repo as .github/workflows/quality.yml
 name: quality
 on:
-  schedule:
-    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       pr_number: { description: "Implementation PR (verify mode); blank = explore", required: false, type: string }

@@ -27,6 +27,16 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **A look at the whole product no longer starts a line of work.** Quality explore ran every
+  night, filed what it found, and dispatched intake, so each morning could open a spec pull
+  request. The schedule is gone, in the station and in the caller an adopter copies. An explore
+  with no source issue is labelled `needs-human` and reported as `Parked`, which is not the word
+  the workflow greps for before it dispatches intake. A finding that came from a source issue is
+  still `Filed` and still re-enters the line. Red: `quality explore does not schedule itself or
+  start intake` failed because `quality.yml` still matched `schedule:`.
+  `findings: an explore with no source issue is parked, not filed into intake` failed with
+  `'Filed' !== 'Parked'` while `reportVerb('-')` still returned `Filed`.
+
 - **The verifier could never pass a behaviour the running app cannot reach.** #108's fix is the
   page's message for an empty catalogue, and the verifier drives the running app, which starts with
   three seeded items and has no way to remove one. `prompts/verify.md` allowed `FEATURE-IMPLEMENTED:
