@@ -8,7 +8,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findingsLine, payloadOf } from '../scripts/file-findings.mjs';
+import { findingsLine, payloadOf, reportVerb } from '../scripts/file-findings.mjs';
 
 const payload = payloadOf; // the CLI's own parse, so the tests read what gets filed
 
@@ -115,6 +115,13 @@ test('findings: a restatement without bodies cannot shadow the real line', () =>
   for (const later of ['`OUT-OF-SCOPE-FINDINGS: [{"title":"real defect"}]`', 'OUT-OF-SCOPE-FINDINGS: [{}]']) {
     assert.deepEqual(payload(findingsLine(`${real}\n\n## Verdict\n\n${later}\n`)), [{ title: 'real defect', body: 'b' }], later);
   }
+});
+
+test('findings: an explore with no source issue is parked, not filed into intake', () => {
+  // quality.yml dispatches intake only for lines that say "Filed". An explore has no parent
+  // issue, and handing it to intake is what turned each nightly finding into a pull request.
+  assert.equal(reportVerb('-'), 'Parked');
+  assert.equal(reportVerb('104'), 'Filed');
 });
 
 test('findings: a broken real line stays loud even beside an empty echo', () => {
