@@ -71,6 +71,8 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
       addEventListener(type, fn) { this.listeners[type] = fn; },
       click() { return this.listeners.click?.(); },
       querySelectorAll() { return []; },
+      setAttribute() {},
+      removeAttribute() {},
     };
   }
 
@@ -1096,4 +1098,124 @@ test('REQ-ORD-7: a later order after a clear is announced normally', () =>
     assert.equal(page.noteHtml(), '');
     await page.order('BOOK-1', 1);
     assert.match(page.noteHtml(), /Order #\d+ placed/);
+  }));
+
+// REQ-ORD-7 / REQ-ORD-9 — the outcome is announced only while the trimmed field is unchanged.
+
+/** The shopper changing the maximum price, through the page's own input listener. */
+async function setMaxPrice(page, value) {
+  page.getElementById('max-price').value = value;
+  await page.getElementById('max-price').listeners.input();
+}
+
+test('REQ-ORD-7: the query is the field at the click, not the results still showing', () =>
+  withServer(async ({ base }) => {
+    const items = freezableItemsFetch(base);
+    const page = await loadClientPage(base, { fetch: items.fetch });
+    items.state.frozen = true;
+    const typing = page.type('mugs'); // the search has not returned; the cards show the old results
+    await flush();
+    const ordering = page.order('MUG-1', 2);
+    await flush();
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+    items.thaw();
+    await Promise.all([typing, ordering]);
+  }));
+
+test('REQ-ORD-7: a withheld rejection adds no entry to the reloaded history, and the cards stay as they were', () =>
+  withServer(async ({ base }) => {
+    const held = heldOrderFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    await page.type('mug');
+    const ordering = page.order('MUG-1', 21);
+    await flush();
+    await page.type('book');
+    held.release();
+    await ordering;
+    assert.equal(page.noteHtml(), '');
+    assert.match(page.getElementById('orders').innerHTML, /No orders yet/);
+    assert.match(page.itemsHtml(), /BOOK-1/);
+    assert.doesNotMatch(page.itemsHtml(), /MUG-1/);
+  }));
+
+test('REQ-ORD-7: changing the maximum price does not clear a showing outcome', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 2);
+    await setMaxPrice(page, '50');
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+    await page.order('MUG-1', 21);
+    await setMaxPrice(page, '60');
+    assert.match(page.noteHtml(), /Rejected/);
+  }));
+
+test('REQ-ORD-7: changing the maximum price does not withhold an in-flight outcome', () =>
+  withServer(async ({ base }) => {
+    const held = heldOrderFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    const ordering = page.order('MUG-1', 2);
+    await flush();
+    await setMaxPrice(page, '50');
+    held.release();
+    await ordering;
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+  }));
+
+test('REQ-ORD-7: a matching late outcome replaces whatever the region holds', () =>
+  withServer(async ({ base }) => {
+    let holdFirst = true;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const page = await loadClientPage(base, {
+      fetch: async (path, options) => {
+        if (path === '/api/orders' && options?.method === 'POST' && holdFirst) {
+          holdFirst = false;
+          await gate;
+        }
+        return fetch(base + path, options);
+      },
+    });
+    await page.type('mug');
+    const first = page.order('MUG-1', 2);
+    await flush();
+    await page.type('book');
+    await page.order('BOOK-1', 1);
+    assert.match(page.noteHtml(), /1 × .*\(BOOK-1\)/);
+    await page.type('mug');
+    release();
+    await first;
+    assert.match(page.noteHtml(), /2 × Enamel Mug \(MUG-1\)/);
+  }));
+
+test('REQ-ORD-7: a not-sent message survives further searches until another order outcome replaces it', () =>
+  withServer(async ({ base }) => {
+    let live = false;
+    const page = await loadClientPage(base, {
+      fetch: (path, options) =>
+        live || !(path === '/api/orders' && options?.method === 'POST') ? fetch(base + path, options) : Promise.reject(new TypeError('Failed to fetch')),
+    });
+    await page.order('MUG-1', 1);
+    await page.type('book');
+    await page.type('cup');
+    assert.match(page.noteHtml(), /was not sent/i);
+    live = true;
+    await page.order('MUG-1', 2);
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+  }));
+
+test('REQ-ORD-9: a rejection is written into the live region when shown, and one that arrives after the field changed is not shown', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('MUG-1', 21);
+    assert.match(page.noteHtml(), /Rejected — no more than 20 units per order/);
+
+    const held = heldOrderFetch(base);
+    const late = await loadClientPage(base, { fetch: held.fetch });
+    await late.type('mug');
+    const ordering = late.order('MUG-1', 21);
+    await flush();
+    await late.type('book');
+    held.release();
+    await ordering;
+    assert.equal(late.noteHtml(), '');
   }));
