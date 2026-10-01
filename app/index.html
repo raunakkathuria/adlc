@@ -36,7 +36,7 @@
   input[aria-invalid=true] { border-color: var(--bad); }
   .filters { display: flex; gap: .5rem; }
   .search-field { flex: 1; min-width: 0; }
-  .search-field label { display: block; font-size: .8rem; color: var(--muted); margin: 0 0 .25rem; }
+  .search-field label, .price-field label { display: block; font-size: .8rem; color: var(--muted); margin: 0 0 .25rem; }
   .filters { align-items: flex-end; }
   .field-error { color: var(--bad); font-size: .8rem; margin: .35rem 0 0; }
   input[type=number] { width: 4.5rem; text-align: right; }
@@ -85,7 +85,10 @@
       <label for="q">Search the catalogue</label>
       <input type="search" id="q" aria-label="Search the catalogue" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
     </div>
-    <input type="text" id="max-price" inputmode="decimal" aria-label="Maximum price" placeholder="Max price (£)" autocomplete="off">
+    <div class="price-field">
+      <label for="max-price">Maximum price</label>
+      <input type="text" id="max-price" inputmode="decimal" aria-label="Maximum price" placeholder="Max price (£)" autocomplete="off">
+    </div>
   </div>
   <div id="price-error" class="field-error"></div>
 
