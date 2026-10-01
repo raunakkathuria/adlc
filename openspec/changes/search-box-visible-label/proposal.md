@@ -17,6 +17,4 @@ A shopper sees the words "Search the catalogue" next to the search box at all ti
 - `REQ-CAT-5`'s earlier "no visible change" stance came from `label-search-input`, which scoped out sighted users because the gap was then about screen readers. That reason does not hold for this issue, which is explicitly about sighted users.
 - Presentation is deliberately not specified: the label's size, colour and spacing, and the alignment of the search field and maximum price field in the filter row. The verifier flagged the shipped choices (small muted label above the field; filter row aligned to the bottom edge) as unspecified. They are declared non-requirements, so a later restyle needs no spec change as long as the label stays visible. The price field's accessible name is untouched.
 
-## Open question
-
-Should the spec fix a minimum contrast or size for the label? Answer "no" (leave to design) or "yes, meet WCAG AA text contrast" — the delta currently assumes no.
+The label's contrast and size stay a design choice. This delta does not set a minimum.
