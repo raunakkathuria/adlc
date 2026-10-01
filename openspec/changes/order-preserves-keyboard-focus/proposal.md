@@ -4,7 +4,7 @@ Issue #122 (the same defect as the earlier #50, closed unfixed). After a shopper
 
 ## What changes for the user
 
-- After an order, keyboard focus is still on the item they ordered. It returns to that item's Order button after the list refreshes. If that button is disabled in the refreshed list because the order took the item's stock to zero, focus goes to that item's quantity input instead, because a disabled button cannot hold focus.
+- After an order, keyboard focus is still on the item they ordered. It returns to that item's Order button after the list refreshes. A disabled control cannot hold focus. If that button is disabled and the quantity input is still enabled — an order still in flight (`REQ-ORD-14`) — focus goes to the quantity input. If the order took the item's stock to zero, both the button and the quantity input are disabled (`REQ-ORD-13`), so focus goes to that item's card instead. The card is not an extra stop while tabbing through the catalogue.
 - This applies whatever the order's outcome: confirmed, rejected, or not sent.
 - Focus is put back from the click. A shopper who has moved to another control, such as another item's quantity input or the search field, is not pulled back, and their focus survives the refresh too: another item's quantity input or Order button is replaced by the refresh, so focus is put on its replacement rather than dropping to the page. Focus that leaves only because the button was disabled while the order was in flight (`REQ-ORD-14`) is still restored when the list is shown.
 - Focus on any other control is left alone. Focus resting on no control at all, such as after a click on blank page space during the order, counts as lost rather than as a move, so it is restored to the ordered item.
