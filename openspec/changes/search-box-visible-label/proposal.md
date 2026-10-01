@@ -12,10 +12,6 @@ A shopper sees the words "Search the catalogue" next to the search box at all ti
 
 - Search behaviour (`REQ-CAT-3`), the live-region summary (`REQ-CAT-7`) and every empty-state message are untouched.
 - The accessible-name guarantee of `REQ-CAT-5` is unchanged and still holds; this adds to it.
-- The maximum price field (`REQ-CAT-13`) has the same shape of gap — an `aria-label` plus a placeholder only — but the issue is about the search box. See the open question.
+- The maximum price field (`REQ-CAT-13`) keeps its `aria-label` and placeholder. This issue is only the search box. A visible label for the price field is a separate change, not this one.
 - No API change: this is a page-only requirement. There is no refusal path, since the label takes no input.
 - `REQ-CAT-5`'s earlier "no visible change" stance came from `label-search-input`, which scoped out sighted users because the gap was then about screen readers. That reason does not hold for this issue, which is explicitly about sighted users.
-
-## Open question
-
-Should the **Maximum price** field also get a persistent visible label in this change? Answer "yes" and the delta gains one requirement of the same shape; "no" and it becomes its own issue. Default as drafted: no.
