@@ -8,20 +8,17 @@ Issue #122 (the same defect as the earlier #50, closed unfixed). After a shopper
 - This applies whatever the order's outcome: confirmed, rejected, or not sent.
 - Focus is put back from the click. A shopper who moved to another control is not pulled back. That includes another item's quantity input or the search field. The refresh replaces those controls, so focus moves to the replacement. It does not drop to the page. Focus that leaves only because the button was disabled while the order was in flight (`REQ-ORD-14`) is still restored when the list is shown.
 - Focus on any other control is left alone. Focus on no control counts as lost, not as a move. It is restored to the item whose Order button was operated most recently. An earlier order's refresh does not pull focus back.
-- Focus resting on an item's card counts as the shopper's move to that item and stays on its card. A focused quantity input stays a quantity input, and a focused Order button stays an Order button, unless disabled.
+- A later order placed without focus on the button does not take the fallback. Focus still returns to the latest item whose button was focused.
+- Focus on an item's card counts as a move to that item and stays on that card. A focused quantity input stays a quantity input. A focused Order button stays an Order button, unless it is disabled.
 - The outcome message is still announced through its live region (`REQ-ORD-7`). Focus does not move to it.
 
 One new requirement, `REQ-ORD-15`, in the existing `orders` capability. It covers the page only, since there is no API change. No new capability directory.
 
 ## Out of scope
 
-- **Pointer clicks that do not focus the button** (some browsers do not focus a button on click). There is no keyboard focus to lose, so nothing is restored.
+- **Pointer clicks that do not focus the button** (some browsers do not focus a button on click). That click restores nothing of its own. It does not cancel an earlier order whose button was focused.
 - **The quantity field resetting to 1** after a refresh. That stays as it is. This delta only moves focus.
 - **Focus after a refresh that fails.** When the item list cannot be loaded (`REQ-CAT-11`), no Order button exists to return to. This delta does not say where focus goes. The earlier decision to leave it unspecified still holds: the failure message and its retry control are the only things on screen.
 - **Focus after searching, the maximum-price field, or retrying the catalogue load.** None of these removes a control the shopper was operating from the keyboard in the way an order does. The search and price fields are not part of the replaced list.
 - **Moving focus to the outcome message** (an alternative the issue floats). The live region already announces it, and focus on the item is the less disruptive choice.
 - **Changing when the in-flight button is disabled** (`REQ-ORD-14`). That disable can take the button out of the Tab order before the list refreshes. This delta treats that loss of focus as not the shopper moving on, and still restores focus when the refreshed list is shown.
-
-## Open question
-
-When the latest order was placed by a pointer that did not focus the button, and focus then rests on no control, should focus go to the latest *keyboard-operated* item (as drafted here), or stay unrestored? The draft restores to the keyboard-operated item; say if you would rather it did nothing.
