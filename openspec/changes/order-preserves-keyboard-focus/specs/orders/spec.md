@@ -8,7 +8,9 @@ A disabled control cannot hold focus. When the Order button that should receive 
 
 If the shopper has moved focus to another control since the click, focus stays on that control. That control may be the search field, the maximum-price field, or any control inside an item card, such as another item's quantity input or another item's Order button. The refresh replaces the item cards, so a control inside a card that was focused is a new control by the time the list is shown. Focus SHALL then be on the same control of the same item in the refreshed list, not on the page body. If that replacement cannot hold focus, the rule above applies: an enabled quantity input, or the item's card when both controls are disabled. Moving focus here means the shopper's own move to a control, by keyboard or pointer. Any other control on the page counts, not only those named here, and focus stays on it. Putting focus back as this requirement describes is not a move. Focus resting on no control at all, because the shopper's click landed on blank page space or because the page dropped it, is not a move to a control either. When the refreshed list is shown with focus on no control, focus is restored as above to the item whose Order button the shopper most recently operated while focused on it. With one order in flight that is the ordered item. With orders for different items in flight together (`REQ-ORD-14` disables only the button of the item being ordered), a refresh that lands first does not take focus back to its own item if a later order has since been placed from another item's button. Focus goes to the item of the latest such order. If the refreshed list has no card for the focused control's item, focus is not moved onto another item's Order button. The same holds when it has no card for the ordered item. The same holds when the list could not be loaded (`REQ-CAT-11`). Focus is not moved onto the outcome region either. A stale refresh is discarded and not shown (`REQ-CAT-8`). This requirement then moves nothing. A withheld outcome discards that refresh, so it also moves nothing. A query that changes and changes back shows the outcome and the refresh. Focus then stays where the shopper moved it.
 
-Focus is restored to the ordered item only when it was on that item's Order button at the click. An order placed by a pointer that does not focus the button leaves nothing to restore, and this requirement asks for nothing then.
+Focus is restored to the ordered item only when it was on that item's Order button at the click. An order placed by a pointer that does not focus the button leaves nothing to restore, and this requirement asks for nothing then. Such an order is also not an order "most recently operated" in the sense above: with focus on no control, focus goes to the item of the latest order operated with focus on its button, and a later pointer-only order does not displace it.
+
+Focus resting on an item card itself, because the shopper clicked the card's text or because focus was restored there, counts as focus on that item's control. When the refreshed list is shown, focus stays on that item's card, since the card is replaced like the controls in it. A focused quantity input stays on the quantity input and a focused Order button stays on the Order button, as far as each can hold focus; focus is not exchanged between them except by the disabled-control rules above.
 
 Focus never moves to the order-outcome region: the outcome continues to reach assistive technology through its live region (`REQ-ORD-7`), unaffected by this requirement. Which outcome is written, withheld, or cleared is still decided by `REQ-ORD-7`. This requirement changes only where focus is.
 
@@ -95,6 +97,17 @@ Focus never moves to the order-outcome region: the outcome continues to reach as
 - **AND** A's refreshed list is shown first
 - **THEN** focus is on item B's Order button, or its quantity input if only the button is disabled, or its card if both are disabled, not on item A
 - **AND** when B's refreshed list is shown, focus is restored to item B in the same way
+- **AND** if A's refreshed list is discarded as stale (`REQ-CAT-8`) because B's order issued a newer request, nothing is moved on its account and B's refreshed list restores focus to item B
+
+#### Scenario: focus on an item card stays on that card
+
+- **WHEN** an order is placed and the shopper moves focus onto a different item's card, and the refreshed list is shown
+- **THEN** focus is on that item's card in the refreshed list
+
+#### Scenario: a later pointer-only order does not take the fallback
+
+- **WHEN** an order is placed from item A's Order button with focus on it, then item B's Order button is operated by a pointer without gaining focus, and focus rests on no control when a refreshed list is shown
+- **THEN** focus is on item A, the latest order operated with focus on its button, not on item B
 
 #### Scenario: a click that did not focus the button restores nothing
 
