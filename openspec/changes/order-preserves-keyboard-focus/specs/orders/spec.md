@@ -4,9 +4,9 @@
 
 After an order is placed, the page refreshes the item list (`REQ-ORD-1`, `REQ-CAT-8`). That refresh replaces every item card. The page remembers that focus was on that item's Order button when the shopper operated it. When that order's refreshed list is shown, focus SHALL be on that same item's Order button. This holds unless the shopper has moved focus to another control since the click. A keyboard user then does not start again from the top of the page. Focus may leave because the button was disabled while the order was in flight (`REQ-ORD-14`). Focus may also leave because the list was replaced. Neither of those is the shopper moving focus, and focus is still restored. The item is the one whose Order button was operated (`REQ-ORD-8`). This holds for a confirmed order, a rejection (`REQ-ORD-9`), and an order that was not sent (`REQ-ORD-11`).
 
-When that button is disabled in the refreshed list because stock is 0 (`REQ-ORD-13`), focus SHALL be on that item's quantity input. A disabled button cannot hold focus.
+A disabled control cannot hold focus. When the Order button that should receive focus is disabled and that item's quantity input is enabled, focus SHALL be on that quantity input. That is what happens when the button is disabled only because an order for that item is in flight (`REQ-ORD-14`). When the button is disabled because stock is 0 (`REQ-ORD-13`), the quantity input is disabled too. Neither control can hold focus. Focus SHALL then be on that item's card: the element that contains the item's name, stock text, quantity input, and Order button. Focus is not on the page body. The card can receive focus. It is not a stop in the Tab order, so tabbing through the catalogue does not land on the card. The same rule applies when the control to restore is a quantity input that is disabled because stock is 0. Focus is on that item's card.
 
-If the shopper has moved focus to another control since the click, focus stays on that control. That control may be the search field, the maximum-price field, or any control inside an item card, such as another item's quantity input or another item's Order button. The refresh replaces the item cards, so a control inside a card that was focused is a new control by the time the list is shown. Focus SHALL then be on the same control of the same item in the refreshed list, not on the page body. If that control is an Order button disabled in the refreshed list because stock is 0, focus is on that item's quantity input instead. Moving focus here means the shopper's own move to a control, by keyboard or pointer. Any other control on the page counts, not only those named here, and focus stays on it. Putting focus back as this requirement describes is not a move. Focus resting on no control at all, because the shopper's click landed on blank page space or because the page dropped it, is not a move to a control either. When the refreshed list is shown with focus on no control, focus is restored to the ordered item as above. If the refreshed list has no card for the item the focused control belonged to, or no card for the ordered item, focus is not moved onto another item's Order button. The same holds when the list could not be loaded (`REQ-CAT-11`). Focus is not moved onto the outcome region either. A stale refresh is discarded and not shown (`REQ-CAT-8`). This requirement then moves nothing. A withheld outcome discards that refresh, so it also moves nothing. A query that changes and changes back shows the outcome and the refresh. Focus then stays where the shopper moved it.
+If the shopper has moved focus to another control since the click, focus stays on that control. That control may be the search field, the maximum-price field, or any control inside an item card, such as another item's quantity input or another item's Order button. The refresh replaces the item cards, so a control inside a card that was focused is a new control by the time the list is shown. Focus SHALL then be on the same control of the same item in the refreshed list, not on the page body. If that replacement cannot hold focus, the rule above applies: an enabled quantity input, or the item's card when both controls are disabled. Moving focus here means the shopper's own move to a control, by keyboard or pointer. Any other control on the page counts, not only those named here, and focus stays on it. Putting focus back as this requirement describes is not a move. Focus resting on no control at all, because the shopper's click landed on blank page space or because the page dropped it, is not a move to a control either. When the refreshed list is shown with focus on no control, focus is restored to the ordered item as above. If the refreshed list has no card for the focused control's item, focus is not moved onto another item's Order button. The same holds when it has no card for the ordered item. The same holds when the list could not be loaded (`REQ-CAT-11`). Focus is not moved onto the outcome region either. A stale refresh is discarded and not shown (`REQ-CAT-8`). This requirement then moves nothing. A withheld outcome discards that refresh, so it also moves nothing. A query that changes and changes back shows the outcome and the refresh. Focus then stays where the shopper moved it.
 
 Focus is restored to the ordered item only when it was on that item's Order button at the click. An order placed by a pointer that does not focus the button leaves nothing to restore, and this requirement asks for nothing then.
 
@@ -32,35 +32,61 @@ Focus never moves to the order-outcome region: the outcome continues to reach as
 - **WHEN** the page shows several item cards, focus is on the Order button of the second item, and that item is ordered
 - **THEN** after the refresh focus is on the second item's Order button, not the first's or any other
 
-#### Scenario: an item that drops to zero stock gives focus to its quantity input
+#### Scenario: an item that drops to zero stock gives focus to its card
 
-- **WHEN** focus is on an item's Order button, the order is accepted and leaves that item at 0 stock, and the refreshed list is shown with that button disabled (`REQ-ORD-13`)
-- **THEN** focus is on that item's quantity input in the refreshed list
+- **WHEN** focus is on an item's Order button and the accepted order leaves that item at 0 stock
+- **AND** the refreshed list shows that button and that quantity input disabled (`REQ-ORD-13`)
+- **THEN** focus is on that item's card
+- **AND** focus is not on the page body, the disabled button, or the disabled quantity input
 
 #### Scenario: focus the shopper has moved elsewhere is left alone
 
-- **WHEN** an order is placed, the shopper moves focus to a different item's quantity input, the search and the maximum price stay unchanged, and the refreshed list is shown
-- **THEN** focus is on that same item's quantity input in the refreshed list, not returned to the Order button
+- **WHEN** an order is placed and the shopper moves focus to a different item's quantity input
+- **AND** that input stays enabled, and the refreshed list is shown
+- **THEN** focus is on that same item's quantity input, not the ordered item's Order button
 
 #### Scenario: focus moved to another item's Order button follows it through the refresh
 
-- **WHEN** an order is placed from one item's Order button, the shopper moves focus to a different item's Order button before the refreshed list is shown, and the refreshed list is shown
+- **WHEN** an order is placed from one item's Order button
+- **AND** the shopper moves focus to a different item's Order button before the refreshed list is shown
 - **THEN** focus is on that different item's Order button in the refreshed list, not on the page body and not on the ordered item's button
 
-#### Scenario: another item's control that is disabled at zero stock gives focus to its quantity input
+#### Scenario: another item's in-flight Order button gives focus to its quantity input
 
-- **WHEN** the shopper has moved focus to a different item's Order button, and that button is disabled in the refreshed list because stock is 0 (`REQ-ORD-13`)
-- **THEN** focus is on that different item's quantity input
+- **WHEN** the shopper has moved focus to a different item's Order button
+- **AND** that button is disabled in the refreshed list only because an order for it is in flight (`REQ-ORD-14`)
+- **AND** that item's quantity input is enabled
+- **THEN** focus is on that item's quantity input
+
+#### Scenario: another item's control that is disabled at zero stock gives focus to its card
+
+- **WHEN** the shopper has moved focus to a different item's Order button
+- **AND** that button and its quantity input are disabled in the refreshed list because stock is 0 (`REQ-ORD-13`)
+- **THEN** focus is on that item's card
+
+#### Scenario: a disabled quantity input gives focus to its card
+
+- **WHEN** the shopper has moved focus to an item's quantity input
+- **AND** that input is disabled in the refreshed list because stock is 0 (`REQ-ORD-13`)
+- **THEN** focus is on that item's card
+
+#### Scenario: the card is not a tab stop
+
+- **WHEN** the shopper tabs through the catalogue and no focus restoration is pending
+- **THEN** focus does not land on an item card
+- **AND** focus does land on each enabled quantity input and each enabled Order button
 
 #### Scenario: focus on another control that is not in the list is left alone
 
-- **WHEN** an order is placed, the shopper moves focus to a control outside the item cards that is not the search or price field, such as a link or a button, and the refreshed list is shown
+- **WHEN** an order is placed and the shopper moves focus to a control outside the item cards
+- **AND** that control is not the search field or the price field, such as a link or a button
+- **AND** the refreshed list is shown
 - **THEN** focus stays on that control
 
 #### Scenario: focus on no control is restored to the ordered item
 
 - **WHEN** an order is placed from an item's Order button, focus then rests on no control (for example the shopper clicked blank page space), and the refreshed list is shown
-- **THEN** focus is on that same item's Order button in the refreshed list, or its quantity input if the button is disabled
+- **THEN** focus is on that item's Order button, or its quantity input if only the button is disabled, or its card if both are disabled
 
 #### Scenario: a click that did not focus the button restores nothing
 
