@@ -14,7 +14,4 @@ A shopper sees the words "Maximum price" next to the price field at all times �
 - Page-only: no API change, and no refusal path, since the label takes no input.
 - Presentation (size, colour, position, alignment with the search field) stays unspecified, as `REQ-CAT-14` left it.
 - The reason `search-box-visible-label` gave for leaving this field out ("this issue is only the search box") expires here; its reason for the search box's `Search the catalogue` text is unaffected.
-
-## Open question
-
-The issue also asks that the field show it is in pounds. `REQ-CAT-13` fixes the accessible name to exactly `Maximum price`, so a label reading `Maximum price (£)` would contradict it. This delta therefore labels the field `Maximum price` only. **Decision for Gate 1: should the page also show a persistent, separate unit hint (for example `£` beside the field, outside the label)?** If yes, say so and the Planner adds it; if no, the pound unit remains visible only in the placeholder and in the `£` amounts the summary states.
+- No separate `£` beside the field. The label is exactly `Maximum price`. The placeholder still hints at pounds while the field is empty.
