@@ -82,6 +82,14 @@ The page's order-outcome region SHALL be exposed as an ARIA live region (for exa
 - **WHEN** the page has just loaded and performs its automatic search with an empty query, and no order has been placed
 - **THEN** the live region is unchanged, still present in the page's markup and empty
 
+#### Scenario: a confirmation or rejection that arrives after the query changed is not shown
+
+- **WHEN** an order is placed, the shopper changes the trimmed search query while that order is still in flight, and a confirmation or a rejection then arrives
+- **THEN** that confirmation or rejection is not written into the live region
+- **AND** the region's text stays as the clearing left it
+- **AND** a confirmation's order is still recorded in the order history
+- **AND** the item-list refresh for the superseded query is discarded (`REQ-CAT-8`)
+
 #### Scenario: a confirmation that arrives after the query changed is not shown
 
 - **WHEN** an order is placed, the shopper changes the trimmed search query while that order is still in flight, and a confirmation then arrives
