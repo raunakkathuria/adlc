@@ -6,20 +6,19 @@ Issue #134 (found while working #130): after the shopper operates an Order butto
 
 ## What changes for the user
 
-- From the moment a shopper operates an item's Order button until that order's outcome is known, that item's Order button is disabled. A second click, or a second Enter/Space press, places nothing.
-- The button comes back once the outcome is known, whatever it was: confirmed, rejected, or not sent (`REQ-ORD-11`), so a shopper whose order never arrived can try again. It also comes back if the outcome was withheld because the search changed meanwhile (`REQ-ORD-7`).
+- From the moment a shopper operates an item's Order button until that order's outcome is known, that item's Order button is disabled with the native `disabled` attribute. A second click, or a second Enter or Space press, places nothing. Exactly one order is sent, and stock drops by that quantity once.
+- The button is enabled again at the moment the outcome is known: confirmed, rejected, not sent, or withheld. That is not when the post-order refresh arrives. If the card then showing already says 0 in stock, `REQ-ORD-13` keeps it disabled. A shopper who orders again before the refresh lands is placing a new order; the server still checks stock. That window is accepted.
+- A not-sent outcome whose reply could not be read may mean the server already placed the order. The button comes back anyway, so it does not stay dead. The history is where the shopper checks. That cost is accepted.
 - Only the item being ordered is held. The shopper can order a different item while the first is pending.
-- The hold follows the item, not the element: if the item list re-renders while the order is pending (a search, the price ceiling, a retry), the item's new button is still disabled.
-- The button's name and its visible text ("Order") do not change, and the outcome message still arrives through the existing live region.
+- The hold follows the item. If the list re-renders, or the item leaves and comes back, or a failed load is retried, the item's new button stays disabled until the outcome is known.
+- There is no "placing…" sentence. Disabling the focused button takes it out of the Tab order, and this change does not move focus. That cost is accepted; restoring focus is a separate issue.
+- A button disabled only because an order is in flight does not carry the "0 in stock" description. `REQ-ORD-13` is modified so that description applies only when the button is disabled because stock is 0.
 - The API is unchanged: it still accepts every valid order it is sent.
 
 ## Out of scope
 
 - Server-side protection against duplicates (idempotency keys, rejecting the same order twice). Two identical orders are legitimate at the API, and `REQ-ORD-1` through `REQ-ORD-6` are untouched.
 - Disabling the quantity input or other items' buttons while an order is pending.
-- Changing the order-outcome message, including any change to the withhold/clear rules of `REQ-ORD-7`. Adding a "placing…" message would interact with those rules (see the open question), so it is not done here. `order-outcome-follows-the-field` (in flight) works on the same rules and adds no requirement ids; this delta adds one and modifies nothing it touches.
+- Changing the order-outcome message, including any "placing…" announcement. The in-flight signal is the disabled button alone.
+- Moving focus when the button is disabled.
 - Timeouts or cancellation of a pending order.
-
-## Open question for Gate 1
-
-The issue offers "disable the button, **or** show a status message". This delta picks the disabled button alone, because a "Placing your order…" message in the live region would have to be reconciled with clearing on search change, withheld outcomes, and not replacing a not-sent message (`REQ-ORD-7`). Decision: is a disabled button enough, or do you also want a "placing…" announcement (a follow-up delta)?
