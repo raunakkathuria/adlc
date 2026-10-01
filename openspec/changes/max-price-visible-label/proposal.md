@@ -15,3 +15,10 @@ A shopper sees the words "Maximum price" next to the price field at all times â€
 - Exact pixel sizes and spacing stay unspecified. The label matches the search label's text size and colour, and sits above its field. The two input boxes line up along their bottom edges.
 - The reason `search-box-visible-label` gave for leaving this field out ("this issue is only the search box") expires here; its reason for the search box's `Search the catalogue` text is unaffected.
 - No separate `Â£` beside the field. The label is exactly `Maximum price`. The placeholder still hints at pounds while the field is empty.
+- Where the refusal message sits is unchanged. `REQ-CAT-13` says only "next to the field", and the page already shows it in its own row below the two fields. That placement predates this change; moving it under the price field is a separate change.
+- Narrow screens: how the two fields wrap or shrink on a very narrow viewport is not specified, as it was not for the search field (`REQ-CAT-14`). The only constraint is that the label is shown and stays tied to its field.
+- How the accessible name is supplied (an attribute or the visible label itself) is an implementation choice. The requirement fixes the outcome: the name is exactly `Maximum price`.
+
+## Open question
+
+Should the refusal message move to sit directly under the price field now that it is labelled? Default if you say nothing: no, leave it where `REQ-CAT-13` has it.
