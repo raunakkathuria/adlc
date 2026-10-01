@@ -1,0 +1,21 @@
+# Give the search box a visible label
+
+## Why now
+
+Issue #129: the catalogue search field is named only by an `aria-label` and a placeholder. The placeholder disappears as soon as a shopper types, and an `aria-label` is invisible to everyone who is not using assistive technology. Once there is text in the box, nothing on screen says what the field is. `REQ-CAT-5` (shipped in `label-search-input`) fixed the *accessible* name and deliberately left sighted users with no visible change; this delta closes the visible half.
+
+## What changes for the user
+
+A shopper sees the words "Search the catalogue" next to the search box at all times — before typing, while typing, and after. The placeholder hint (the "try “mug”" examples) stays. Nothing about searching itself changes. The visible words match the field's accessible name, so a person using speech control can say what they read.
+
+## Out of scope
+
+- Search behaviour (`REQ-CAT-3`), the live-region summary (`REQ-CAT-7`) and every empty-state message are untouched.
+- The accessible-name guarantee of `REQ-CAT-5` is unchanged and still holds; this adds to it.
+- The maximum price field (`REQ-CAT-13`) has the same shape of gap — an `aria-label` plus a placeholder only — but the issue is about the search box. See the open question.
+- No API change: this is a page-only requirement. There is no refusal path, since the label takes no input.
+- `REQ-CAT-5`'s earlier "no visible change" stance came from `label-search-input`, which scoped out sighted users because the gap was then about screen readers. That reason does not hold for this issue, which is explicitly about sighted users.
+
+## Open question
+
+Should the **Maximum price** field also get a persistent visible label in this change? Answer "yes" and the delta gains one requirement of the same shape; "no" and it becomes its own issue. Default as drafted: no.
