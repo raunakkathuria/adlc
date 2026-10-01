@@ -787,8 +787,51 @@ test('REQ-CAT-14: the search label is fixed text and leaves the maximum price ac
     const html = await (await fetch(base + '/')).text();
     const input = html.match(/<input[^>]*\bid="max-price"[^>]*>/)[0];
     assert.match(input, /\baria-label="Maximum price"/);
-    assert.doesNotMatch(html, /<label[^>]*\bfor="max-price"/, 'the search label does not name the price field');
     assert.doesNotMatch(html.match(/<label[^>]*\bfor="q"[^>]*>[^<]*<\/label>/)?.[0] ?? '', /\$\{|\$\(|innerHTML/, 'the label takes no query');
+  }));
+
+const labelFor = (html, id) => html.match(new RegExp('<label\\b([^>]*\\bfor="' + id + '"[^>]*)>([^<]*)</label>'));
+
+test('REQ-CAT-15: the maximum price field has a visible label that does not depend on its placeholder', () =>
+  withServer(async ({ base }) => {
+    const html = await (await fetch(base + '/')).text();
+    const label = labelFor(html, 'max-price');
+    assert.ok(label, 'a <label for="max-price"> is on the page');
+    assert.equal(label[2].trim(), 'Maximum price');
+    assert.doesNotMatch(label[1], /\b(hidden|sr-only|visually-hidden)\b|display:\s*none/, 'the label is not hidden inline');
+
+    const cls = label[1].match(/\bclass="([^"]+)"/);
+    for (const name of cls ? cls[1].split(/\s+/) : []) {
+      const rule = html.match(new RegExp('\\.' + name + '\\s*\\{([^}]*)\\}'));
+      assert.doesNotMatch(rule ? rule[1] : '', /display:\s*none|visibility:\s*hidden|clip:|position:\s*absolute|(?:width|height):\s*1px/, 'the label is not visually hidden');
+    }
+
+    const input = html.match(/<input[^>]*\bid="max-price"[^>]*>/)[0];
+    assert.match(input, /placeholder="/, 'the placeholder hint is still present');
+  }));
+
+test('REQ-CAT-15: the price label keeps the accessible name, leaves the search label alone, and is styled like it', () =>
+  withServer(async ({ base }) => {
+    const html = await (await fetch(base + '/')).text();
+    const input = html.match(/<input[^>]*\bid="max-price"[^>]*>/)[0];
+    const aria = input.match(/\baria-label="([^"]*)"/);
+    assert.ok(!aria || aria[1] === 'Maximum price', 'any aria-label is exactly Maximum price');
+
+    assert.equal(labelFor(html, 'q')[2].trim(), 'Search the catalogue');
+    assert.equal(labelFor(html, 'max-price')[2].trim(), 'Maximum price');
+    assert.doesNotMatch(labelFor(html, 'max-price')[0], /\$\{|\$\(|innerHTML/, 'the label takes no input');
+
+    const rules = [...html.matchAll(/([^{}]+)\{([^}]*)\}/g)];
+    const styleOf = (labelFrag) => rules
+      .filter(([, sel]) => sel.split(',').some((s) => s.trim().endsWith(labelFrag)))
+      .map(([, , body]) => body.trim()).join(';');
+    const search = styleOf('.search-field label');
+    assert.match(search, /font-size/);
+    assert.equal(styleOf('.price-field label'), search, 'the price label has the search label\'s styling');
+
+    const price = html.indexOf('id="max-price"');
+    assert.ok(html.indexOf('for="max-price"') < price, 'the label is above its field');
+    assert.match(styleOf('.filters'), /align-items:\s*flex-end/, 'the two boxes line up along their bottom edges');
   }));
 
 test('REQ-CAT-13: the maximum price field has an accessible name independent of any placeholder', () =>
