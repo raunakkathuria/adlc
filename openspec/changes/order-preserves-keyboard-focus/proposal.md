@@ -6,13 +6,14 @@ Issue #122 (the same defect as the earlier #50, closed unfixed). After a shopper
 
 - After an order, keyboard focus is still on the item they ordered. It returns to that item's Order button after the list refreshes. If that button is disabled in the refreshed list because the order took the item's stock to zero, focus goes to that item's quantity input instead, because a disabled button cannot hold focus.
 - This applies whatever the order's outcome: confirmed, rejected, or not sent.
-- Focus is put back from the click. A shopper who has moved to another control, such as another item's quantity input or the search field, is not pulled back. Focus that leaves only because the button was disabled while the order was in flight (`REQ-ORD-14`) is still restored when the list is shown.
+- Focus is put back from the click. A shopper who has moved to another control, such as another item's quantity input or the search field, is not pulled back, and their focus survives the refresh too: another item's quantity input or Order button is replaced by the refresh, so focus is put on its replacement rather than dropping to the page. Focus that leaves only because the button was disabled while the order was in flight (`REQ-ORD-14`) is still restored when the list is shown.
 - The outcome message is still announced through its live region (`REQ-ORD-7`). Focus does not move to it.
 
 One new requirement, `REQ-ORD-15`, in the existing `orders` capability. It covers the page only, since there is no API change. No new capability directory.
 
 ## Out of scope
 
+- **Pointer clicks that do not focus the button** (some browsers do not focus a button on click). There is no keyboard focus to lose, so nothing is restored.
 - **The quantity field resetting to 1** after a refresh. That stays as it is. This delta only moves focus.
 - **Focus after a refresh that fails.** When the item list cannot be loaded (`REQ-CAT-11`), no Order button exists to return to. This delta does not say where focus goes. The earlier decision to leave it unspecified still holds: the failure message and its retry control are the only things on screen.
 - **Focus after searching, the maximum-price field, or retrying the catalogue load.** None of these removes a control the shopper was operating from the keyboard in the way an order does. The search and price fields are not part of the replaced list.

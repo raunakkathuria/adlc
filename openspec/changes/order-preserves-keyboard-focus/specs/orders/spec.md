@@ -6,7 +6,9 @@ After an order is placed, the page refreshes the item list (`REQ-ORD-1`, `REQ-CA
 
 When that button is disabled in the refreshed list because stock is 0 (`REQ-ORD-13`), focus SHALL be on that item's quantity input. A disabled button cannot hold focus.
 
-If the shopper has moved focus to another control since the click, focus stays on that control. That control may be another item's quantity input, the search field, or the maximum-price field. If the refreshed list has no card for that item, focus is not moved onto another item's Order button. The same holds when the list could not be loaded (`REQ-CAT-11`). Focus is not moved onto the outcome region either. A stale refresh is discarded and not shown (`REQ-CAT-8`). This requirement then moves nothing. A withheld outcome discards that refresh, so it also moves nothing. A query that changes and changes back shows the outcome and the refresh. Focus then stays where the shopper moved it.
+If the shopper has moved focus to another control since the click, focus stays on that control. That control may be the search field, the maximum-price field, or any control inside an item card, such as another item's quantity input or another item's Order button. The refresh replaces the item cards, so a control inside a card that was focused is a new control by the time the list is shown. Focus SHALL then be on the same control of the same item in the refreshed list, not on the page body. If that control is an Order button disabled in the refreshed list because stock is 0, focus is on that item's quantity input instead. Moving focus here means the shopper's own move by keyboard or pointer. Putting focus back as this requirement describes is not a move. If the refreshed list has no card for the item the focused control belonged to, or no card for the ordered item, focus is not moved onto another item's Order button. The same holds when the list could not be loaded (`REQ-CAT-11`). Focus is not moved onto the outcome region either. A stale refresh is discarded and not shown (`REQ-CAT-8`). This requirement then moves nothing. A withheld outcome discards that refresh, so it also moves nothing. A query that changes and changes back shows the outcome and the refresh. Focus then stays where the shopper moved it.
+
+Focus is restored to the ordered item only when it was on that item's Order button at the click. An order placed by a pointer that does not focus the button leaves nothing to restore, and this requirement asks for nothing then.
 
 Focus never moves to the order-outcome region: the outcome continues to reach assistive technology through its live region (`REQ-ORD-7`), unaffected by this requirement. Which outcome is written, withheld, or cleared is still decided by `REQ-ORD-7`. This requirement changes only where focus is.
 
@@ -38,7 +40,22 @@ Focus never moves to the order-outcome region: the outcome continues to reach as
 #### Scenario: focus the shopper has moved elsewhere is left alone
 
 - **WHEN** an order is placed, the shopper moves focus to a different item's quantity input, the search and the maximum price stay unchanged, and the refreshed list is shown
-- **THEN** focus is still on that quantity input, not returned to the Order button
+- **THEN** focus is on that same item's quantity input in the refreshed list, not returned to the Order button
+
+#### Scenario: focus moved to another item's Order button follows it through the refresh
+
+- **WHEN** an order is placed from one item's Order button, the shopper moves focus to a different item's Order button before the refreshed list is shown, and the refreshed list is shown
+- **THEN** focus is on that different item's Order button in the refreshed list, not on the page body and not on the ordered item's button
+
+#### Scenario: another item's control that is disabled at zero stock gives focus to its quantity input
+
+- **WHEN** the shopper has moved focus to a different item's Order button, and that button is disabled in the refreshed list because stock is 0 (`REQ-ORD-13`)
+- **THEN** focus is on that different item's quantity input
+
+#### Scenario: a click that did not focus the button restores nothing
+
+- **WHEN** an item's Order button is operated by a pointer without focus having been on it
+- **THEN** this requirement does not move focus onto that button after the refresh
 
 #### Scenario: a stale refresh moves nothing
 
