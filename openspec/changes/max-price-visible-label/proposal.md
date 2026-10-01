@@ -12,6 +12,10 @@ A shopper sees the words "Maximum price" next to the price field at all times â€
 
 - Price parsing, the three field states, refusal message and live-region wording (`REQ-CAT-13`) are untouched; the accessible name stays exactly `Maximum price`.
 - Page-only: no API change, and no refusal path, since the label takes no input.
-- Presentation (size, colour, position, alignment with the search field) stays unspecified, as `REQ-CAT-14` left it.
+- Exact sizes and spacing stay unspecified. The verifier found the build had to choose the label's look and the fields' alignment, so those two choices are now recorded in `REQ-CAT-15`: same look as the search label, price field beside the search field, input boxes bottom-aligned.
 - The reason `search-box-visible-label` gave for leaving this field out ("this issue is only the search box") expires here; its reason for the search box's `Search the catalogue` text is unaffected.
 - No separate `Â£` beside the field. The label is exactly `Maximum price`. The placeholder still hints at pounds while the field is empty.
+
+## Open question
+
+- Is "same look as the search label, boxes bottom-aligned" the presentation you want recorded? Say so, or name a different look, and the spec changes to match.
