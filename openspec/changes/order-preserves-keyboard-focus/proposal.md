@@ -21,6 +21,4 @@ One new requirement, `REQ-ORD-15`, in the existing `orders` capability. It cover
 - **Moving focus to the outcome message** (an alternative the issue floats). The live region already announces it, and focus on the item is the less disruptive choice.
 - **Changing when the in-flight button is disabled** (`REQ-ORD-14`). That disable can take the button out of the Tab order before the list refreshes. This delta treats that loss of focus as not the shopper moving on, and still restores focus when the refreshed list is shown.
 
-## Open question
-
-If a shopper clicks blank page space while an order is in flight, should focus still return to the ordered item's button when the list is shown? This delta says yes: nothing is focused then, and the page cannot tell that from focus dropped by the refresh. Answer "no" and that scenario is removed, leaving focus on the page.
+Clicking blank page space leaves nothing focused. That is not a move to a control, so focus returns to the ordered item when the list is shown.
