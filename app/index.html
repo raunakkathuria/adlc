@@ -35,7 +35,9 @@
   }
   input[aria-invalid=true] { border-color: var(--bad); }
   .filters { display: flex; gap: .5rem; }
-  .filters input[type=search] { flex: 1; min-width: 0; }
+  .search-field { flex: 1; min-width: 0; }
+  .search-field label { display: block; font-size: .8rem; color: var(--muted); margin: 0 0 .25rem; }
+  .filters { align-items: flex-end; }
   .field-error { color: var(--bad); font-size: .8rem; margin: .35rem 0 0; }
   input[type=number] { width: 4.5rem; text-align: right; }
   button {
@@ -79,7 +81,10 @@
   <p class="sub">Search the catalogue, then order what you need. Stock updates as orders are placed.</p>
 
   <div class="filters">
-    <input type="search" id="q" aria-label="Search the catalogue" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
+    <div class="search-field">
+      <label for="q">Search the catalogue</label>
+      <input type="search" id="q" aria-label="Search the catalogue" placeholder="Search the catalogue — try “mug”, or a SKU like “BOOK-1”" autocomplete="off">
+    </div>
     <input type="text" id="max-price" inputmode="decimal" aria-label="Maximum price" placeholder="Max price (£)" autocomplete="off">
   </div>
   <div id="price-error" class="field-error"></div>
@@ -163,6 +168,17 @@ function readPrice(text) {
 // leaves it alone, so a typo never widens the list.
 let appliedCeiling = null;
 
+// The hold on an Order button belongs to the item, not to the rendered button (REQ-ORD-14):
+// every render asks `inFlight`, so a re-render, or the item coming back, cannot lose it. The
+// stock last drawn on a card is kept so that releasing a hold defers to REQ-ORD-13 at zero.
+const inFlight = new Set();
+const shownStock = new Map();
+
+function syncOrderButton(sku) {
+  const button = [...el('items').querySelectorAll('button')].find((b) => b.dataset.sku === sku);
+  if (button) button.disabled = inFlight.has(sku) || shownStock.get(sku) === 0;
+}
+
 const CATALOGUE_FAILED = 'Could not load the catalogue. Check your connection.';
 const HISTORY_FAILED = 'Could not load your orders. Check your connection.';
 const ORDER_FAILED = 'Could not reach the server — your order was not sent. Check your connection and try again.';
@@ -208,14 +224,15 @@ async function loadItems({ announce = true, query, seq } = {}) {
     // No query and no ceiling means nothing narrowed the list, so the catalogue itself is empty.
     el('items').innerHTML = `<p class="empty">${emptyText(q, ceiling)}</p>`;
   } else {
+    for (const item of items) shownStock.set(item.sku, item.stock);
     el('items').innerHTML = `<ul class="cards" role="list">` + items.map((item) => `
       <li class="card">
         <div class="grow">
           <div class="name">${escapeHtml(item.name)}</div>
           <div class="meta">${escapeHtml(item.sku)} · ${money(item.price)} · <span id="stock-${escapeHtml(item.sku)}">${escapeHtml(item.stock)} in stock</span></div>
         </div>
-        <input type="number" min="1" max="${Math.min(20, item.stock)}" value="1" id="qty-${escapeHtml(item.sku)}" aria-label="Quantity of ${escapeHtml(item.name)}">
-        <button data-sku="${escapeHtml(item.sku)}" aria-label="Order ${escapeHtml(item.name)}"${item.stock === 0 ? ` disabled aria-describedby="stock-${escapeHtml(item.sku)}"` : ''}>Order</button>
+        <input type="number" min="1" max="${Math.min(20, item.stock)}" value="1" id="qty-${escapeHtml(item.sku)}" aria-label="Quantity of ${escapeHtml(item.name)}"${item.stock === 0 ? ` disabled aria-describedby="stock-${escapeHtml(item.sku)}"` : ''}>
+        <button data-sku="${escapeHtml(item.sku)}" aria-label="Order ${escapeHtml(item.name)}"${item.stock === 0 ? ` disabled aria-describedby="stock-${escapeHtml(item.sku)}"` : inFlight.has(item.sku) ? ' disabled' : ''}>Order</button>
       </li>
     `).join('') + `</ul>`;
 
@@ -244,6 +261,8 @@ async function order(sku) {
   const placedUnder = query.trim();
   const seq = nextRequestSeq(); // reserve the refresh's place in line right away, not once it fires
   const qty = Number(el('qty-' + sku).value);
+  inFlight.add(sku);
+  syncOrderButton(sku);
   const { ok, status, body } = await api('/orders', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -262,6 +281,10 @@ async function order(sku) {
     const reason = body && Object.hasOwn(REJECTIONS, body.reason) ? REJECTIONS[body.reason] : null;
     note(reason ?? 'Rejected — the order could not be placed.', 'bad');
   }
+
+  // The outcome is known: the button returns now, not when the refresh below arrives.
+  inFlight.delete(sku);
+  syncOrderButton(sku);
 
   await loadItems({ announce: false, query, seq });
   await loadOrders();
