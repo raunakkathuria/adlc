@@ -8,7 +8,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findingsLine, payloadOf, reportVerb } from '../scripts/file-findings.mjs';
+import { findingsLine, filingDecision, payloadOf, reportVerb } from '../scripts/file-findings.mjs';
 
 const payload = payloadOf; // the CLI's own parse, so the tests read what gets filed
 
@@ -122,6 +122,116 @@ test('findings: an explore with no source issue is parked, not filed into intake
   // issue, and handing it to intake is what turned each nightly finding into a pull request.
   assert.equal(reportVerb('-'), 'Parked');
   assert.equal(reportVerb('104'), 'Filed');
+});
+
+test('findings: a closed not-planned finding stays closed when the title is reworded', () => {
+  // Exact titles missed this. "Card quantity inputs…" was closed, then the next
+  // quality pass filed "Quantity inputs on item cards…" as a new issue.
+  const closed = {
+    number: 146,
+    state: 'CLOSED',
+    stateReason: 'NOT_PLANNED',
+    title: 'Card quantity inputs have no visible label',
+    body: 'Element: input[type=number][id^=qty-] named only by aria-label="Quantity of <name>".',
+  };
+  const again = {
+    title: 'Quantity inputs on item cards have no visible label',
+    body: 'Element: input[type=number][id^=qty-] in each li.card, named only by aria-label="Quantity of <name>".',
+  };
+  assert.deepEqual(filingDecision(again, [closed]), { action: 'suppress', number: 146 });
+});
+
+test('findings: a hidden summary stays closed when the next report names it differently', () => {
+  const closed = {
+    number: 151,
+    state: 'CLOSED',
+    stateReason: 'NOT_PLANNED',
+    title: 'Result count and applied-filter summary is visually hidden',
+    body: 'Element: p#summary.visually-hidden[role=status]. The text is only available to assistive tech.',
+  };
+  const again = {
+    title: 'Sighted shoppers never see how many items matched',
+    body: 'Element: #summary is visually hidden, so the match count is announced and not shown.',
+  };
+  assert.deepEqual(filingDecision(again, [closed]), { action: 'suppress', number: 151 });
+});
+
+test('findings: a broader closed issue does not swallow one of its controls', () => {
+  // Search and max-price were one declined finding. A later finding about only the
+  // price field is a different control and must still be allowed through.
+  const closed = {
+    number: 139,
+    state: 'CLOSED',
+    stateReason: 'NOT_PLANNED',
+    title: 'Search and max-price inputs have no visible label',
+    body: '#q and #max-price are labelled only by aria-label and a placeholder.',
+  };
+  const narrower = {
+    title: 'Maximum price field has no visible label',
+    body: 'Element: #max-price. The field is labelled only by aria-label.',
+  };
+  assert.deepEqual(filingDecision(narrower, [closed]), { action: 'file' });
+});
+
+test('findings: the same title on a not-reproducible issue reopens it', () => {
+  const closed = {
+    number: 9,
+    state: 'CLOSED',
+    resolution: 'not-reproducible',
+    title: 'Search returns the wrong items',
+    body: 'Element: #items. The list ignored the query.',
+  };
+  assert.deepEqual(
+    filingDecision({ title: 'Search returns the wrong items', body: 'Seen again on #items.' }, [closed]),
+    { action: 'reopen', number: 9 },
+  );
+});
+
+test('findings: a declined enter-to-order finding stays closed when the title changes', () => {
+  const closed = {
+    number: 147,
+    state: 'CLOSED',
+    stateReason: 'NOT_PLANNED',
+    title: 'Pressing Enter in a quantity field does not place the order',
+    body: 'Element: input[type=number] in each li.card. The shopper presses Enter and nothing is ordered.',
+  };
+  const again = {
+    title: 'Pressing Enter in the quantity box still does nothing',
+    body: 'Element: input[type=number][id^=qty-]. The shopper presses Enter and the order is not placed.',
+  };
+  assert.deepEqual(filingDecision(again, [closed]), { action: 'suppress', number: 147 });
+});
+
+test('findings: a different complaint about the same control is still filed', () => {
+  // The summary element carries a visually-hidden class. Quoting that selector
+  // must not turn a wrong count into the declined "keep it hidden" decision.
+  const closed = {
+    number: 151,
+    state: 'CLOSED',
+    stateReason: 'NOT_PLANNED',
+    title: 'Result count and applied-filter summary is visually hidden',
+    body: 'Element: p#summary.visually-hidden[role=status]. The text is only available to assistive tech.',
+  };
+  const other = {
+    title: 'The result summary announces the wrong count',
+    body: 'Element: p#summary.visually-hidden[role=status]. It says 3 when two cards are shown.',
+  };
+  assert.deepEqual(filingDecision(other, [closed]), { action: 'file' });
+});
+
+test('findings: a different control is still filed', () => {
+  const closed = {
+    number: 146,
+    state: 'CLOSED',
+    stateReason: 'NOT_PLANNED',
+    title: 'Card quantity inputs have no visible label',
+    body: 'Element: input[type=number][id^=qty-].',
+  };
+  const other = {
+    title: 'Order button has no visible label',
+    body: 'Element: button[data-sku]. The button text is Order and nothing else names it.',
+  };
+  assert.deepEqual(filingDecision(other, [closed]), { action: 'file' });
 });
 
 test('findings: a broken real line stays loud even beside an empty echo', () => {
