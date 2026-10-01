@@ -32,6 +32,8 @@ The scanner caught contrast and missing attributes. You check what it cannot:
 - **Every finding needs evidence** — the element (selector or served HTML snippet), what a user experiences, and what would fix it in one line. A finding you cannot point at is a hunch; label it as one.
 - **Split in-scope from out-of-scope.** In-scope = the pages and states this change touched; those findings go in your report for the PR. Out-of-scope = everything else you noticed; those are filed as issues, not held against this PR.
 - **Do not manufacture findings.** A page can pass. Say so and stop.
+- **The living spec is not a finding.** If `openspec/specs/` already requires the behaviour, leave it out.
+- **Name the control.** The body starts with its selector (`#id` or `[id^=…]`), so a declined finding is recognised when the title changes.
 - **Change no files.** Report to stdout only.
 
 ## Output
