@@ -61,9 +61,13 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
 
   const elements = new Map();
   let itemButtons = [];
+  let cards = [];
+  const body = { tagName: 'BODY' };
+  const document = { getElementById: element, activeElement: body, body };
 
-  function makeStub() {
-    return {
+  function makeStub(tagName = 'DIV') {
+    const stub = {
+      tagName,
       value: '',
       innerHTML: '',
       dataset: {},
@@ -75,45 +79,80 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
       querySelectorAll() { return []; },
       setAttribute(name, v) { this.attrs[name] = String(v); },
       removeAttribute(name) { delete this.attrs[name]; },
+      closest(selector) { return selector === 'li.card' ? (this.card ?? null) : null; },
+      // a disabled control, or a card with no tabindex, refuses focus, as in a browser
+      focus() {
+        if ('disabled' in this.attrs) return;
+        if (this.tagName === 'LI' && !('tabindex' in this.attrs)) return;
+        document.activeElement = this;
+      },
     };
+    // `control.disabled = x` reflects to the attribute, and a control disabled while it holds
+    // focus drops it to the page, as in a browser
+    Object.defineProperty(stub, 'disabled', {
+      get() { return 'disabled' in this.attrs; },
+      set(v) {
+        if (v) {
+          this.attrs.disabled = '';
+          if (document.activeElement === this) document.activeElement = body;
+        } else delete this.attrs.disabled;
+      },
+    });
+    return stub;
   }
 
+  const isDisabled = (tag) => /\sdisabled\b/.test(tag.replace(/="[^"]*"/g, ''));
+
   function renderItemsMarkup(itemsHtml) {
-    for (const m of itemsHtml.matchAll(/<input[^>]*\btype="number"[^>]*>/g)) {
-      const attrs = parseAttrs(m[0]);
-      if (attrs.id) element(attrs.id).value = attrs.value ?? '';
-    }
+    // the old cards are gone, and focus on any of them goes to the page
+    if (document.activeElement.card) document.activeElement = body;
     itemButtons = [...itemsHtml.matchAll(/<button[^>]*>/g)].map((m) => {
-      const button = makeStub();
+      const button = makeStub('BUTTON');
       button.attrs = parseAttrs(m[0]);
-      if (/\sdisabled\b/.test(m[0].replace(/="[^"]*"/g, ''))) button.attrs.disabled = '';
+      if (isDisabled(m[0])) button.attrs.disabled = '';
       button.dataset = { sku: button.attrs['data-sku'] };
-      // `button.disabled = x` reflects to the attribute, as it does in a browser
-      Object.defineProperty(button, 'disabled', {
-        get() { return 'disabled' in this.attrs; },
-        set(v) { if (v) this.attrs.disabled = ''; else delete this.attrs.disabled; },
-      });
       return button;
+    });
+    cards = [...itemsHtml.matchAll(/<li class="card"[\s\S]*?<\/li>/g)].map((m) => {
+      const card = makeStub('LI');
+      card.card = card;
+      card.attrs = parseAttrs(m[0].match(/^<li[^>]*>/)[0]);
+      card.dataset = { sku: card.attrs['data-sku'] };
+      card.sku = parseAttrs(m[0].match(/<button[^>]*>/)?.[0] ?? '')['data-sku']; // the test's own key
+      const inputTag = m[0].match(/<input[^>]*>/)?.[0];
+      if (inputTag) {
+        const input = makeStub('INPUT');
+        input.attrs = parseAttrs(inputTag);
+        if (isDisabled(inputTag)) input.attrs.disabled = '';
+        input.value = input.attrs.value ?? '';
+        input.card = card;
+        card.input = input;
+        elements.set(input.attrs.id, input);
+      }
+      card.button = itemButtons.find((b) => b.dataset.sku === card.sku);
+      if (card.button) card.button.card = card;
+      card.querySelector = (selector) => (selector === 'button' ? card.button : selector === 'input' ? card.input : null);
+      return card;
     });
   }
 
   function element(id) {
     if (elements.has(id)) return elements.get(id);
-    const stub = makeStub();
+    const stub = makeStub(id === 'q' || id === 'max-price' ? 'INPUT' : 'DIV');
     if (id === 'items') {
       let html = '';
       Object.defineProperty(stub, 'innerHTML', {
         get() { return html; },
         set(v) { html = v; renderItemsMarkup(v); },
       });
-      stub.querySelectorAll = (selector) => (selector === 'button' ? itemButtons : []);
+      stub.querySelectorAll = (selector) => (selector === 'button' ? itemButtons : selector === 'li.card' ? cards : []);
     }
     elements.set(id, stub);
     return stub;
   }
 
   const sandbox = {
-    document: { getElementById: element },
+    document,
     fetch: fetchImpl ?? ((path, options) => fetch(base + path, options)),
   };
   vm.createContext(sandbox);
@@ -142,7 +181,46 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
     getElementById: element,
     // the live button the shopper has in front of them, as last rendered and since updated
     orderButton: (sku) => itemButtons.find((b) => b.dataset.sku === sku),
+    // focus: the shopper's own moves, and what the page has left focused
+    card: (sku) => cards.find((c) => c.sku === sku),
+    quantityField: (sku) => cards.find((c) => c.sku === sku)?.input,
+    active: () => document.activeElement,
+    focusOn: (control) => { control.focus(); assert.equal(document.activeElement, control, 'precondition: the control took focus'); },
+    blur: () => { document.activeElement = body; },
+    control: (tagName) => makeStub(tagName),
+    // what Tab can reach in the list: no disabled control, no card without a tabindex of 0 or more
+    tabStops: () => [...cards.flatMap((c) => [c.input, c.button]), ...cards.filter((c) => Number(c.attrs.tabindex ?? -1) >= 0)]
+      .filter((c) => c && !c.disabled),
   };
+}
+
+/**
+ * A `fetch` for holding chosen requests back, so the shopper can act while an order or a refresh
+ * is in flight. `hold('GET /api/items')` holds the next such request, exact method and path, until
+ * the returned function is called. `offline` makes every order fail to send (REQ-ORD-11).
+ */
+function gatedFetch(base, { offline = false } = {}) {
+  const holds = [];
+  const gated = (path, options) => {
+    const key = `${options?.method ?? 'GET'} ${path}`;
+    if (offline && key === 'POST /api/orders') return Promise.reject(new Error('offline'));
+    const at = holds.findIndex((h) => h.key === key);
+    if (at === -1) return fetch(base + path, options);
+    const [{ gate }] = holds.splice(at, 1);
+    return gate.then(() => fetch(base + path, options));
+  };
+  gated.hold = (key) => {
+    let release;
+    holds.push({ key, gate: new Promise((resolve) => { release = resolve; }) });
+    return release;
+  };
+  return gated;
+}
+
+/** Let the page run until `ready()` holds — bounded in turns, not time, so a stuck test fails rather than hangs. */
+async function until(ready, what) {
+  for (let turns = 0; turns < 2000 && !ready(); turns++) await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.ok(ready(), `gave up waiting for ${what}`);
 }
 
 function orderButtonMarkup(itemsHtml, sku) {
@@ -1571,4 +1649,315 @@ test('REQ-ORD-14: the server still accepts two sequential valid orders for the s
     assert.equal((await post('/api/orders', { sku: 'MUG-1', qty: 2 })).status, 201);
     assert.equal((await get('/api/orders')).body.length, 2);
     assert.equal(await stock('MUG-1'), before - 4);
+  }));
+
+// REQ-ORD-15 — keyboard focus stays on the ordered item after the list refreshes.
+// The page runs against a stub DOM that models focus the way a browser does: a disabled control
+// refuses it, a card takes it only with a tabindex, and replaced or newly disabled controls drop
+// it to the page body. Each test settles every request it starts, so none can hang.
+
+const ORDER_FOCUS = 'REQ-ORD-15';
+
+test(`${ORDER_FOCUS}: focus returns to the Order button after a confirmed order`, () =>
+  withServer(async ({ base, stock }) => {
+    const page = await loadClientPage(base);
+    page.focusOn(page.orderButton('MUG-1'));
+    await page.orderButton('MUG-1').click();
+    assert.equal(await stock('MUG-1'), 46, 'precondition: the order was accepted');
+    assert.equal(page.active(), page.orderButton('MUG-1'));
+    assert.ok(page.active().attrs['data-sku'], 'a button of the refreshed list');
+  }));
+
+test(`${ORDER_FOCUS}: focus returns after a rejected order`, () =>
+  withServer(async ({ base, stock }) => {
+    const page = await loadClientPage(base);
+    page.quantityField('MUG-1').value = '21';
+    page.focusOn(page.orderButton('MUG-1'));
+    await page.orderButton('MUG-1').click();
+    assert.equal(await stock('MUG-1'), 47, 'precondition: the order was rejected');
+    assert.equal(page.active(), page.orderButton('MUG-1'));
+  }));
+
+test(`${ORDER_FOCUS}: focus returns after an order that was not sent`, () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base, { fetch: gatedFetch(base, { offline: true }) });
+    page.focusOn(page.orderButton('MUG-1'));
+    await page.orderButton('MUG-1').click();
+    assert.match(page.noteHtml(), /not sent/);
+    assert.equal(page.active(), page.orderButton('MUG-1'));
+  }));
+
+test(`${ORDER_FOCUS}: it is the ordered item's button, not another's`, () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    page.focusOn(page.orderButton('BOOK-1'));
+    await page.orderButton('BOOK-1').click();
+    assert.equal(page.active(), page.orderButton('BOOK-1'));
+    assert.notEqual(page.active(), page.orderButton('MUG-1'));
+  }));
+
+test(`${ORDER_FOCUS}: an item that drops to zero stock gives focus to its card`, () =>
+  withServer(async ({ base, stock }) => {
+    const page = await loadClientPage(base);
+    page.quantityField('PEN-1').value = '8';
+    page.focusOn(page.orderButton('PEN-1'));
+    await page.orderButton('PEN-1').click();
+    assert.equal(await stock('PEN-1'), 0, 'precondition: sold out');
+    assert.equal(page.orderButton('PEN-1').disabled, true);
+    assert.equal(page.quantityField('PEN-1').disabled, true);
+    assert.equal(page.active(), page.card('PEN-1'));
+    assert.notEqual(page.active(), page.orderButton('PEN-1'));
+    assert.notEqual(page.active().tagName, 'BODY');
+  }));
+
+test(`${ORDER_FOCUS}: focus left on another item's enabled quantity input stays on its replacement`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('MUG-1'));
+    const ordering = page.orderButton('MUG-1').click();
+    await until(() => !page.orderButton('MUG-1').disabled, 'the outcome');
+    const before = page.quantityField('BOOK-1');
+    page.focusOn(before);
+    release();
+    await ordering;
+    assert.notEqual(page.quantityField('BOOK-1'), before, 'precondition: the refresh replaced the input');
+    assert.equal(page.active(), page.quantityField('BOOK-1'));
+  }));
+
+test(`${ORDER_FOCUS}: focus moved to another item's Order button follows it through the refresh`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('MUG-1'));
+    const ordering = page.orderButton('MUG-1').click();
+    await until(() => !page.orderButton('MUG-1').disabled, 'the outcome');
+    page.focusOn(page.orderButton('BOOK-1'));
+    release();
+    await ordering;
+    assert.equal(page.active(), page.orderButton('BOOK-1'));
+  }));
+
+test(`${ORDER_FOCUS}: another item's control that is disabled at zero stock gives focus to its card`, () =>
+  withServer(async ({ base, post }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('MUG-1'));
+    const ordering = page.orderButton('MUG-1').click();
+    await until(() => !page.orderButton('MUG-1').disabled, 'the outcome');
+    page.focusOn(page.orderButton('PEN-1'));
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 }); // sold out elsewhere before the list is drawn
+    release();
+    await ordering;
+    assert.equal(page.orderButton('PEN-1').disabled, true);
+    assert.equal(page.quantityField('PEN-1').disabled, true);
+    assert.equal(page.active(), page.card('PEN-1'));
+  }));
+
+test(`${ORDER_FOCUS}: a disabled quantity input gives focus to its card`, () =>
+  withServer(async ({ base, post }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('MUG-1'));
+    const ordering = page.orderButton('MUG-1').click();
+    await until(() => !page.orderButton('MUG-1').disabled, 'the outcome');
+    page.focusOn(page.quantityField('PEN-1'));
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    release();
+    await ordering;
+    assert.equal(page.quantityField('PEN-1').disabled, true);
+    assert.equal(page.active(), page.card('PEN-1'));
+  }));
+
+test(`${ORDER_FOCUS}: the card can take focus and is not a tab stop`, () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    const stops = page.tabStops();
+    assert.ok(!stops.includes(page.card('MUG-1')), 'tabbing does not land on a card');
+    assert.equal(page.card('MUG-1').attrs.tabindex, '-1', 'a card that can take focus without joining the Tab order');
+    for (const sku of ['MUG-1', 'BOOK-1', 'PEN-1']) {
+      assert.ok(stops.includes(page.quantityField(sku)), `tabbing lands on ${sku}'s quantity input`);
+      assert.ok(stops.includes(page.orderButton(sku)), `tabbing lands on ${sku}'s Order button`);
+    }
+    page.focusOn(page.card('MUG-1'));
+  }));
+
+test(`${ORDER_FOCUS}: focus on another control that is not in the list is left alone`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('MUG-1'));
+    const ordering = page.orderButton('MUG-1').click();
+    await until(() => !page.orderButton('MUG-1').disabled, 'the outcome');
+    const link = page.control('A');
+    page.focusOn(link);
+    release();
+    await ordering;
+    assert.equal(page.active(), link);
+  }));
+
+test(`${ORDER_FOCUS}: focus on no control is restored to the ordered item`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('BOOK-1'));
+    const ordering = page.orderButton('BOOK-1').click();
+    await until(() => !page.orderButton('BOOK-1').disabled, 'the outcome');
+    page.blur(); // the shopper clicked blank page space
+    release();
+    await ordering;
+    assert.equal(page.active(), page.orderButton('BOOK-1'));
+  }));
+
+test(`${ORDER_FOCUS}: overlapping orders restore focus to the most recently operated item`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const releaseA = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('MUG-1'));
+    const orderA = page.orderButton('MUG-1').click();
+    await until(() => !page.orderButton('MUG-1').disabled, "A's outcome");
+    const releaseB = fetchImpl.hold('POST /api/orders');
+    page.focusOn(page.orderButton('BOOK-1'));
+    const orderB = page.orderButton('BOOK-1').click(); // B's newer request supersedes A's refresh
+    assert.equal(page.active().tagName, 'BODY', 'precondition: B\'s button was disabled, so nothing has focus');
+    releaseA();
+    await orderA;
+    assert.notEqual(page.active(), page.orderButton('MUG-1'), "A's discarded refresh moved nothing onto A");
+    assert.equal(page.active().tagName, 'BODY', "A's discarded refresh moved nothing at all");
+    releaseB();
+    await orderB;
+    assert.equal(page.active().card, page.card('BOOK-1'), "B's refresh restores focus to item B");
+  }));
+
+test(`${ORDER_FOCUS}: focus on an item card stays on that card`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('MUG-1'));
+    const ordering = page.orderButton('MUG-1').click();
+    await until(() => !page.orderButton('MUG-1').disabled, 'the outcome');
+    page.focusOn(page.card('BOOK-1'));
+    release();
+    await ordering;
+    assert.equal(page.active(), page.card('BOOK-1'));
+  }));
+
+test(`${ORDER_FOCUS}: a later pointer-only order does not take the fallback`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const releaseA = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('MUG-1'));
+    const orderA = page.orderButton('MUG-1').click();
+    await until(() => !page.orderButton('MUG-1').disabled, "A's outcome");
+    page.blur();
+    const orderB = page.orderButton('BOOK-1').click(); // a pointer that did not focus the button
+    releaseA();
+    await Promise.all([orderA, orderB]);
+    assert.equal(page.active(), page.orderButton('MUG-1'));
+    assert.notEqual(page.active().card, page.card('BOOK-1'));
+  }));
+
+test(`${ORDER_FOCUS}: a click that did not focus the button restores nothing`, () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.orderButton('BOOK-1').click();
+    assert.equal(page.active().tagName, 'BODY');
+  }));
+
+test(`${ORDER_FOCUS}: a stale refresh moves nothing`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('GET /api/items');
+    page.focusOn(page.orderButton('MUG-1'));
+    const ordering = page.orderButton('MUG-1').click();
+    await until(() => !page.orderButton('MUG-1').disabled, 'the outcome');
+    page.blur();
+    await page.type('pen'); // a newer item-list request
+    release();
+    await ordering;
+    assert.equal(page.active().tagName, 'BODY');
+  }));
+
+test(`${ORDER_FOCUS}: a withheld outcome's discarded refresh moves nothing`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('POST /api/orders');
+    page.focusOn(page.orderButton('MUG-1'));
+    const ordering = page.orderButton('MUG-1').click();
+    await page.type('pen');
+    release();
+    await ordering;
+    assert.equal(page.noteHtml(), '', 'precondition: the outcome was withheld');
+    assert.equal(page.active().tagName, 'BODY');
+  }));
+
+test(`${ORDER_FOCUS}: a query that changes and changes back leaves focus where the shopper put it`, () =>
+  withServer(async ({ base }) => {
+    const fetchImpl = gatedFetch(base);
+    const page = await loadClientPage(base, { fetch: fetchImpl });
+    const release = fetchImpl.hold('POST /api/orders');
+    page.focusOn(page.orderButton('MUG-1'));
+    const ordering = page.orderButton('MUG-1').click();
+    const search = page.getElementById('q');
+    page.focusOn(search);
+    await page.type('pen');
+    await page.type('');
+    release();
+    await ordering;
+    assert.match(page.noteHtml(), /placed/, 'precondition: the outcome is shown');
+    assert.equal(page.active(), search);
+  }));
+
+test(`${ORDER_FOCUS}: a SKU containing markup characters is still found`, () =>
+  withServer(async ({ base }) => {
+    const items = [
+      { sku: 'A"&<b>\'x', name: 'Odd', price: 100, stock: 5 },
+      { sku: 'B-1', name: 'Plain', price: 100, stock: 5 },
+    ];
+    const page = await loadClientPage(base, { fetch: fakeItemsFetch(base, items) });
+    page.focusOn(page.orderButton('A"&<b>\'x'));
+    await page.orderButton('A"&<b>\'x').click();
+    assert.equal(page.active(), page.orderButton('A"&<b>\'x'));
+  }));
+
+test(`${ORDER_FOCUS}: no card for the item, or no list, requires nothing`, () =>
+  withServer(async ({ base }) => {
+    for (const refresh of [
+      { status: 200, json: async () => [{ sku: 'BOOK-1', name: 'Pocket Notebook', price: 800, stock: 5 }] },
+      null, // the list cannot be loaded
+    ]) {
+      let after = false;
+      const fetchImpl = (path, options) => {
+        if (after && path.startsWith('/api/items')) return refresh ? Promise.resolve(refresh) : Promise.reject(new Error('down'));
+        return fetch(base + path, options);
+      };
+      const page = await loadClientPage(base, { fetch: fetchImpl });
+      page.focusOn(page.orderButton('MUG-1'));
+      after = true;
+      await page.orderButton('MUG-1').click();
+      assert.equal(page.active().tagName, 'BODY');
+      assert.notEqual(page.active(), page.getElementById('note'));
+    }
+  }));
+
+test(`${ORDER_FOCUS}: the outcome is still announced and focus does not follow it`, () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    page.focusOn(page.orderButton('MUG-1'));
+    await page.orderButton('MUG-1').click();
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+    assert.match(page.noteMarkup, /role="status"/);
+    assert.equal(page.active(), page.orderButton('MUG-1'));
+    assert.notEqual(page.active(), page.getElementById('note'));
   }));
