@@ -179,6 +179,34 @@ function syncOrderButton(sku) {
   if (button) button.disabled = inFlight.has(sku) || shownStock.get(sku) === 0;
 }
 
+// Keyboard focus survives the post-order refresh (REQ-ORD-15). The refresh replaces every card,
+// so where focus is gets noted just before the swap and put back on its replacement just after.
+// `lastOrderedWithFocus` is the item whose Order button was most recently operated while it held
+// focus: the home for focus that has dropped to the page, whether the shopper clicked blank space
+// or the button was disabled while its order was in flight (REQ-ORD-14).
+let lastOrderedWithFocus = null;
+
+function focusToRestore() {
+  const active = document.activeElement;
+  if (!active || active === document.body) {
+    return lastOrderedWithFocus === null ? null : { sku: lastOrderedWithFocus, kind: 'BUTTON' };
+  }
+  const card = active.closest('li.card');
+  if (!card) return null; // a control outside the list: the shopper's, left where it is
+  return { sku: card.dataset.sku, kind: active.tagName };
+}
+
+// The replacement control if it can hold focus; otherwise the nearest thing that can: the
+// button gives way to the quantity input, and both give way to the card (REQ-ORD-13, REQ-ORD-14).
+function restoreFocus({ sku, kind }) {
+  const card = [...el('items').querySelectorAll('li.card')].find((c) => c.dataset.sku === sku);
+  if (!card) return;
+  const button = card.querySelector('button');
+  const input = card.querySelector('input');
+  const candidates = kind === 'BUTTON' ? [button, input, card] : kind === 'INPUT' ? [input, card] : [card];
+  candidates.find((c) => c && !c.disabled)?.focus();
+}
+
 const CATALOGUE_FAILED = 'Could not load the catalogue. Check your connection.';
 const HISTORY_FAILED = 'Could not load your orders. Check your connection.';
 const ORDER_FAILED = 'Could not reach the server — your order was not sent. Check your connection and try again.';
@@ -196,7 +224,7 @@ const REJECTIONS = {
 let requestSeq = 0;
 const nextRequestSeq = () => ++requestSeq;
 
-async function loadItems({ announce = true, query, seq } = {}) {
+async function loadItems({ announce = true, query, seq, keepFocus = false } = {}) {
   const mySeq = seq ?? nextRequestSeq();
   const q = (query ?? el('q').value).trim();
   const price = readPrice(el('max-price').value);
@@ -225,8 +253,9 @@ async function loadItems({ announce = true, query, seq } = {}) {
     el('items').innerHTML = `<p class="empty">${emptyText(q, ceiling)}</p>`;
   } else {
     for (const item of items) shownStock.set(item.sku, item.stock);
+    const focusAfter = keepFocus ? focusToRestore() : null;
     el('items').innerHTML = `<ul class="cards" role="list">` + items.map((item) => `
-      <li class="card">
+      <li class="card" tabindex="-1" data-sku="${escapeHtml(item.sku)}">
         <div class="grow">
           <div class="name">${escapeHtml(item.name)}</div>
           <div class="meta">${escapeHtml(item.sku)} · ${money(item.price)} · <span id="stock-${escapeHtml(item.sku)}">${escapeHtml(item.stock)} in stock</span></div>
@@ -239,6 +268,7 @@ async function loadItems({ announce = true, query, seq } = {}) {
     for (const button of el('items').querySelectorAll('button')) {
       button.addEventListener('click', () => order(button.dataset.sku));
     }
+    if (focusAfter) restoreFocus(focusAfter);
   }
 
   if (announce) el('summary').innerHTML = summaryText(q, items.length, ceiling);
@@ -259,6 +289,8 @@ async function loadOrders() {
 async function order(sku) {
   const query = el('q').value;
   const placedUnder = query.trim();
+  const active = document.activeElement;
+  if (active?.tagName === 'BUTTON' && active.dataset.sku === sku) lastOrderedWithFocus = sku;
   const seq = nextRequestSeq(); // reserve the refresh's place in line right away, not once it fires
   const qty = Number(el('qty-' + sku).value);
   inFlight.add(sku);
@@ -286,7 +318,7 @@ async function order(sku) {
   inFlight.delete(sku);
   syncOrderButton(sku);
 
-  await loadItems({ announce: false, query, seq });
+  await loadItems({ announce: false, query, seq, keepFocus: true });
   await loadOrders();
 }
 
