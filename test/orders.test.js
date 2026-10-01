@@ -408,6 +408,119 @@ test("REQ-ORD-13, REQ-ORD-8: the description leaves the button's accessible name
     assert.equal(parseAttrs(button.match(/<button[^>]*>/)[0])['aria-label'], 'Order Fineliner Pen');
   }));
 
+// Quantity input — disabled at zero stock and described by the same stock text as the button.
+
+/** The rendered quantity input's opening tag for a SKU. */
+function quantityInputTag(itemsHtml, sku) {
+  const tag = itemsHtml.match(new RegExp(`<input[^>]*\\bid="qty-${sku}"[^>]*>`))?.[0];
+  assert.ok(tag, `expected a quantity input for ${sku}`);
+  return tag;
+}
+
+/** Whether the quantity input is disabled — attribute presence only, quoted values stripped first. */
+function quantityInputDisabled(itemsHtml, sku) {
+  return /\sdisabled\b/.test(quantityInputTag(itemsHtml, sku).replace(/="[^"]*"/g, ''));
+}
+
+/** The text the quantity input's aria-describedby resolves to, or undefined. */
+function inputDescription(itemsHtml, sku) {
+  const id = parseAttrs(quantityInputTag(itemsHtml, sku))['aria-describedby'];
+  if (id === undefined) return undefined;
+  for (const m of itemsHtml.matchAll(/<span[^>]*>([^<]*)<\/span>/g)) {
+    if (parseAttrs(m[0].match(/<[^>]*>/)[0]).id === id) return decodeHtmlEntities(m[1]);
+  }
+  return undefined;
+}
+
+test('REQ-ORD-13: a zero-stock item\'s quantity input is disabled and keeps min, max and value', () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    assert.equal(await stock('PEN-1'), 0, 'precondition: PEN-1 sold out');
+    const page = await loadClientPage(base);
+    const html = page.itemsHtml();
+    assert.equal(quantityInputDisabled(html, 'PEN-1'), true, 'expected the sold-out PEN-1 quantity input to be disabled');
+    const input = quantityInput(html, 'PEN-1');
+    assert.equal(input.min, '1');
+    assert.equal(input.max, '0');
+    assert.equal(input.value, '1');
+  }));
+
+test("REQ-ORD-13: a zero-stock item's quantity input is described by its stock text, not its name", () =>
+  withServer(async ({ base, post }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    const page = await loadClientPage(base);
+    const html = page.itemsHtml();
+    const description = inputDescription(html, 'PEN-1');
+    assert.equal(description, '0 in stock');
+    assert.ok(!description.includes('PEN-1') && !description.includes('3.50'), 'no SKU or price in the reason');
+    assert.equal(quantityInput(html, 'PEN-1')['aria-label'], 'Quantity of Fineliner Pen');
+  }));
+
+test("REQ-ORD-13: each zero-stock input is described by its own item's stock text", () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    await post('/api/orders', { sku: 'MUG-1', qty: 20 });
+    await post('/api/orders', { sku: 'MUG-1', qty: 20 });
+    await post('/api/orders', { sku: 'MUG-1', qty: 7 });
+    assert.equal(await stock('MUG-1'), 0, 'precondition: two items sold out');
+    const html = (await loadClientPage(base)).itemsHtml();
+    const pen = parseAttrs(quantityInputTag(html, 'PEN-1'))['aria-describedby'];
+    const mug = parseAttrs(quantityInputTag(html, 'MUG-1'))['aria-describedby'];
+    assert.ok(pen && mug && pen !== mug, 'each input points at a distinct element');
+    assert.equal(inputDescription(html, 'PEN-1'), '0 in stock');
+    assert.equal(inputDescription(html, 'MUG-1'), '0 in stock');
+  }));
+
+test('REQ-ORD-13: an item with 1 or more in stock keeps an enabled quantity input with no description', () =>
+  withServer(async ({ base, post, stock }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 7 });
+    assert.equal(await stock('PEN-1'), 1, 'precondition: PEN-1 at exactly 1');
+    const html = (await loadClientPage(base)).itemsHtml();
+    for (const sku of ['PEN-1', 'MUG-1']) {
+      assert.equal(quantityInputDisabled(html, sku), false, `expected ${sku} quantity input enabled`);
+      assert.doesNotMatch(quantityInputTag(html, sku), /aria-describedby/);
+    }
+    assert.equal(quantityInput(html, 'MUG-1').max, '20');
+    assert.equal(quantityInput(html, 'MUG-1').value, '1');
+  }));
+
+test('REQ-ORD-13, REQ-ORD-14: an in-flight order leaves the quantity input enabled', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    const ordering = page.orderButton('MUG-1').click();
+    await flush();
+    await page.type('mug');
+    const html = page.itemsHtml();
+    assert.equal(orderButtonDisabled(html, 'MUG-1'), true, 'precondition: the button is held');
+    assert.equal(quantityInputDisabled(html, 'MUG-1'), false);
+    assert.doesNotMatch(quantityInputTag(html, 'MUG-1'), /aria-describedby/);
+    held.release();
+    await ordering;
+  }));
+
+test('REQ-ORD-13: the disabled input composes with search', () =>
+  withServer(async ({ base, post }) => {
+    await post('/api/orders', { sku: 'PEN-1', qty: 8 });
+    const page = await loadClientPage(base);
+    await page.search('Pen');
+    const html = page.itemsHtml();
+    assert.equal(orderButtonMarkup(html, 'MUG-1'), undefined, 'search narrowed MUG-1 out');
+    assert.equal(quantityInputDisabled(html, 'PEN-1'), true);
+    assert.equal(inputDescription(html, 'PEN-1'), '0 in stock');
+  }));
+
+test('REQ-ORD-13: an item that drops to zero stock has its input disabled on the next render', () =>
+  withServer(async ({ base, stock }) => {
+    const page = await loadClientPage(base);
+    assert.equal(quantityInputDisabled(page.itemsHtml(), 'PEN-1'), false, 'precondition: enabled before');
+    await page.order('PEN-1', 8);
+    assert.equal(await stock('PEN-1'), 0);
+    const html = page.itemsHtml();
+    assert.equal(quantityInputDisabled(html, 'PEN-1'), true);
+    assert.equal(inputDescription(html, 'PEN-1'), '0 in stock');
+  }));
+
 // "the hint does not change what the server accepts" — a client that ignores the disabled state
 // still meets REQ-ORD-2's stock check on the server. The existing REQ-ORD-2 test orders *over*
 // stock; this one orders from *zero* stock, the case the hint is about.
