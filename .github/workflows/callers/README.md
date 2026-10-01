@@ -1,6 +1,6 @@
 # Adopt the line in your repo
 
-Copy these six files into your repository's `.github/workflows/` directory (drop them in as-is. The filenames matter, because the stations dispatch each other by filename), add one Actions secret, and the line is on. Either credential works: `ADLC_API_KEY` for API billing, or `ADLC_OAUTH_TOKEN`, holding the output of `claude setup-token`, if you are on a Claude subscription. Set both and the API key wins — that is the CLI's own precedence, not a rule this line invents. Delete the secret and it is off — every workflow then explains itself and stops.
+Copy these six files into your repository's `.github/workflows/` directory (drop them in as-is. The filenames matter, because the stations dispatch each other by filename), add one Actions secret, and the line is on. Either credential works: `ADLC_API_KEY` for API billing, or `ADLC_OAUTH_TOKEN`, holding the output of `claude setup-token`, if you are on a Claude subscription. Set both and the API key wins — that is the CLI's own precedence, not a rule this line invents. Delete the secret and the stations that call a model explain themselves and stop. `finalize.yml` still closes the loop after a merge, and `verify.yml` still runs the gate.
 
 `ADLC_API_KEY` is named for the line, not for a vendor, because it also authenticates against a
 gateway when you point one at it. `scripts/run-station.sh` maps it to whatever the pinned CLI

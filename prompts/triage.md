@@ -29,14 +29,12 @@ A closed issue is only a reason to stand down if it says **`· shipped`**. `· n
 
 **A JSON object on the first line, then your reasoning as prose.** Two parts, in that order, because they are read by different readers.
 
-```
-{"actionable":true,"type":"bug","slug":"kebab-case-name","duplicate_of":null,"recurrence_of":null,"requirements":["REQ-ORD-4"]}
+    {"actionable":true,"type":"bug","slug":"kebab-case-name","duplicate_of":null,"recurrence_of":null,"requirements":["`REQ-ORD-4`"]}
 
-Why: the report names REQ-ORD-4 and the observed total contradicts it, so this is
-a broken promise rather than new behaviour.
-```
+    Why: the report names `REQ-ORD-4` and the observed total contradicts it, so this is
+    a broken promise rather than new behaviour.
 
-Both sit in a fence above as illustration. Emit them flush left, the object first with no code fence and no preamble.
+Both are indented above as illustration. Emit them flush left, the object first, with no code fence and no preamble. Backticks around an id in that illustration are not part of the object. Emit the id itself.
 
 **The object carries no free text, deliberately.** It used to hold a `reason`, and a long one truncated the object mid-string. The closing brace never arrived, the parse failed, and the line parked issues on verdicts it had reached correctly. Machine fields only keeps the object short by construction rather than by your restraint. Everything after the first line is your reasoning. A human reads it, and it can be as long as it needs to be.
 

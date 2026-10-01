@@ -51,7 +51,7 @@ Note where the Verifier's failures go: **back to the Planner, not to the Executo
 
 The spec PR itself **stays open until the last implementation PR has merged**, and this is deliberate, for two reasons. First, one spec is the shared artifact of every implementation built from it. A single delta can fan out to an implementation PR per repo (web, mobile, api), each branched from the same approved spec head and each verified against it. Second, it keeps `main` honest: the living spec updates only when `openspec archive` folds the delta in after shipping, so **the spec on `main` only ever describes what the product actually does.** A spec that merges before its implementation is a promise; a spec that merges after is a record.
 
-The mechanics fall out of git: the implementation branches from the spec branch, so the delta rides inside the implementation PR and lands on `main` at Gate 2. The archive step then folds it into `openspec/specs/` and the spec PR resolves. If a verifier mismatch sends the Planner back to revise the spec, the new commits dismiss the old approval — Gate 1 simply happens again, which is exactly right.
+The mechanics fall out of git: the implementation branches from the spec branch, so the delta rides inside the implementation PR and lands on `main` at Gate 2. The archive step then folds it into `openspec/specs/` and the spec PR resolves. If a verifier mismatch sends the Planner back to revise the spec, the new commits do not dismiss the old approval. This repo has no branch protection to dismiss it. Gate 1 happens again because `build.yml` refuses an approval that is not on the current head.
 
 ## Intake — anything in, one shape out
 
