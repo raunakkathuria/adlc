@@ -1,6 +1,6 @@
 # Running the line on another model
 
-The demo runs on Claude keys, because CI has to pin one CLI to be reproducible. Nothing else in the line is tied to Anthropic: the station prompts in [`prompts/`](../prompts/) are plain markdown with no vendor in them, the deterministic gate has no model in it at all, and [`scripts/run-station.sh`](../scripts/run-station.sh) is the only file that names a runner's own variables.
+The demo runs on Claude keys, because CI has to pin one CLI to be reproducible. The rest of the line is independent of Anthropic. The station prompts in [`prompts/`](../prompts/) are plain markdown with no vendor in them. The deterministic gate has no model in it at all. [`scripts/run-station.sh`](../scripts/run-station.sh) is the only file that names a runner's own variables.
 
 So pointing the line at a different model is two repository variables. No prompt changes, no workflow changes, no fork.
 
@@ -45,7 +45,7 @@ litellm_settings:
   drop_params: true
 ```
 
-Naming the entries by role rather than by model is worth the small indirection: retuning which model the line uses becomes a one-line edit here, and the repository variable never changes.
+Naming the entries by role rather than by model is worth the small indirection. Retuning which model the line uses becomes a one-line edit here, and the repository variable never changes.
 
 Note where the provider keys live. `OPENAI_API_KEY` and `GEMINI_API_KEY` are the **proxy's** configuration, read from the environment of the process you run — they are not part of this line's interface and the line never sees them. The line has exactly one credential, `ADLC_API_KEY`, and against a gateway it holds the gateway's own key. So adding a third provider adds an entry here and changes nothing about what the repository is configured with.
 
@@ -59,7 +59,7 @@ litellm.BadRequestError: OpenAIException - Unknown parameter: 'context_managemen
 
 `drop_params: true` does **not** fix this, which is the trap: it strips params LiteLLM knows a provider does not support, and these are fields it does not know about at all. They have to be named, per route, in `additional_drop_params`.
 
-Gemini needs none of this — Anthropic-shaped requests map onto it cleanly. So "point it at LiteLLM and it works" is true of some backends and one config line short for others. Expect to do this once per provider, and expect the error to arrive as a 500 from your own proxy rather than as anything mentioning the parameter you need to drop.
+Gemini needs none of this — Anthropic-shaped requests map onto it cleanly. So "point it at LiteLLM and it works" is true of some backends and one config line short for others. Expect to do this once per provider. Expect the error to arrive as a 500 from your own proxy, not as anything mentioning the parameter you need to drop.
 
 Run it:
 
@@ -138,8 +138,8 @@ identically:
 Both named `REQ-ORD-4` as the violated requirement, from the spec alone.
 
 One thing that table shows and a single run would not: the reason is capped at 600 characters, and
-gpt-5 came within 23 of it. Nothing breaks when it truncates — the object holding the machine fields
-is parsed from its own line, so a lost tail costs the explanation and never the verdict, which is
+gpt-5 came within 23 of it. Nothing breaks when it truncates. The object holding the machine fields
+is parsed from its own line, so a lost tail costs the explanation and never the verdict. That is
 why it is built that way. But a more verbose model will lose the end of its reasoning in the issue
 comment, and that is worth knowing before you wonder where it went.
 
@@ -154,12 +154,12 @@ if [ -n "${ADLC_API_KEY:-}" ]; then export ANTHROPIC_API_KEY="$ADLC_API_KEY"; fi
 if [ -n "${ADLC_OAUTH_TOKEN:-}" ]; then export CLAUDE_CODE_OAUTH_TOKEN="$ADLC_OAUTH_TOKEN"; fi
 ```
 
-`ANTHROPIC_*` and `CLAUDE_CODE_*` here are the CLI's wire protocol, not a claim about who serves the model. Every agent step passes `ADLC_*` and nothing else, so swapping the runner is still one file — and `test/callers.test.js` fails if a station names a runner variable directly, or if any agent step forgets to pass the seam. Miss one station and it would quietly keep talking to Anthropic while the rest of the line used the gateway, which is worse than not supporting this at all.
+`ANTHROPIC_*` and `CLAUDE_CODE_*` here are the CLI's wire protocol, not a claim about who serves the model. Every agent step passes `ADLC_*` and nothing else, so swapping the runner is still one file. `test/callers.test.js` fails if a station names a runner variable directly, or if any agent step forgets to pass the seam. Miss one station and it would quietly keep talking to Anthropic while the rest of the line used the gateway, which is worse than not supporting this at all.
 
 On credentials, `ADLC_OAUTH_TOKEN` holds the output of `claude setup-token`. It reaches the gateway as `authorization: Bearer`, where `ADLC_API_KEY` reaches it as `x-api-key` — measured, not assumed. Real LiteLLM accepts the same value in either header, so on a gateway the two are interchangeable and whichever secret you already have works.
 
-Against Anthropic directly they are **not** interchangeable, and this is the part worth knowing before it costs you an afternoon. They are two different credential classes, not two names for one: a subscription token is not an API key, and no choice of header makes it into one. If you set both, the API key wins and the token is silently ignored. A gateway cannot rescue a subscription token for another provider either — LiteLLM *forwards* it to Anthropic (with `forward_client_headers_to_llm_api`), it does not translate it, and nothing can mint an OpenAI or Gemini credential from a Claude identity.
+Against Anthropic directly they are **not** interchangeable, and this is the part worth knowing before it costs you an afternoon. They are two different credential classes, not two names for one: a subscription token is not an API key, and no choice of header makes it into one. If you set both, the API key wins and the token is silently ignored. A gateway cannot rescue a subscription token for another provider either. LiteLLM *forwards* it to Anthropic (with `forward_client_headers_to_llm_api`). It does not translate it. Nothing can mint an OpenAI or Gemini credential from a Claude identity.
 
-## What this does not change
+## What stays the same
 
-The gates. A different model does not make its output trustworthy, which is the entire argument of this repo — the deterministic gate has no model in it, the reviewer never wrote the code, the Verifier re-derives behaviour from the spec, and both accountable decisions stay with a person. Swap the model and every one of those still holds. That is the point of keeping the vendor in one file.
+The gates stay the same. A different model leaves its output as untrustworthy as before, which is the entire argument of this repo. The deterministic gate has no model in it. The reviewer never wrote the code. The Verifier re-derives behaviour from the spec. Both accountable decisions stay with a person. Swap the model and every one of those still holds. That is the point of keeping the vendor in one file.
