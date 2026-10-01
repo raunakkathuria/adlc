@@ -121,8 +121,7 @@ and only the final message on stdout. The captured report is a review and not a 
   the agent contained, `codex exec --sandbox workspace-write` sandboxes and the default does not.
 - **You cannot approve the PR it opens.** It pushes with your credentials, so you are the PR's
   author and GitHub will not let an author approve their own PR. This does not block anything.
-  Gate 2 is a **merge**, not an approval. It is the mirror image of CI, whose bot-opened PRs
-  can be approved yet start no `verify` run. See `docs/design.md`.
+  Gate 2 is a **merge**, not an approval. Not being able to approve your own PR is the mirror image of CI, whose bot-opened PRs can be approved yet start no `verify` run. See `docs/design.md`.
 - **Approving a spec PR fires CI.** `build.yml` triggers on `pull_request_review`, so if you approve
   a spec PR intending to build it locally, disable that workflow first or both drivers will race the
   same issue:

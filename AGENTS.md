@@ -30,7 +30,7 @@ issue opened → triage → [bug? reproduce] → spec PR → GATE 1 (human appro
                                             all merged → spec PR merges · archive · issue closes
 ```
 
-Fully automated from the moment an issue lands (when a credential secret is set — `ADLC_API_KEY` or `ADLC_OAUTH_TOKEN`; without either, every workflow explains itself and stops). Labels are written only by the line and show which station the work is at: one `state:*` at a time.
+Fully automated from the moment an issue lands, once a credential secret is set. Either `ADLC_API_KEY` or `ADLC_OAUTH_TOKEN` counts. Without either, the stations that call a model explain themselves and stop. `finalize.yml` and `verify.yml` still run, because neither calls a model. Labels are written only by the line and show which station the work is at: one `state:*` at a time.
 
 **The spec PR merges last.** Gate 1 is an *approving review* on the spec PR, not a merge. The PR stays open as the shared artifact every implementation is built from and verified against. One spec can fan out to several implementation PRs. When the last linked implementation PR merges, the line merges the spec PR and runs `openspec archive`. `main`'s spec only ever describes what shipped.
 
