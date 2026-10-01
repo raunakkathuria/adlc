@@ -226,7 +226,7 @@ async function loadItems({ announce = true, query, seq } = {}) {
           <div class="name">${escapeHtml(item.name)}</div>
           <div class="meta">${escapeHtml(item.sku)} · ${money(item.price)} · <span id="stock-${escapeHtml(item.sku)}">${escapeHtml(item.stock)} in stock</span></div>
         </div>
-        <input type="number" min="1" max="${Math.min(20, item.stock)}" value="1" id="qty-${escapeHtml(item.sku)}" aria-label="Quantity of ${escapeHtml(item.name)}">
+        <input type="number" min="1" max="${Math.min(20, item.stock)}" value="1" id="qty-${escapeHtml(item.sku)}" aria-label="Quantity of ${escapeHtml(item.name)}"${item.stock === 0 ? ` disabled aria-describedby="stock-${escapeHtml(item.sku)}"` : ''}>
         <button data-sku="${escapeHtml(item.sku)}" aria-label="Order ${escapeHtml(item.name)}"${item.stock === 0 ? ` disabled aria-describedby="stock-${escapeHtml(item.sku)}"` : inFlight.has(item.sku) ? ' disabled' : ''}>Order</button>
       </li>
     `).join('') + `</ul>`;
