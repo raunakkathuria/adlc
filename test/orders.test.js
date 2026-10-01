@@ -68,11 +68,13 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
       innerHTML: '',
       dataset: {},
       listeners: {},
+      attrs: {},
       addEventListener(type, fn) { this.listeners[type] = fn; },
-      click() { return this.listeners.click?.(); },
+      // a browser fires no click on a disabled button, whether by pointer, Enter or Space
+      click() { return 'disabled' in this.attrs ? undefined : this.listeners.click?.(); },
       querySelectorAll() { return []; },
-      setAttribute() {},
-      removeAttribute() {},
+      setAttribute(name, v) { this.attrs[name] = String(v); },
+      removeAttribute(name) { delete this.attrs[name]; },
     };
   }
 
@@ -83,7 +85,14 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
     }
     itemButtons = [...itemsHtml.matchAll(/<button[^>]*>/g)].map((m) => {
       const button = makeStub();
-      button.dataset = { sku: parseAttrs(m[0])['data-sku'] };
+      button.attrs = parseAttrs(m[0]);
+      if (/\sdisabled\b/.test(m[0].replace(/="[^"]*"/g, ''))) button.attrs.disabled = '';
+      button.dataset = { sku: button.attrs['data-sku'] };
+      // `button.disabled = x` reflects to the attribute, as it does in a browser
+      Object.defineProperty(button, 'disabled', {
+        get() { return 'disabled' in this.attrs; },
+        set(v) { if (v) this.attrs.disabled = ''; else delete this.attrs.disabled; },
+      });
       return button;
     });
   }
@@ -131,6 +140,8 @@ async function loadClientPage(base, { fetch: fetchImpl } = {}) {
       await element('q').listeners.input();
     },
     getElementById: element,
+    // the live button the shopper has in front of them, as last rendered and since updated
+    orderButton: (sku) => itemButtons.find((b) => b.dataset.sku === sku),
   };
 }
 
@@ -1218,4 +1229,233 @@ test('REQ-ORD-9: a rejection is written into the live region when shown, and one
     held.release();
     await ordering;
     assert.equal(late.noteHtml(), '');
+  }));
+
+// REQ-ORD-14 — an item's Order button is unavailable while its order is in flight.
+
+/**
+ * A fetch whose order POST waits for `release()` and then either reaches the server or fails
+ * as not-sent, and whose item requests can be frozen — so a test can look at the page in the
+ * moment the outcome is known but the post-order refresh has not arrived. Every POST body is kept.
+ */
+function inFlightFetch(base, { unsent = false, itemsOverride } = {}) {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const state = { posts: [], frozen: false, waiting: [], itemsOverride };
+  const fetchImpl = async (path, options) => {
+    if (path === '/api/orders' && options?.method === 'POST') {
+      state.posts.push(JSON.parse(options.body));
+      await gate;
+      if (unsent) throw new TypeError('Failed to fetch');
+    }
+    if (path.startsWith('/api/items')) {
+      if (state.frozen) await new Promise((r) => state.waiting.push(r));
+      if (state.itemsOverride) return { status: 200, json: async () => state.itemsOverride };
+    }
+    return fetch(base + path, options);
+  };
+  return {
+    fetch: fetchImpl,
+    state,
+    release: () => release(),
+    thaw: () => { state.frozen = false; state.waiting.splice(0).forEach((r) => r()); },
+  };
+}
+
+test('REQ-ORD-14: a second click while the order is pending places no second order', () =>
+  withServer(async ({ base, get, stock }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    const before = await stock('MUG-1');
+    page.getElementById('qty-MUG-1').value = '3';
+    const first = page.orderButton('MUG-1').click();
+    await flush();
+    const second = page.orderButton('MUG-1').click(); // a second click, or a second Enter or Space, is this click
+    await flush();
+    held.release();
+    await Promise.all([first, second]);
+    assert.equal(held.state.posts.length, 1, 'exactly one POST /api/orders');
+    const { body: orders } = await get('/api/orders');
+    assert.equal(orders.length, 1);
+    assert.equal(await stock('MUG-1'), before - 3);
+  }));
+
+test('REQ-ORD-14: the button is disabled with the native attribute while the order is pending', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    assert.equal(page.orderButton('MUG-1').disabled, false);
+    const ordering = page.orderButton('MUG-1').click();
+    await flush();
+    assert.equal(page.orderButton('MUG-1').disabled, true);
+    assert.ok('disabled' in page.orderButton('MUG-1').attrs);
+    held.release();
+    await ordering;
+  }));
+
+/** Place MUG-1 or PEN-1, hold the refresh, release the outcome, and look at the button then. */
+async function buttonWhenOutcomeKnown(base, held, page, { sku = 'MUG-1', qty = 2, before } = {}) {
+  page.getElementById(`qty-${sku}`).value = String(qty);
+  const ordering = page.orderButton(sku).click();
+  await flush();
+  assert.equal(page.orderButton(sku).disabled, true, 'held while pending');
+  await before?.();
+  held.state.frozen = true; // the refresh that follows the outcome is still on its way
+  held.release();
+  await flush();
+  const enabled = !page.orderButton(sku).disabled;
+  held.thaw();
+  await ordering;
+  return enabled;
+}
+
+test('REQ-ORD-14: the button is enabled again at a confirmation, before the refresh arrives', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    assert.equal(await buttonWhenOutcomeKnown(base, held, page), true);
+    assert.match(page.noteHtml(), /Order #\d+ placed/);
+  }));
+
+test('REQ-ORD-14: the button is enabled again at a rejection, before the refresh arrives', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    assert.equal(await buttonWhenOutcomeKnown(base, held, page, { qty: 21 }), true);
+    assert.match(page.noteHtml(), /Rejected/);
+  }));
+
+test('REQ-ORD-14: the button is enabled again at a not-sent outcome, before the refresh arrives', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base, { unsent: true });
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    assert.equal(await buttonWhenOutcomeKnown(base, held, page), true);
+    assert.match(page.noteHtml(), /was not sent/i);
+  }));
+
+test('REQ-ORD-14: the button is enabled again at a withheld outcome, before the refresh arrives', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    await page.type('mug');
+    const enabled = await buttonWhenOutcomeKnown(base, held, page, { before: () => page.type('enamel') });
+    assert.equal(enabled, true);
+    assert.equal(page.noteHtml(), '', 'withheld: no outcome message');
+  }));
+
+test('REQ-ORD-14, REQ-ORD-13: a card then showing 0 in stock stays disabled when the outcome is known', () =>
+  withServer(async ({ base }) => {
+    const soldOut = [{ sku: 'PEN-1', name: 'Fineliner Pen', price: 350, stock: 0 }];
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    const enabled = await buttonWhenOutcomeKnown(base, held, page, {
+      sku: 'PEN-1',
+      qty: 8,
+      before: async () => { held.state.itemsOverride = soldOut; await page.type('pen'); },
+    });
+    assert.equal(enabled, false);
+    assert.equal(orderButtonDisabled(page.itemsHtml(), 'PEN-1'), true);
+  }));
+
+test('REQ-ORD-14: only the ordered item is held, and another item can be ordered meanwhile', () =>
+  withServer(async ({ base, get }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    const first = page.orderButton('MUG-1').click();
+    await flush();
+    assert.equal(page.orderButton('MUG-1').disabled, true);
+    assert.equal(page.orderButton('BOOK-1').disabled, false);
+    const second = page.orderButton('BOOK-1').click();
+    await flush();
+    assert.deepEqual(held.state.posts.map((p) => p.sku), ['MUG-1', 'BOOK-1']);
+    held.release();
+    await Promise.all([first, second]);
+    assert.equal((await get('/api/orders')).body.length, 2);
+  }));
+
+test('REQ-ORD-14: the hold survives a re-render of the list', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    const ordering = page.orderButton('MUG-1').click();
+    await flush();
+    await page.type('mug');
+    assert.equal(orderButtonDisabled(page.itemsHtml(), 'MUG-1'), true);
+    assert.equal(page.orderButton('MUG-1').disabled, true);
+    held.release();
+    await ordering;
+    assert.equal(page.orderButton('MUG-1').disabled, false, 'enabled again once the outcome is known');
+  }));
+
+test('REQ-ORD-14: the hold survives the item leaving the list and coming back', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    const ordering = page.orderButton('MUG-1').click();
+    await flush();
+    await page.type('book');
+    assert.doesNotMatch(page.itemsHtml(), /MUG-1/);
+    await page.type('mug');
+    assert.equal(orderButtonDisabled(page.itemsHtml(), 'MUG-1'), true);
+    held.release();
+    await ordering;
+  }));
+
+test('REQ-ORD-14: the hold survives a load failure and its retry', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base);
+    let failItems = false;
+    const page = await loadClientPage(base, {
+      fetch: (path, options) =>
+        failItems && path.startsWith('/api/items') ? Promise.reject(new TypeError('Failed to fetch')) : held.fetch(path, options),
+    });
+    const ordering = page.orderButton('MUG-1').click();
+    await flush();
+    failItems = true;
+    await page.type('mug');
+    assert.match(page.itemsHtml(), /Could not load the catalogue/);
+    failItems = false;
+    page.getElementById('retry-items').click();
+    await flush();
+    assert.equal(orderButtonDisabled(page.itemsHtml(), 'MUG-1'), true);
+    held.release();
+    await ordering;
+  }));
+
+test('REQ-ORD-14, REQ-ORD-13: an in-flight button carries no stock description, and name, label and quantity input are unchanged', () =>
+  withServer(async ({ base }) => {
+    const held = inFlightFetch(base);
+    const page = await loadClientPage(base, { fetch: held.fetch });
+    const inputBefore = quantityInput(page.itemsHtml(), 'MUG-1');
+    const ordering = page.orderButton('MUG-1').click();
+    await flush();
+    await page.type('mug'); // a fresh render while the order is pending
+    const html = page.itemsHtml();
+    const button = orderButtonMarkup(html, 'MUG-1');
+    assert.equal(orderButtonDisabled(html, 'MUG-1'), true);
+    assert.doesNotMatch(button, /aria-describedby/);
+    assert.match(button, /aria-label="Order Enamel Mug"/);
+    assert.match(button, />Order<\/button>$/);
+    assert.deepEqual(quantityInput(html, 'MUG-1'), inputBefore);
+    assert.equal(page.orderButton('MUG-1').attrs['aria-describedby'], undefined);
+    held.release();
+    await ordering;
+  }));
+
+test('REQ-ORD-14, REQ-ORD-13: a zero-stock button still carries "0 in stock"', () =>
+  withServer(async ({ base }) => {
+    const page = await loadClientPage(base);
+    await page.order('PEN-1', 8);
+    const button = orderButtonMarkup(page.itemsHtml(), 'PEN-1');
+    assert.match(button, /aria-describedby="stock-PEN-1"/);
+    assert.match(page.itemsHtml(), /<span id="stock-PEN-1">0 in stock<\/span>/);
+  }));
+
+test('REQ-ORD-14: the server still accepts two sequential valid orders for the same item', () =>
+  withServer(async ({ post, get, stock }) => {
+    const before = await stock('MUG-1');
+    assert.equal((await post('/api/orders', { sku: 'MUG-1', qty: 2 })).status, 201);
+    assert.equal((await post('/api/orders', { sku: 'MUG-1', qty: 2 })).status, 201);
+    assert.equal((await get('/api/orders')).body.length, 2);
+    assert.equal(await stock('MUG-1'), before - 4);
   }));
