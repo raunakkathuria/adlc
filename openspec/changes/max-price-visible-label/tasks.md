@@ -1,0 +1,12 @@
+## 1. Tests first
+
+- [ ] 1.1 Add a failing test naming `REQ-CAT-15` that fetches the page and asserts a visible (not visually hidden) `Maximum price` label is associated with the maximum price field, apart from its placeholder
+- [ ] 1.2 Add a test naming `REQ-CAT-15` that the field's accessible name is still exactly `Maximum price`, the search field's `Search the catalogue` label is unchanged, and each label is tied to its own field
+
+## 2. Implementation
+
+- [ ] 2.1 Add the visible label to the catalogue page's maximum price field, keeping the placeholder, accessible name and refusal message behaviour
+
+## 3. Verification
+
+- [ ] 3.1 `npm run verify` is green
