@@ -14,7 +14,7 @@ Never guess an endpoint, a field name, or a `reason` string — verify each one 
 
 Assert the **correct** behaviour, the thing that *should* happen. Your test must **FAIL on today's build** and **PASS once the bug is fixed**. Do not assert the buggy behaviour.
 
-"Reproduce" here does **not** mean "write a test that demonstrates the bug and passes." It means "write the regression guard that this bug currently breaks." A passing test is read as *bug not reproduced* — if you assert the bug as expected, you hide the very thing you were asked to catch.
+"Reproduce" here does **not** mean "write a test that demonstrates the bug and passes". It means "write the regression guard that this bug currently breaks". A passing test is read as *bug not reproduced*. If you assert the bug as expected, you hide the very thing you were asked to catch.
 
 Bug: *"a rejected order still takes the units out of stock."*
 

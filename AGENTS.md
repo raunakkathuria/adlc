@@ -4,7 +4,7 @@ This is the **only** instruction file here. `CLAUDE.md`, `GEMINI.md`, `.cursor/r
 
 ## What this is
 
-An **assembly line for software development**: a GitHub issue goes in, a verified pull request comes out, and exactly two human decisions happen in between. The repo is both the line itself (reusable GitHub Actions workflows any repo can adopt) and its own first consumer — a small storefront (catalog and orders, in memory, zero dependencies) that ships through the line it demonstrates.
+An **assembly line for software development**: a GitHub issue goes in, a verified pull request comes out, and exactly two human decisions happen in between. The repo is both the line itself and its own first consumer. The line is reusable GitHub Actions workflows any repo can adopt. The consumer is a small storefront (catalog and orders, in memory, zero dependencies) that ships through the line it demonstrates.
 
 Engineering philosophy, always: **KISS, YAGNI, DRY** (see `.buildwright/steering/philosophy.md`). The app is deliberately tiny. The method is the deliverable.
 
@@ -12,7 +12,7 @@ Engineering philosophy, always: **KISS, YAGNI, DRY** (see `.buildwright/steering
 
 The living spec is [`openspec/specs/`](openspec/specs/) — one capability per directory ([`catalog/spec.md`](openspec/specs/catalog/spec.md), [`orders/spec.md`](openspec/specs/orders/spec.md)), managed with [OpenSpec](https://github.com/Fission-AI/OpenSpec). Requirements are numbered (`REQ-CAT-1`, `REQ-ORD-4`, …) and carry WHEN/THEN scenarios.
 
-**A capability is a slice of the product, and the spec covers all of it** — the HTTP API *and* the page a person uses. Not a layer: there is no UI capability, because a requirement about what a shopper sees belongs with the behaviour it serves. In a larger org the API and the front end live in separate repos and each spec covers its own surface; here they are one repo, so one capability file covers both. A change that gives a user something must say what they see, not only what an endpoint returns — `npm run req-ids` guards id allocation across deltas in flight, but nothing but the spec guards this.
+**A capability is a slice of the product, and the spec covers all of it**: the HTTP API *and* the page a person uses. It is not a layer. There is no UI capability, because a requirement about what a shopper sees belongs with the behaviour it serves. In a larger org the API and the front end live in separate repos and each spec covers its own surface. Here they are one repo, so one capability file covers both. A change that gives a user something must say what they see, not only what an endpoint returns. `npm run req-ids` guards id allocation across deltas in flight, but nothing but the spec guards this.
 
 **If the code and the spec disagree, the code is wrong.** Fix the code, not the spec.
 
@@ -32,7 +32,7 @@ issue opened → triage → [bug? reproduce] → spec PR → GATE 1 (human appro
 
 Fully automated from the moment an issue lands (when a credential secret is set — `ADLC_API_KEY` or `ADLC_OAUTH_TOKEN`; without either, every workflow explains itself and stops). Labels are written only by the line and show which station the work is at: one `state:*` at a time.
 
-**The spec PR merges last.** Gate 1 is an *approving review* on the spec PR, not a merge — the PR stays open as the shared artifact every implementation is built from and verified against (one spec can fan out to several implementation PRs). When the last linked implementation PR merges, the line merges the spec PR and runs `openspec archive`. `main`'s spec only ever describes what shipped.
+**The spec PR merges last.** Gate 1 is an *approving review* on the spec PR, not a merge. The PR stays open as the shared artifact every implementation is built from and verified against. One spec can fan out to several implementation PRs. When the last linked implementation PR merges, the line merges the spec PR and runs `openspec archive`. `main`'s spec only ever describes what shipped.
 
 ## The gate
 
@@ -42,7 +42,7 @@ npm run verify     # node --test  +  requirement coverage
 
 Deterministic. No model in it. It must be green before you say you are done, and it runs in under a second, so run it often.
 
-`npm run req-coverage` checks that every requirement in `openspec/specs/` is named by at least one test. It cannot check whether that test asserts the *right* thing — only that somebody wrote one. A requirement in an `openspec/changes/` delta is **known but not owed**: a test may name it — that is what makes an implementation PR's new tests legal — but it only starts owing one when that delta's `tasks.md` is **fully ticked**. A spec PR is therefore never red for describing work nobody has built, while a build that ticks every box and forgets the test is — and because the gate runs before the implementation PR opens, that costs no PR and no attempt. Archiving into the living spec makes the requirement owe a test permanently, like every other.
+`npm run req-coverage` checks that every requirement in `openspec/specs/` is named by at least one test. It cannot check whether that test asserts the *right* thing. It only checks that somebody wrote one. A requirement in an `openspec/changes/` delta is **known but not owed**. A test may name it. That is what makes an implementation PR's new tests legal. It only starts owing one when that delta's `tasks.md` is **fully ticked**. A spec PR is therefore never red for describing work nobody has built. A build that ticks every box and forgets the test is red. The gate runs before the implementation PR opens, so that costs no PR and no attempt. Archiving into the living spec makes the requirement owe a test permanently, like every other.
 
 ## Rules that must hold
 
@@ -88,4 +88,4 @@ Everything between the gates is the line's to run.
 
 Conventional commits (`feat:` / `fix:` / `refactor:` / `docs:` / `chore:`), atomic, and stage only the files you changed — never `git add -A`. Spec branches are `spec/<slug>`; implementation branches are `impl/<slug>`.
 
-**Merge commits only — squash and rebase are disabled on this repo, deliberately.** The line's bookkeeping depends on the spec PR's commits reaching `main` *inside* the implementation PR, after which GitHub marks the spec PR merged and `finalize` has nothing left to do. Squash and rebase both rewrite commit identity, so the spec branch stops being an ancestor of `main`: the delta then arrives twice by two different routes and the implementation PR conflicts add/add against files identical to its own. That is not a discipline to remember — the setting enforces it.
+**Merge commits only. Squash and rebase are disabled on this repo, deliberately.** The line's bookkeeping depends on the spec PR's commits reaching `main` *inside* the implementation PR, after which GitHub marks the spec PR merged and `finalize` has nothing left to do. Squash and rebase both rewrite commit identity, so the spec branch stops being an ancestor of `main`. The delta then arrives twice by two different routes. The implementation PR conflicts add/add against files identical to its own. That is not a discipline to remember. The setting enforces it.

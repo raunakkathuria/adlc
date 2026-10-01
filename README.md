@@ -1,8 +1,8 @@
 # ADLC — the automated development life cycle
 
-An **assembly line for software development**, built from GitHub issues, GitHub Actions, [OpenSpec](https://github.com/Fission-AI/OpenSpec), and [buildwright](https://github.com/raunakkathuria/buildwright): an issue goes in, a verified pull request comes out, and exactly two human decisions happen in between.
+An **assembly line for software development**, built from GitHub issues, GitHub Actions, [OpenSpec](https://github.com/Fission-AI/OpenSpec), and [buildwright](https://github.com/raunakkathuria/buildwright). An issue goes in, a verified pull request comes out, and exactly two human decisions happen in between.
 
-This repo is both the line itself — six reusable workflows any repository can adopt — and its own first consumer: a small storefront (catalog and orders, in memory, zero dependencies) that ships through the line it demonstrates. Its issues, PRs, and Actions history are the living proof.
+This repo is both the line itself and its own first consumer. The line is six reusable workflows any repository can adopt. The consumer is a small storefront (catalog and orders, in memory, zero dependencies) that ships through the line it demonstrates. Its issues, PRs, and Actions history are the living proof.
 
 **Anything in, one shape out.** Work arrives as a GitHub issue and triage decides what it is. A bug is accepted only once the reproduce station turns it into a failing test — a reproduction, not a model's opinion, is what makes a bug real. Anything that is not a bug has nothing to reproduce. Either way, what leaves is a spec delta.
 
@@ -16,11 +16,11 @@ Everything between the two gates is automated. Every check is run by something t
 
 ## The idea in four sentences
 
-**The spec is the source of truth**, kept in git (`openspec/specs/`); if the code and the spec disagree, the code is wrong. **Every change is a spec delta** — bugs included — proposed as a spec PR that a human approves at Gate 1 but that **merges last**, only after every implementation PR built from it has merged, so `main`'s spec only ever describes what shipped. **Every guardrail is independent**: the deterministic gate has no model in it, the reviewer never wrote the code, and the Verifier re-derives expected behaviour from the spec before reading a line of the implementation — that is what catches feature drift. **Findings route, they don't rot**: a verifier mismatch goes back to the Planner, a quality finding outside the change becomes a new issue that re-enters the line at triage.
+**The spec is the source of truth**, kept in git (`openspec/specs/`). If the code and the spec disagree, the code is wrong. **Every change is a spec delta**, bugs included. It is proposed as a spec PR that a human approves at Gate 1, and it **merges last**. It merges only after every implementation PR built from it has merged, so `main`'s spec only ever describes what shipped. **Every guardrail is independent.** The deterministic gate has no model in it. The reviewer never wrote the code. The Verifier re-derives expected behaviour from the spec before reading a line of the implementation. That is what catches feature drift. **Findings route, they don't rot.** A verifier mismatch goes back to the Planner. A quality finding outside the change becomes a new issue that re-enters the line at triage.
 
 ## See it run
 
-The line is **off** unless the repo has a credential: either an `ADLC_API_KEY` Actions secret, or an `ADLC_OAUTH_TOKEN` holding the output of `claude setup-token` if you are on a Claude subscription. The demo runs on Claude keys because CI pins one CLI, but the line is not tied to one model: point it at any Anthropic-compatible gateway, such as LiteLLM fronting OpenAI, Gemini or Bedrock, and the prompts and workflows do not change ([docs/any-model.md](docs/any-model.md)). Without one, every workflow runs, explains itself, and stops. That is the whole switch: a repo that can open PRs on its own should require a human to turn it on.
+The line is **off** unless the repo has a credential: either an `ADLC_API_KEY` Actions secret, or an `ADLC_OAUTH_TOKEN` holding the output of `claude setup-token` if you are on a Claude subscription. The demo runs on Claude keys because CI pins one CLI. You can point the line at any Anthropic-compatible gateway, such as LiteLLM fronting OpenAI, Gemini or Bedrock. The prompts and workflows do not change ([docs/any-model.md](docs/any-model.md)). Without a credential, every workflow runs, explains itself, and stops. That is the whole switch: a repo that can open PRs on its own should require a human to turn it on.
 
 With a credential set, open an issue and watch the labels move: `state:triaging → state:spec-draft → state:gate-1` — then approve the spec PR (Gate 1) and follow it through `state:building → state:verifying → state:quality → state:gate-2`. Merge the implementation PR (Gate 2) and the spec archives itself, the issue closes, and the label reads `state:shipped`. The issue list *is* the factory floor.
 
@@ -38,16 +38,16 @@ an issue. Everything that *dispatches* them is a driver, and there are two:
 
 Both write the same labels and respect the same attempt caps, so the `state:*` label is the claim —
 **do not run both on one repo.** The local driver also requires the reviewer to be a **different
-vendor than the builder**, which is the reason it exists: two seats you already pay for, so a second
+vendor than the builder**. That is why it exists. You already pay for two seats, so a second
 opinion from an agent that shares none of the builder's blind spots costs nothing.
 
 ```bash
 node local/build.mjs 42        # 42 = the approved spec PR number
 ```
 
-**[`local/README.md`](local/README.md)** has the rest: what it copies from `build.yml` and what it
-deliberately does not do, how to choose the CLIs, and the handful of things that will surprise you
-(you cannot approve the PR it opens; approving a spec PR fires CI).
+**[`local/README.md`](local/README.md)** has the rest. It covers what the driver copies from `build.yml` and what it
+deliberately does not do. It covers how to choose the CLIs, and the handful of things that will surprise you.
+You cannot approve the PR it opens. Approving a spec PR fires CI.
 
 ## The stations
 
@@ -74,11 +74,11 @@ Three properties do most of the work:
 
 Copy the six thin callers from [`.github/workflows/callers/`](.github/workflows/callers/) into your repo's `.github/workflows/`, add one credential secret — `ADLC_API_KEY` or `ADLC_OAUTH_TOKEN` — run `openspec init` (`npm i -g @fission-ai/openspec`, or `npx @fission-ai/openspec init`), and give the line a deterministic `npm run verify`. Two callers need to know how to start your app: set `start_command` and `health_url` on **verifier** and **quality**, since the defaults are this repo's own app. That's the whole setup — the callers run these stations at a pinned tag, so you own no workflow logic and upgrade by bumping `@v1`. Details and the recommended branch-protection settings: [callers/README.md](.github/workflows/callers/README.md).
 
-Security posture, since the line runs agents over text strangers wrote: issue bodies are handled as files, never interpolated into shell; agent steps run with allowlisted tools; every job has least-privilege permissions and a timeout; triage fails closed; and both accountable decisions belong to humans with write access — an approval from a drive-by account does not start a build.
+Security posture, since the line runs agents over text strangers wrote. Issue bodies are handled as files, never interpolated into shell. Agent steps run with allowlisted tools. Every job has least-privilege permissions and a timeout. Triage fails closed. Both accountable decisions belong to humans with write access. An approval from a drive-by account does not start a build.
 
-## What this is not
+## Checkable output
 
-None of this makes an agent reliable. It makes an unreliable agent's output **checkable**, and it puts the two decisions that carry accountability in front of a person who can be held to them. When the line is wrong, the wrongness lands somewhere a person can see it: a red gate, a review that objects, a MISMATCH verdict, a parked issue that says what it tried.
+The agent stays unreliable. The line makes that agent's output **checkable**. It puts the two decisions that carry accountability in front of a person who can be held to them. When the line is wrong, the wrongness lands somewhere a person can see it. That place is a red gate, a review that objects, a MISMATCH verdict, or a parked issue that says what it tried.
 
 ## The parts
 

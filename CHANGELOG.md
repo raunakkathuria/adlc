@@ -2,7 +2,7 @@
 
 Notable changes to the line. Adopting repos consume the stations by tag, so a version here is what a caller pins.
 
-Semantic versioning, read from the adopter's side: a major bump means a caller file or a repo setting has to change, a minor bump adds a station or an input, a patch fixes a station without changing how it is called. The moving `v1` tag always points at the newest `v1.x.y`.
+Semantic versioning, read from the adopter's side. A major bump means a caller file or a repo setting has to change. A minor bump adds a station or an input. A patch fixes a station without changing how it is called. The moving `v1` tag always points at the newest `v1.x.y`.
 
 ## Unreleased
 
@@ -12,7 +12,7 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   defined nowhere — reached a pushed branch with 231 tests green, because `node --check` validates
   syntax and says nothing about resolution. Two review rounds went on it. `no-undef` is what exists
   for that.
-  - `oxlint` runs through `npx --yes`, the same route `quality.yml:152` already uses for Lighthouse,
+  - `oxlint` runs through `npx --yes`, the same route as Lighthouse in `quality.yml`,
     so `package.json` still has no dependencies and `AGENTS.md`'s rule is untouched.
   - Config is `.oxlintrc.json`: node globals and **`no-undef` only**. It is here for dangling
     references, not style.
@@ -27,6 +27,8 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 ### Fixed
 
+- **A closed not-planned finding stays closed when the title changes.** Quality and the verifier file what they notice outside the change. An open issue about the same finding is commented on, even if the title was rewritten. A closed not-planned issue about that finding stays closed. A new wording is not a new decision. A closed not-reproducible issue is still reopened, and only when the title matches exactly. Same finding means the same control and the same complaint, or titles that still share their content words. `prompts/quality.md` tells the station to start the body with the control's selector, so that match can be made. A different complaint about the same control is still filed. So is a different control.
+
 - **A look at the whole product no longer starts a line of work.** Quality explore ran every
   night, filed what it found, and dispatched intake, so each morning could open a spec pull
   request. The schedule is gone, in the station and in the caller an adopter copies. An explore
@@ -37,36 +39,11 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   `findings: an explore with no source issue is parked, not filed into intake` failed with
   `'Filed' !== 'Parked'` while `reportVerb('-')` still returned `Filed`.
 
-- **The verifier could never pass a behaviour the running app cannot reach.** #108's fix is the
-  page's message for an empty catalogue, and the verifier drives the running app, which starts with
-  three seeded items and has no way to remove one. `prompts/verify.md` allowed `FEATURE-IMPLEMENTED:
-  YES` only for behaviour observed there and `N/A` only for docs and chores, so the verifier said
-  `NO` (PR #117; the same report also found a real gap, a whitespace-only query, which the Planner
-  has since specified). `NO` goes back to the Planner, and no revision of that spec can make the
-  state reachable. `N/A` now also covers a behaviour that exists only in a state the running app
-  cannot be put in. The verifier must establish that from the spec and the API, not from a comment
-  in the change; every scenario for the state must be pinned by a test; and every reachable part of
-  the change must still be driven. It is never for behaviour the verifier could have driven.
-  - Two deterministic guards come with it. A report that gives `SPEC-MATCH` but no
-    `FEATURE-IMPLEMENTED` used to default to `N/A` and pass; it now reads as `NO`, and says so. A
-    reason after the value (`FEATURE-IMPLEMENTED: N/A — …`) still reads as that value, so arguing
-    the `N/A` on the trailer line does not send the work back. And when the verdict is `N/A`, the
-    comment on the implementation PR opens with a fixed line saying the change was not observed in
-    the running app, so Gate 2 does not read "passed" as "seen".
+- **The verifier could never pass a behaviour the running app cannot reach.** #108's fix is the page's message for an empty catalogue, and the verifier drives the running app. The app starts with three seeded items and has no way to remove one. `prompts/verify.md` allowed `FEATURE-IMPLEMENTED: YES` only for behaviour observed there and `N/A` only for docs and chores, so the verifier said `NO` (PR #117). The same report also found a real gap, a whitespace-only query, which the Planner has since specified. `NO` goes back to the Planner, and no revision of that spec can make the state reachable. `N/A` now also covers a behaviour that exists only in a state the running app cannot be put in. The verifier must establish that from the spec and the API, not from a comment in the change. Every scenario for the state must be pinned by a test; and every reachable part of the change must still be driven. It is never for behaviour the verifier could have driven.
+- Two deterministic guards come with it. A report that gives `SPEC-MATCH` but no `FEATURE-IMPLEMENTED` used to default to `N/A` and pass; it now reads as `NO`, and says so. A reason after the value (`FEATURE-IMPLEMENTED: N/A — …`) still reads as that value, so arguing the `N/A` on the trailer line does not send the work back. And when the verdict is `N/A`, the comment on the implementation PR opens with a fixed line saying the change was not observed in the running app. Gate 2 does not read "passed" as "seen".
   - A test pins the routing all of this relies on: `N/A` goes on to quality, only `NO` goes back.
 
-- **A second green build parked because one sentence opened with a verdict word.** #108's reviewer
-  approved, and began its report with "**REQUEST CHANGES is not warranted — …**". The review reader
-  took every line opening with a verdict word as a decision, so it saw two different verdicts and
-  parked (run 36394430702). #112 made this reachable by letting a verdict wrapped in `**` count, and
-  chose not to tighten the decision field, citing "APPROVE with nits — …" — a shape no real review
-  had produced. That reasoning was wrong. Skipping only a verdict word followed by a letter left
-  the same sentence a verdict once a period or colon sat in between: "REQUEST CHANGES. Not
-  warranted — …" beside a real approval is two verdicts, and the build parks; the same line alone
-  opened a pull request. The field before the dash (`—`, `–`, or ` - `), with markdown removed,
-  must now be exactly `APPROVE`, `APPROVED`, or `REQUEST CHANGES`. A trailing mark on the word
-  alone (`APPROVE.`) still counts. Anything else there is prose and is skipped. A line naming
-  both is still undecided. A colon is not a dash, so it does not end the field.
+- **A second green build parked because one sentence opened with a verdict word.** #108's reviewer approved, and began its report with "**REQUEST CHANGES is not warranted — …**". The review reader took every line opening with a verdict word as a decision. It saw two different verdicts and parked (run 36394430702). #112 made this reachable by letting a verdict wrapped in `**` count. Chose not to tighten the decision field, citing "APPROVE with nits — …" — a shape no real review had produced. That reasoning was wrong. Skipping only a verdict word followed by a letter left the same sentence a verdict once a period or colon sat in between. "REQUEST CHANGES. Not warranted — …" beside a real approval is two verdicts, and the build parks. The same line alone opened a pull request. The field before the dash (`—`, `–`, or ` - `), with markdown removed, must now be exactly `APPROVE`, `APPROVED`, or `REQUEST CHANGES`. A trailing mark on the word alone (`APPROVE.`) still counts. Anything else there is prose and is skipped. A line naming both is still undecided. A colon is not a dash, so it does not end the field.
   - On all 17 real reviews in this repo's history, 16 read the same and the one that parked now
     reads `APPROVE`. The cost, which no real review has hit: a report whose only verdict line is
     not that shape — "APPROVE with nits — …", "APPROVE. No blocking findings.", "APPROVE ✅" —
@@ -97,30 +74,15 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   `scripts/is-main.mjs`, which compares the real paths of both sides — `--preserve-symlinks-main`
   keeps the symlink as the module's URL — and a test starts the gate's scripts through a symlink.
 
-- **The findings and citation readers dropped a bold line, silently.** A bold
-  `**OUT-OF-SCOPE-FINDINGS:** […]` filed nothing, and a bold `**Red:** …` left the commit without
-  its proof of red. #112 fixed the same flaw in the two verdict readers; these two now take the
-  model's formatting off with one shared function, `unwrap` in `scripts/marker-line.mjs`. It
-  removes markdown only at the edges of the line and around the marker's colon, never in the
-  payload.
-  - `scripts/file-findings.mjs` reads the last line with findings, then the last line that did not
-    parse (so a broken line still warns), then the last empty one. A quoted `[]`, a bold label or a
-    prose mention cannot take the real line's place. Its one rule for what a finding is,
-    `payloadOf`, is shared by the CLI: an object with a title and a body, never the prompts'
-    `"title":"..."` placeholder; anything but an array of objects does not parse — `[null]` used to
-    crash the CLI.
+- **The findings and citation readers dropped a bold line, silently.** A bold `**OUT-OF-SCOPE-FINDINGS:** […]` filed nothing, and a bold `**Red:** …` left the commit without its proof of red. #112 fixed the same flaw in the two verdict readers. These two now take the model's formatting off with one shared function, `unwrap` in `scripts/marker-line.mjs`. It removes markdown only at the edges of the line and around the marker's colon, never in the payload.
+- `scripts/file-findings.mjs` reads the last line with findings, then the last line that did not parse (so a broken line still warns), then the last empty one. A quoted `[]`, a bold label or a prose mention cannot take the real line's place. Its one rule for what a finding is, `payloadOf`, is shared by the CLI: an object with a title and a body, never the prompts' `"title":"..."` placeholder. Anything but an array of objects does not parse. `[null]` used to crash the CLI.
   - Trade-off: a quoted line that parses as findings is filed when it comes after the real line, or
     anywhere in a run whose real answer is `[]`. A steered model could print the line itself anyway.
   - `test/model-lines.test.js` feeds every line a station's report hands back to a script, in five
     formats, to its reader and requires one answer. Triage's inline JSON is not in it (#106).
   - Plain lines read as before: old and new agree on this repo's real history, 582 of 582.
 
-- **A correct approval parked a green build, because it was in bold.** The reviewer of #108's build
-  wrote `**APPROVE** — …`, and `scripts/review-verdict.mjs` anchors on the start of the line, so it
-  read no verdict and parked (run 36370074384). The review prompt shows the line in backticks, which
-  failed the same way. Both readers of a model's verdict now treat markdown as formatting, like the
-  indent: the review verdict, and the verifier's `SPEC-MATCH` / `FEATURE-IMPLEMENTED` trailers,
-  where the same miss would fail closed and send sound work back to the Planner.
+- **A correct approval parked a green build, because it was in bold.** The reviewer of #108's build wrote `**APPROVE** — …`, and `scripts/review-verdict.mjs` anchors on the start of the line, so it read no verdict and parked (run 36370074384). The review prompt shows the line in backticks, which failed the same way. Both readers of a model's verdict now treat markdown as formatting, like the indent. That covers the review verdict and the verifier's `SPEC-MATCH` / `FEATURE-IMPLEMENTED` trailers, where the same miss would fail closed and send sound work back to the Planner.
   - The verifier's reader moved out of `verifier.yml`, unchanged first, into
     `scripts/verifier-verdict.mjs`. It routed every implementation and no test covered it. A
     shared-rules row now stops a second inline copy.
@@ -161,20 +123,11 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
     `scripts/` untouched — so a rewritten `req-ids.mjs` would have run. Both tamper checks now come
     first.
 
-- **`build.yml`'s "line's own tools must be untouched" guard never ran when adlc built adlc.** The
-  step was gated on `env.ADLC == '.adlc'`, and `.adlc` is only checked out for an adopter repo — so
-  on this repo the guard was skipped entirely and nothing stopped an Executor rewriting a station
-  it was standing in. It now runs in both shapes: the whole `.adlc` checkout for an adopter, and
-  `prompts scripts local .github` for the line itself. `package.json` is deliberately not guarded,
-  because a delta may legitimately change the manifest — that is what the reinstall step is for.
+- **`build.yml`'s "line's own tools must be untouched" guard never ran when adlc built adlc.** The step was gated on `env.ADLC == '.adlc'`, and `.adlc` is only checked out for an adopter repo. So on this repo the guard was skipped entirely and nothing stopped an Executor rewriting a station it was standing in. It now runs in both shapes: the whole `.adlc` checkout for an adopter, and `prompts scripts local .github` for the line itself. `package.json` is deliberately not guarded, because a delta may legitimately change the manifest — that is what the reinstall step is for.
 
 ### Changed
 
-- **`prompts/review.md`: the reviewer must not read the Executor's own report.** `work/build.md`
-  sits in the workspace and the review station's allowlist can open it. An author's account of
-  their own change is the one input that makes a reviewer agree with it — it hands over the
-  framing of what was hard, what was deliberate and what was "out of scope". The reviewer reads
-  the diff and the spec.
+- **`prompts/review.md`: the reviewer must not read the Executor's own report.** `work/build.md` sits in the workspace and the review station's allowlist can open it. An author's account of their own change is the one input that makes a reviewer agree with it. It hands over the framing of what was hard, what was deliberate and what was "out of scope". The reviewer reads the diff and the spec.
 
 ### Fixed
 
@@ -184,30 +137,19 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   `scripts/review-verdict.mjs`, which `local/build.mjs` imports and `build.yml` runs — the same
   shape `labels.mjs` and `attempts.mjs` already use, so a rule stated once in a shared prompt is
   implemented once.
-  - Parking could be **lost**: the once-only flag was set before the comment and the label, so a
-    failure in either made the boundary's retry a no-op and stranded the issue with no
-    `needs-human`. The fix for double-parking had been worse than double-parking. Each half now
-    sets its own flag after its own call succeeds.
+- Parking could be **lost**: the once-only flag was set before the comment and the label. A failure in either made the boundary's retry a no-op and stranded the issue with no `needs-human`. The fix for double-parking had been worse than double-parking. Each half now sets its own flag after its own call succeeds.
   - `prompts/spec.md`'s new rule was **factually wrong about OpenSpec**: matching normalises
     whitespace rather than being character-for-character, and `## RENAMED Requirements` with
     `FROM:`/`TO:` does exist. Verified against the installed 1.6.0 parser this time rather than
     inferred from this repo's own deltas, which is how the error got in. Scenario renames really
     are unsupported, so that half of the rule stands.
 
-- **A second cross-vendor review, of the first round of fixes, found the fixes had broken the
-  driver outright.** A helper was renamed and one call site missed, so every successful build threw
-  `ReferenceError` after pushing its branch and before opening its PR — with all 231 tests green,
-  because they cover exported pure functions and never the orchestration between them. The
-  reviewer's vendor is now resolved once, beside the check that proves it exists.
+- **A second cross-vendor review, of the first round of fixes, found the fixes had broken the driver outright.** A helper was renamed and one call site missed, so every successful build threw `ReferenceError` after pushing its branch and before opening its PR. With all 231 tests green, because they cover exported pure functions and never the orchestration between them. The reviewer's vendor is now resolved once, beside the check that proves it exists.
   - The verdict check accepted any occurrence of the words: `"do not APPROVE"`, a reviewer echoing
     its own instructions, and two contradictory verdicts all passed. It now requires exactly one
     anchored verdict line, the shape `verifier.yml` already uses.
-  - `build.yml` implements both promises the shared prompts make — citations lifted into the commit
-    and the verdict enforced before a PR — because a prompt that promises what its driver does not
-    do is the failure this line keeps finding in itself.
-  - The commit message travels as a file (`git commit -F`), removing the argv-limit failure class
-    rather than capping it, and dropping the leading whitespace the old inline heredoc baked into
-    every CI commit message.
+- `build.yml` implements both promises the shared prompts make: citations lifted into the commit, and the verdict enforced before a PR. A prompt that promises what its driver does not do is the failure this line keeps finding in itself.
+- The commit message travels as a file (`git commit -F`), removing the argv-limit failure class rather than capping it. It also drops the leading whitespace the old inline heredoc baked into every CI commit message.
   - Parking is once-only, and the boundary no longer claims no PR was opened — it also catches
     failures after one exists.
   - The vendor check requires exactly one vendor per station; an ambiguous command is refused.
@@ -222,11 +164,7 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   - **Failures could strand an issue at `state:building`.** The tools guard and the gate-definition
     guard exited without parking, and fetch, worktree creation, install, commit, push, links and the
     final label were uncaught. One boundary now parks anything unhandled once the issue is claimed.
-  - **The proof of red was written and thrown away.** The Executor's failing output went to
-    `work/build.md`, which lives in a throwaway worktree, is excluded from the commit and absent
-    from the PR body — and the reviewer is forbidden to read it, so no human ever saw it. The
-    Executor now emits `Red:`/`Characterization:` lines in `tdd-evidence.md`'s existing format and
-    the driver lifts them into the commit message. Facts travel; narrative does not.
+- **The proof of red was written and thrown away.** The Executor's failing output went to `work/build.md`, which lives in a throwaway worktree, is excluded from the commit and absent from the PR body. And the reviewer is forbidden to read it, so no human ever saw it. The Executor now emits `Red:`/`Characterization:` lines in `tdd-evidence.md`'s existing format and the driver lifts them into the commit message. Facts travel; narrative does not.
   - **An empty review passed as an independent review.** A reviewer exiting 0 having printed nothing
     yielded a PR body claiming it was reviewed. A report must now carry an `APPROVE` or
     `REQUEST CHANGES` verdict or the work parks.
@@ -241,9 +179,9 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
 
 - `local/build.mjs` — the build station driven from your machine rather than from Actions, so it
   runs on a coding CLI you are already logged into instead of billing tokens against a secret. A
-  twin of `build.yml` for the build station: the same Gate 1 fine print — including the approver
-  having write access — the same implementation branch cut from the **approved** commit and merged
-  with `main`, the same `npm run verify` gate before any PR, the same commit and PR trailers, the
+  twin of `build.yml` for the build station. It uses the same Gate 1 fine print, including the approver
+  having write access. It uses the same implementation branch, cut from the **approved** commit and merged
+  with `main`. It uses the same `npm run verify` gate before any PR, the same commit and PR trailers, and the
   same attempt caps and links block. The work happens in a worktree under `~/.adlc/worktrees/`,
   never in your checkout.
   - `AGENT_CMD` selects the CLI, the same variable `run.sh` already uses; the prompt arrives on
@@ -252,29 +190,14 @@ Semantic versioning, read from the adopter's side: a major bump means a caller f
   - One repo, one run, by hand. No daemon, no polling, no config file — a poll loop needs crash
     recovery, locks and concurrency control, and none of that earns its keep before hand-running
     this is proven.
-  - Runs the gate **before** the Executor as well as after, and resets the attempt if it is
-    already red: a red base is not the build's fault and must not park the issue or burn a try.
-  - Guards the line's own `prompts/`, `scripts/`, `local/` and `.github/`. `package.json` is left
-    alone so a legitimate manifest change still works; what is guarded instead is the gate's own
-    definition — the `verify` script is compared before and after, because a build that rewrites
-    it clears a gate that no longer checks anything.
-  - **The review station runs too, with a different vendor than built the change** — the reason
-    this runs locally at all. `REVIEW_CMD` runs `prompts/review.md` (the same station `build.yml`
-    runs) in a fresh session against the unstaged diff, and its findings become the PR body. The
-    driver refuses to start when both stations resolve to the same vendor: a reviewer sharing the
-    builder's vendor shares its blind spots, and a second vendor is free when both are
-    subscriptions already paid for. Defaults: builder `claude -p`, reviewer
-    `codex exec --sandbox read-only`.
+- Runs the gate **before** the Executor as well as after, and resets the attempt if it is already red. A red base is not the build's fault and must not park the issue or burn a try.
+- Guards the line's own `prompts/`, `scripts/`, `local/` and `.github/`. `package.json` is left alone so a legitimate manifest change still works; what is guarded instead is the gate's own definition. The `verify` script is compared before and after, because a build that rewrites it clears a gate that no longer checks anything.
+- **The review station runs too, with a different vendor than built the change** — the reason this runs locally at all. `REVIEW_CMD` runs `prompts/review.md` (the same station `build.yml` runs) in a fresh session against the unstaged diff, and its findings become the PR body. The driver refuses to start when both stations resolve to the same vendor. A reviewer sharing the builder's vendor shares its blind spots, and a second vendor is free when both are subscriptions already paid for. Defaults: builder `claude -p`, reviewer `codex exec --sandbox read-only`.
   - stderr is inherited rather than merged, because `codex exec` puts its transcript there and
     only the final message on stdout — so `tee` captures a review and not a file dump. No
     transcript parsing, no vendor-specific JSON.
-  - Still not wired up locally, and the PR body says so rather than implying parity: no verifier
-    dispatch (the issue goes to `state:gate-2`, not the `state:verifying` label that would claim a
-    drift check nobody is running) and no reproduce patch applied for bugs. The spec, verifier,
-    quality and finalize stations are unchanged in Actions.
-  - Model output travels as a file to `--body-file`, and the agent streams through `tee` with
-    stdout inherited, matching the workflows — nothing buffers an unbounded report in memory or
-    passes it as an argv.
+- Still not wired up locally, and the PR body says so rather than implying parity. No verifier dispatch (the issue goes to `state:gate-2`, not the `state:verifying` label that would claim a drift check nobody is running) and no reproduce patch applied for bugs. The spec, verifier, quality and finalize stations are unchanged in Actions.
+- Model output travels as a file to `--body-file`, and the agent streams through `tee` with stdout inherited, matching the workflows. Nothing buffers an unbounded report in memory or passes it as an argv.
 
 ## v1.0.0 — 5 September 2026
 
@@ -300,4 +223,5 @@ The first tagged line: six reusable stations, two human gates, and the kit for w
 
 ### Known gaps
 
-Recorded in [docs/design.md](docs/design.md#known-gaps-found-by-running-it), and found by running the line rather than by reviewing it: there is no backlog state, nothing automated compares an issue's intent to the delta's scope, and three stations do not exist yet — security review, browser end-to-end checks, and deploy. The missing browser checks are the reason one accessibility finding (#71) is recorded rather than fixed.
+Recorded in [docs/design.md](docs/design.md#known-gaps-found-by-running-it), and found by running the line rather than by reviewing it. There is no backlog state, nothing automated compares an issue's intent to the delta's scope, and three stations do not exist yet. Security review, browser end-to-end checks, and deploy. The missing browser checks are the reason one accessibility finding (#71) is recorded rather than fixed.
+

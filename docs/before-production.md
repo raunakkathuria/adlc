@@ -1,8 +1,6 @@
 # Before production
 
-Decisions that are fine while the local driver is one hand-run command on one
-machine, and must be resolved before it is trusted to run unattended or on a
-repo you do not own.
+Decisions that are fine while the local driver is one hand-run command on one machine. Must be resolved before it is trusted to run unattended or on a repo you do not own.
 
 ## ~~The self-build guard is off in CI~~ — fixed
 
@@ -13,9 +11,7 @@ itself; `local/build.mjs` does the same through `GUARDED_PATHS`.
 
 ## The gate's own definition is only guarded locally
 
-- **Ships now:** `local/build.mjs` reads `scripts.verify` from `package.json`
-  before and after the Executor and refuses to open a PR if it moved — a build
-  that rewrites its own gate clears a gate that checks nothing.
+- **Ships now:** `local/build.mjs` reads `scripts.verify` from `package.json` before and after the Executor and refuses to open a PR if it moved. A build that rewrites its own gate clears a gate that checks nothing.
 - **Before production:** `build.yml` has no equivalent. `package.json` cannot
   simply be added to its path guard, because the reinstall-after-manifest-change
   step exists precisely so a delta *can* change the manifest. CI needs the same
@@ -68,9 +64,7 @@ parks rather than opening a PR if the reviewer produces no verdict.
   the first build's review as the body — which a Gate 2 reader takes as current —
   with later reviews accumulating as comments beneath it. Same one-line fix:
   `gh pr edit` alongside the existing `gh pr comment`.
-- **Why now is OK:** the rebuild path needs a spec revision after an
-  implementation PR is already open, which is rare, and the newest review is
-  always present as the last comment.
+- **Why now is OK:** the rebuild path needs a spec revision after an implementation PR is already open. Is rare, and the newest review is always present as the last comment.
 
 ## The failure paths still have only unit coverage, and drilling them is blocked
 
@@ -78,25 +72,9 @@ parks rather than opening a PR if the reviewer produces no verdict.
   the parking boundary are covered by tests over their pure decisions. The
   orchestration between those decisions is covered by nothing — which is how a
   dangling reference reached a pushed branch with 231 tests green.
-- **Before production:** exercise them deliberately. `AGENT_CMD` and `REVIEW_CMD`
-  are the fault-injection seam and need no model: a fake builder that breaks a
-  test drills the red gate, one that edits `prompts/` drills the tools guard, one
-  that exits non-zero drills the crash path, and a fake reviewer printing nothing
-  drills the verdict gate. Seconds each, no quota.
-- **Why it has not happened:** each drill needs a **claimed issue behind an
-  approved spec PR**, and Gate 1 needs an approving review from someone who is
-  not the PR's author. In this repo the spec station authors those PRs
-  (`app/github-actions`), so a maintainer can approve them. In a fresh private
-  drill repo the operator authors everything and GitHub refuses an author
-  approving their own PR — the same authorship asymmetry recorded in
-  `docs/design.md`, now blocking the drill setup rather than a merge. Drilling
-  against this repo instead would move a real issue backwards out of
-  `state:gate-2`, park it, and spend its attempt budget.
-- **The way through:** run the spec station in the drill repo so the PRs are
-  bot-authored, or drill with a second account. Both are real setup; neither is
-  hard. It is recorded here rather than done because the alternative was
-  disturbing live issues, and an independent review of the orchestration has so
-  far found more than a drill would have.
+- **Before production:** exercise them deliberately. `AGENT_CMD` and `REVIEW_CMD` are the fault-injection seam and need no model. A fake builder that breaks a test drills the red gate, one that edits `prompts/` drills the tools guard, one that exits non-zero drills the crash path. A fake reviewer printing nothing drills the verdict gate. Seconds each, no quota.
+- **Why it has not happened:** each drill needs a **claimed issue behind an approved spec PR**. Gate 1 needs an approving review from someone who is not the PR's author. In this repo the spec station authors those PRs (`app/github-actions`), so a maintainer can approve them. In a fresh private drill repo the operator authors everything and GitHub refuses an author approving their own PR. The same authorship asymmetry recorded in `docs/design.md`, now blocking the drill setup rather than a merge. Drilling against this repo instead would move a real issue backwards out of `state:gate-2`, park it, and spend its attempt budget.
+- **The way through:** run the spec station in the drill repo so the PRs are bot-authored, or drill with a second account. Both are real setup; neither is hard. It is recorded here rather than done because the alternative was disturbing live issues. An independent review of the orchestration has so far found more than a drill would have.
 
 ## A reviewer that indents a restatement of the options poisons its own verdict
 
@@ -105,10 +83,7 @@ parks rather than opening a PR if the reviewer produces no verdict.
   verdict. But a line that *begins* with a verdict and names both before the
   dash is read as undecided, and an **indented** restatement such as
   `    APPROVE or REQUEST CHANGES — the required shape` does begin with one.
-- **Before production:** if a real reviewer ever trips this, sharpen the rule
-  rather than adding a condition to it — a blockquote (`>`) is already immune,
-  so requiring the verdict to be the line's first non-blank token in the report
-  body would likely do it.
+- **Before production:** if a real reviewer ever trips this, sharpen the rule rather than adding a condition to it. A blockquote (`>`) is already immune, so requiring the verdict to be the line's first non-blank token in the report body would likely do it.
 - **Why now is OK:** narrow, not a regression (the previous rule rejected the
   same line), and it fails **safe** — the work parks and a human looks. It is
   recorded rather than fixed because this rule has already been changed three
@@ -122,28 +97,12 @@ parks rather than opening a PR if the reviewer produces no verdict.
 `local/build.mjs` imports it. The copies had already diverged on trailing
 whitespace before anyone noticed.
 
-This was the **second** instance of one rule stated in a shared prompt being
-implemented twice, so the fix is not the extraction — it is
-`test/shared-rules.test.js`, which fails if any driver inlines a shape that
-`scripts/` owns, and also fails if the owner stops containing it, so the table
-cannot rot into a check of nothing. A third shared rule costs one line there.
-Found by `/bw-cleaner`; the extraction was left to `/bw-work` because a sweep may
-delete duplicates but not invent helpers.
+This was the **second** instance of one rule stated in a shared prompt being implemented twice, so the fix is not the extraction. It is `test/shared-rules.test.js`, which fails if any driver inlines a shape that `scripts/` owns. Also fails if the owner stops containing it, so the table cannot rot into a check of nothing. A third shared rule costs one line there. Found by `/bw-cleaner`; the extraction was left to `/bw-work` because a sweep may delete duplicates but not invent helpers.
 
 ## `npm run verify` now needs the network on a cold npx cache
 
-- **Ships now:** `npm run lint` fetches `oxlint@1.82.0` through `npx --yes`, the
-  route `quality.yml:152` already uses for Lighthouse, so nothing is added to
-  `package.json` and `AGENTS.md`'s no-dependency rule is untouched. After the
-  first run it is cached in `~/.npm/_npx` and costs nothing. The version is
-  **pinned**, unlike the Lighthouse precedent: `verify` is the gate both drivers
-  clear, so an unpinned fetch would let the gate's behaviour change with no
-  commit — a new rule in a new release could redden a build nobody touched.
-- **Before production:** `verify` is the gate BOTH drivers clear, and
-  `local/build.mjs` runs it twice per build. On a cold cache with no network the
-  gate now fails where it used to pass — which would park a build for a reason
-  that has nothing to do with the build. If that ever bites, pin the version and
-  vendor the binary, or move lint out of `verify` into its own gate.
+- **Ships now:** `npm run lint` fetches `oxlint@1.82.0` through `npx --yes`, the same route as Lighthouse in `quality.yml`, so nothing is added to `package.json` and `AGENTS.md`'s no-dependency rule is untouched. After the first run it is cached in `~/.npm/_npx` and costs nothing. The version is **pinned**, unlike the Lighthouse precedent: `verify` is the gate both drivers clear, so an unpinned fetch would let the gate's behaviour change with no commit. A new rule in a new release could redden a build nobody touched.
+- **Before production:** `verify` is the gate BOTH drivers clear, and `local/build.mjs` runs it twice per build. On a cold cache with no network the gate now fails where it used to pass. That would park a build for a reason that has nothing to do with the build. If that ever bites, pin the version and vendor the binary, or move lint out of `verify` into its own gate.
 - **Why now is OK:** CI always has network, the local cache survives between
   runs, and the failure is loud and obviously unrelated rather than silent.
 
@@ -156,10 +115,12 @@ delete duplicates but not invent helpers.
   because `npm test` imports the module and the load raises a `SyntaxError` — so
   `npm run verify` exits 1.
 - **Before production:** that coverage is **incidental**. It holds only while
-  every module is imported by some test. Checked today: all ten in `local/` and
-  `scripts/` are. A module added without a test importing it would lose it
-  silently.
+  every module is loaded by the suite. Checked against this tree: all fourteen
+  in `local/` and `scripts/` are. Two of them, `is-main.mjs` and `marker-line.mjs`,
+  are reached through the modules that use them. A module added that nothing
+  imports would lose this coverage silently.
 - **Why now is OK:** the condition holds, and this repo's house rule already
   pushes every module to export something a test calls. If that ever stops being
   true, oxlint's import plugin (`--import-plugin`, rule `import/named`) closes it
   directly rather than by accident.
+
