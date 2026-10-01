@@ -761,6 +761,36 @@ const refusalShown = (element) => ({
   describedby: element('max-price').getAttribute('aria-describedby'),
 });
 
+test('REQ-CAT-14: the search field has a visible label, tied to it, that agrees with its accessible name', () =>
+  withServer(async ({ base }) => {
+    const html = await (await fetch(base + '/')).text();
+
+    const label = html.match(/<label\b([^>]*\bfor="q"[^>]*)>([^<]*)<\/label>/);
+    assert.ok(label, 'a <label for="q"> is on the page');
+    assert.equal(label[2].trim(), 'Search the catalogue');
+    assert.doesNotMatch(label[1], /\b(hidden|sr-only|visually-hidden)\b|display:\s*none/, 'the label is not hidden inline');
+
+    const cls = label[1].match(/\bclass="([^"]+)"/);
+    for (const name of cls ? cls[1].split(/\s+/) : []) {
+      const rule = html.match(new RegExp('\\.' + name + '\\s*\\{([^}]*)\\}'));
+      assert.doesNotMatch(rule ? rule[1] : '', /display:\s*none|visibility:\s*hidden|clip:|position:\s*absolute|(?:width|height):\s*1px/, 'the label is not visually hidden');
+    }
+
+    const input = html.match(/<input[^>]*\bid="q"[^>]*>/)[0];
+    assert.match(input, /placeholder="/, 'the placeholder hint is still present');
+    const aria = input.match(/\baria-label="([^"]*)"/);
+    assert.ok(!aria || aria[1].includes('Search the catalogue'), 'any aria-label contains the visible label text');
+  }));
+
+test('REQ-CAT-14: the search label is fixed text and leaves the maximum price accessible name exactly Maximum price', () =>
+  withServer(async ({ base }) => {
+    const html = await (await fetch(base + '/')).text();
+    const input = html.match(/<input[^>]*\bid="max-price"[^>]*>/)[0];
+    assert.match(input, /\baria-label="Maximum price"/);
+    assert.doesNotMatch(html, /<label[^>]*\bfor="max-price"/, 'the search label does not name the price field');
+    assert.doesNotMatch(html.match(/<label[^>]*\bfor="q"[^>]*>[^<]*<\/label>/)?.[0] ?? '', /\$\{|\$\(|innerHTML/, 'the label takes no query');
+  }));
+
 test('REQ-CAT-13: the maximum price field has an accessible name independent of any placeholder', () =>
   withServer(async ({ base }) => {
     const html = await (await fetch(base + '/')).text();
