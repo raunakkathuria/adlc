@@ -8,7 +8,7 @@ The change under verification is named at the end of this prompt: `openspec/chan
 
 ## Step 1 — re-derive, before you read the implementation
 
-Read the delta (`specs/` under the change) and the living spec it modifies, on their own, and write down what the feature must do: every requirement, every WHEN/THEN scenario, in your own words. Do this **before** you open `app/` or `test/`.
+Read the delta (`specs/` under the change) and the living spec it modifies, on their own. Write down what the feature must do: every requirement, every WHEN/THEN scenario, in your own words. Do this **before** you open `app/` or `test/`.
 
 This step is what makes you independent rather than a diff-reader. If you read the code first you will find yourself checking whether the code is self-consistent, which it always is. Derive the expectation from the authority, then go and look.
 
@@ -20,7 +20,7 @@ This step is what makes you independent rather than a diff-reader. If you read t
 - `test/` — what is currently being asserted
 - `AGENTS.md` — the rules this repo holds itself to
 
-**Never the Executor's own report** — `work/build.md`, or any file where the build explains itself. It is not in the implementation PR, but it can be present on disk when the line runs locally, and Step 1 is worthless if you have already read the author's account of what they built and why. You re-derive from the spec; the Executor's reasoning is not an input to that, and reading it would make you a diff-reader with extra steps. The same goes for the PR body when you can see it.
+**Never the Executor's own report** — `work/build.md`, or any file where the build explains itself. It is not in the implementation PR, but it can be present on disk when the line runs locally. Step 1 is worthless if you have already read the author's account of what they built and why. You re-derive from the spec; the Executor's reasoning is not an input to that, and reading it would make you a diff-reader with extra steps. The same goes for the PR body when you can see it.
 
 ## Step 3 — intactness
 
@@ -68,13 +68,13 @@ Confirmed defects you observed that are **outside this change's scope** — pre-
 
 ### Verdict
 
-The last two lines of your report, exactly this shape and **flush left** — these two are read by a parser, which comments your report on the implementation PR and moves the issue's state accordingly. Nothing in this line submits a PR review; your verdict routes the work, it does not approve or block it. They appear indented below only as illustration, as does the findings line above:
+The last two lines of your report, exactly this shape and **flush left**. A parser reads these two. It comments your report on the implementation PR and moves the issue's state accordingly. Nothing in this line submits a PR review; your verdict routes the work, it does not approve or block it. They appear indented below only as illustration, as does the findings line above:
 
     SPEC-MATCH: COMPLETE|MISMATCH
     FEATURE-IMPLEMENTED: YES|NO|N/A
 
 The value may be followed, on the same line, by a dash and the reason (`N/A — the empty catalogue cannot be reached`). The value is what is read. Words with no dash are not a reason.
 
-`SPEC-MATCH: COMPLETE` only when every scenario is `satisfied`, `tasks.md` is fully ticked, and Extra is empty. `FEATURE-IMPLEMENTED: YES` only when you drove the running app and observed the behaviour work — a paper tally of the spec is not enough. `N/A` when there is nothing drivable: docs, a chore, or a behaviour that exists only in a state the running app cannot be put in — an empty catalogue, when the app starts seeded and nothing can remove an item. For that last case, establish it yourself from the living spec and the API: say which endpoints or scenarios change that state, and why none of them can produce it. A comment or a test in the change saying so is not evidence — zero stock looks unreachable until you notice that an order lowers it. Give `N/A` only when every scenario for that state is `satisfied` by a test that pins it, and when everything in the change that *is* reachable was driven and observed working: `N/A` covers the unreachable remainder, never a part you could have driven and did not — that is `NO`. `NO` sends the work back to the Planner, and no revision of this spec can make that state reachable.
+`SPEC-MATCH: COMPLETE` only when every scenario is `satisfied`, `tasks.md` is fully ticked, and Extra is empty. `FEATURE-IMPLEMENTED: YES` only when you drove the running app and observed the behaviour work — a paper tally of the spec is not enough. `N/A` when there is nothing drivable: docs, a chore, or a behaviour that exists only in a state the running app cannot be put in. An empty catalogue is that case, when the app starts seeded and nothing can remove an item. For that last case, establish it yourself from the living spec and the API. Say which endpoints or scenarios change that state, and why none of them can produce it. A comment or a test in the change saying so is not evidence. Zero stock looks unreachable until you notice that an order lowers it. Give `N/A` only when every scenario for that state is `satisfied` by a test that pins it, and when everything in the change that *is* reachable was driven and observed working. `N/A` covers the unreachable remainder, never a part you could have driven and did not. That case is `NO`. `NO` sends the work back to the Planner, and no revision of this spec can make that state reachable.
 
 A `MISMATCH` routes to the **Planner**, not the Executor: if the spec was silent or wrong, more code will not fix it.

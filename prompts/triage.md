@@ -10,7 +10,7 @@ Read `AGENTS.md`, the issue, and the living spec in `openspec/specs/`. If a file
 
 **Actionable** means the issue describes work that would change code, config, tests, or product behaviour: a bug, a new capability, a change to existing behaviour, an operational chore. Size does not matter — a one-line fix is actionable.
 
-**Not actionable** means there is nothing the line can do with it: a question, a duplicate of an existing issue, something already implemented or already resolved, spam, or a report so thin that no one could act on it without asking the reporter something first. Say which, and what is missing if information is the problem.
+**Not actionable** means there is nothing the line can do with it. That covers a question, a duplicate of an existing issue, or spam. It covers something already implemented, or already resolved. It covers a report so thin that no one could act on it without asking the reporter first. Say which, and what is missing if information is the problem.
 
 ## Types
 
@@ -23,20 +23,20 @@ Read `AGENTS.md`, the issue, and the living spec in `openspec/specs/`. If a file
 
 If the existing-issues listing shows an **open** issue describing the same problem, this one is a duplicate — not actionable, name the original in `duplicate_of`. If it matches a **closed** issue labeled `resolution:not-reproducible`, that is not a duplicate: it is a recurrence, and a recurrence is evidence. Set `recurrence_of` to that issue number — the line will reopen it and carry both reports to the reproduce station.
 
-A closed issue is only a reason to stand down if it says **`· shipped`**. `· not planned, so the problem may remain` means a person declined it, or closed it as a duplicate of something else — the defect is very likely still in the product, and this report is actionable on its own. Never read somebody's decision not to do the work as evidence that the work was done.
+A closed issue is only a reason to stand down if it says **`· shipped`**. `· not planned, so the problem may remain` means a person declined it, or closed it as a duplicate of something else. The defect is very likely still in the product, and this report is actionable on its own. Never read somebody's decision not to do the work as evidence that the work was done.
 
 ## Output
 
 **A JSON object on the first line, then your reasoning as prose.** Two parts, in that order, because they are read by different readers.
 
-    {"actionable":true,"type":"bug","slug":"kebab-case-name","duplicate_of":null,"recurrence_of":null,"requirements":["REQ-ORD-4"]}
+    {"actionable":true,"type":"bug","slug":"kebab-case-name","duplicate_of":null,"recurrence_of":null,"requirements":["`REQ-ORD-4`"]}
 
-    Why: the report names REQ-ORD-4 and the observed total contradicts it, so this is
+    Why: the report names `REQ-ORD-4` and the observed total contradicts it, so this is
     a broken promise rather than new behaviour.
 
-Both are indented above as illustration; emit them flush left, the object first with no code fence and no preamble.
+Both are indented above as illustration. Emit them flush left, the object first, with no code fence and no preamble. Backticks around an id in that illustration are not part of the object. Emit the id itself.
 
-**The object carries no free text, deliberately.** It used to hold a `reason`, and a long one truncated the object mid-string — the closing brace never arrived, the parse failed, and the line parked issues on verdicts it had reached correctly. Machine fields only keeps the object short by construction rather than by your restraint. Everything after the first line is your reasoning: a human reads it, and it can be as long as it needs to be.
+**The object carries no free text, deliberately.** It used to hold a `reason`, and a long one truncated the object mid-string. The closing brace never arrived, the parse failed, and the line parked issues on verdicts it had reached correctly. Machine fields only keeps the object short by construction rather than by your restraint. Everything after the first line is your reasoning. A human reads it, and it can be as long as it needs to be.
 
 - `actionable` — `false` for questions, duplicates, already-done, spam, or too-thin reports.
 - `type` — one of the four above; `null` when not actionable.

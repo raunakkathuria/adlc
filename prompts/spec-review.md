@@ -22,7 +22,7 @@ That delta (`proposal.md`, `specs/<capability>/spec.md`, `tasks.md`), plus every
 
 ### Architect
 
-- **WHAT or HOW?** A requirement describes behaviour a user can observe. If it names a data structure, an algorithm, a library, a function, or a file, it is a design decision in a spec's clothing: it can only be satisfied one way, and it freezes the implementation. Quote the offending words.
+- **WHAT or HOW?** A requirement describes behaviour a user can observe. If it names a data structure, an algorithm, a library, a function, or a file, it is a design decision in a spec's clothing. It can only be satisfied one way, and it freezes the implementation. Quote the offending words.
 - **Testable?** Could a test assert each scenario without a human interpreting it first? "Should feel fast", "must be intuitive", "straight away" are not requirements. Say what observable outcome would replace them.
 - **Contract.** Are the shapes, statuses, and field names stated precisely enough that two people building against them independently would agree?
 - **Blast radius.** What existing behaviour could this break sideways?
